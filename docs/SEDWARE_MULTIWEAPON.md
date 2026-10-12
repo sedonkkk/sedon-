@@ -60,6 +60,8 @@ En hitscan no hay tiempo de vuelo. La dispersión conserva el punto predicho com
 
 La colisión del proyectil barre su línea central; no incluye el volumen de la esfera, penetración ni rebotes. Un perfil de proyectil con varios pellets requiere ampliar ese controlador: se rechaza explícitamente en esta versión. Un modelo físicamente inalcanzable o una predicción ausente impide enviar el tiro bloqueado y muestra el error.
 
+La demostración asume un Tool equipado por jugador. Doble empuñadura y otros sistemas de inventario requieren adaptar el registro autoritativo. Los scripts de demostración comprueban IsStudio; para una experiencia propia publicada su desarrollador debe instalar los módulos dentro de su controlador autorizado y definir esa integración, sin usar las armas de un juego ajeno como destino.
+
 ## Registrar otras armas autorizadas
 
 Añade el perfil al módulo compartido `WeaponProfiles.defaults()` antes de inicializar el servidor y el cliente. El servidor también debe crear o registrar la **identidad exacta** del Tool correspondiente. Los atributos/nombres por sí solos no autorizan un objeto copiado.
@@ -125,3 +127,12 @@ python3 scripts/check.py
 ```
 
 Luau oficial 0.695: 33 fuentes Pink/SEDWARE compiladas. **246 pruebas de Pink/SEDWARE, 4.633 comprobaciones; 96 anteriores, 75.895 comprobaciones. Total: 342 pruebas, 80.528 comprobaciones, cero fallos.** Las 36 nuevas cubren perfiles, dispersión, segmentos físicos, los seis Tools con el bundle real, cambio de arma, cadencia, respuestas diferidas, spoofing de perfiles, recursos, limpieza y rechazo de un informe simulado como evidencia nativa. Los eventos, posiciones físicas y raycasts de esas pruebas son dobles explícitos.
+
+## Entrega publicada
+
+Código y lugar publicados en [`e18ba899586cd12214bee587802f927fa258d4c9`](https://github.com/sedonkkk/sedon-/commit/e18ba899586cd12214bee587802f927fa258d4c9).
+
+- [Lugar completo multiarmas, Raw .rbxlx](https://raw.githubusercontent.com/sedonkkk/sedon-/e18ba899586cd12214bee587802f927fa258d4c9/studio/PinkDotLockTest.rbxlx): HTTP 200, 198.452 bytes idénticos al lugar generado y comprobado; SHA-256 `1b8d3aee36b4268384765f6db8a4344065e132bed791f81fdedf46057d66a37b`.
+- [PinkDotLock.lua v4, Raw](https://raw.githubusercontent.com/sedonkkk/sedon-/e18ba899586cd12214bee587802f927fa258d4c9/PinkDotLock.lua): HTTP 200, 111.295 bytes idénticos al payload compilado y probado; SHA-256 `43bd7e57e81cc6bd5f7a8d566df9873c395644ae80ac3f1b70596b0efaf3a123`.
+
+El loader actualizado está fijado a ese commit nuevo. **Cargar únicamente PinkDotLock.lua no instala el WeaponManager ni su servidor y no altera armas de Da Hood.** Para disparar con la arquitectura nueva usa el lugar completo o instala los módulos y scripts de cliente/servidor en tu experiencia autorizada.
