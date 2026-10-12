@@ -51,3 +51,7 @@ Para comprobar selección real y percepción del seguimiento, abre [studio/Sedwa
 ## Diagnóstico opcional
 
 Config incluye `CameraDebugMode=false` y `CameraDebugInterval=0.5`. Puedes habilitarlo desde el archivo o mediante `api.configure("CameraDebugMode", true)`. La consola registra yaw, pitch, roll, targetAngle, deltaTime, angularError y estado; los ángulos están en grados. `api.session.controller:GetDiagnostics()` devuelve una copia de esos datos. El diagnóstico no añade controles ni envía información a servidores externos.
+
+## Archivo publicado
+
+[SedwareCamLock.lua Raw del commit corregido](https://raw.githubusercontent.com/sedonkkk/sedon-/64678f60e84762cb9cbc29df6ee86f7395059254/SedwareCamLock.lua), verificado byte por byte. [Loader e instrucciones](SEDWARE_CAM_LOCK.md#entrega-de-la-corrección). El commit anterior no recibe cambios automáticamente.

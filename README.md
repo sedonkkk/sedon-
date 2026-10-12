@@ -32,6 +32,8 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [SedwareCamLock.lua](SedwareCamLock.lua). [Corrección de Camera Roll](docs/SEDWARE_CAMERA_ROLL.md): yaw/pitch nivelados respecto a Y global y sin transportar UpVector. 85 pruebas de Cam Lock y 342 anteriores pasan. [Runner nativo de Studio](studio/SedwareCamRollTest.rbxlx) preparado; ejecución nativa pendiente.
 
+[Raw corregido y verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/64678f60e84762cb9cbc29df6ee86f7395059254/SedwareCamLock.lua) · [CamLoader.lua actualizado](CamLoader.lua). Los loaders con el commit anterior deben sustituirse para recibir esta corrección.
+
 ## Ejecutar el laboratorio original
 
 Abre [`build/AimLab.rbxlx`](build/AimLab.rbxlx) con Roblox Studio y pulsa **Play**. Selecciona un bot con el cursor, mantén **RMB** para orientar la cámara y dispara con **F** o el botón. Puedes minimizar y mover el panel. Sus seis secciones incluyen los controles de predicción, blancos, armas y diagnósticos.

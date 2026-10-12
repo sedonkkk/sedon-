@@ -95,4 +95,15 @@ También pasan las **342 pruebas de los proyectos anteriores**, con 80.528 compr
 
 ## Entrega de la corrección
 
-El enlace Raw fijado al nuevo commit se añadirá después de publicar y comparar los bytes con el archivo probado. El enlace anterior ejecuta el controlador anterior y no recibe esta corrección.
+La corrección está publicada en el commit **64678f60e84762cb9cbc29df6ee86f7395059254**. [Raw nuevo](https://raw.githubusercontent.com/sedonkkk/sedon-/64678f60e84762cb9cbc29df6ee86f7395059254/SedwareCamLock.lua) y [CamLoader.lua](../CamLoader.lua) cargan el controlador corregido. El enlace anterior con commit fijo conserva el controlador anterior.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/64678f60e84762cb9cbc29df6ee86f7395059254/SedwareCamLock.lua"))()
+```
+
+Se comprobó HTTP 200 y correspondencia byte por byte: 136.399 bytes, SHA-256 `5a1f8bc4e2e2249456de5d17bd3d8d5bf2aaad078422017841b2fd9abf4ff42b`. También se verificaron los bytes de ambos lugares publicados:
+
+- [SedwareCamLock.rbxlx Raw](https://raw.githubusercontent.com/sedonkkk/sedon-/64678f60e84762cb9cbc29df6ee86f7395059254/studio/SedwareCamLock.rbxlx): demo para selección real con dos jugadores.
+- [SedwareCamRollTest.rbxlx Raw](https://raw.githubusercontent.com/sedonkkk/sedon-/64678f60e84762cb9cbc29df6ee86f7395059254/studio/SedwareCamRollTest.rbxlx): runner nativo preparado, pendiente de ejecución en Studio.
+
+El loader solo obtiene este archivo público y compila/ejecuta Luau con diagnóstico de errores. Para conservar una referencia y descargar la sesión después, guarda el retorno en `local api = loadstring(...)()` y llama a `api.Unload()`.
