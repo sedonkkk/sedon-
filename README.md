@@ -16,7 +16,7 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Corrección de inicialización y guía de consola SEDWARE](docs/SEDWARE_INITIALIZATION.md): espera limitada de recursos, diagnósticos por fase y de C; valores X/Y conservados.
 
-[Raw de Pink verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/837ef39140063c4576a7aa9166cda4cf2e4ceec3/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 89 pruebas nuevas y 96 anteriores pasan; motor de Studio y Da Hood sin comprobar.
+[Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/817e81df4cfce3936f8e3b10beaff1561dfebe3f/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 126 pruebas de Pink/SEDWARE y 96 anteriores pasan; motor de Studio y Da Hood sin comprobar.
 
 ## Ejecutar
 

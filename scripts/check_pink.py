@@ -25,12 +25,17 @@ def main():
     level=0
     while ']'+ '='*level + ']' in source: level+=1
     literal='['+'='*level+'[\n'+source+']'+'='*level+']'
+    loader=(ROOT/'PinkLoader.lua').read_text(encoding='utf-8')
+    loader_level=0
+    while ']'+ '='*loader_level + ']' in loader: loader_level+=1
+    loader_literal='['+'='*loader_level+'[\n'+loader+']'+'='*loader_level+']'
     harness=ROOT/'tests/.generated_pink.luau'
     harness.write_text('local mock=require("./PinkMock").new()\nlocal source='+literal+'\n'
         'local function reloadBundle(env)\n local chunk=assert(loadstring(source,"PinkDotLock.bundleTest"))\n'
         ' setfenv(chunk,env)\n return chunk()\nend\n'
         'local bundle=reloadBundle(mock.env)\nrequire("./pink_gui_body")(mock,bundle,reloadBundle)\n'
-        'require("./pink_startup_body")(reloadBundle)\n',encoding='utf-8')
+        'require("./pink_startup_body")(reloadBundle)\n'
+        'require("./pink_loader_body")(source,'+loader_literal+')\n',encoding='utf-8')
     try: subprocess.run([runner,str(harness)],cwd=ROOT,check=True)
     finally: harness.unlink(missing_ok=True)
 

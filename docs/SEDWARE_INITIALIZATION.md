@@ -85,8 +85,14 @@ python3 scripts/check_pink.py
 python3 scripts/check.py
 ```
 
-Compilación con Luau oficial 0.695 correcta. Resultado: **123 pruebas de Pink/SEDWARE y 96 anteriores: 219 pruebas, 77.977 comprobaciones, 0 fallos**. Las 34 pruebas nuevas abarcan todos los diez casos pedidos, más timeout conjunto, viewport, LocalPlayer, excepciones, cancelación, error del encabezado y autoinicio sin game.
+Compilación con Luau oficial 0.695 correcta. Resultado: **126 pruebas de Pink/SEDWARE y 96 anteriores: 222 pruebas, 77.987 comprobaciones, 0 fallos**. Las 34 pruebas nuevas de arranque abarcan todos los diez casos pedidos, más timeout conjunto, viewport, LocalPlayer, excepciones, cancelación, error del encabezado y autoinicio sin game. Otras 3 pruebas ejercitan el loader real, la causa original de un error HTTP y la identificación de un fallo de compilación.
 
 La lógica de arranque y los callbacks se ejecutaron sobre el archivo autónomo real con dobles deterministas. **No son pruebas de Roblox Studio ni Da Hood real.** Esas ejecuciones y las limitaciones específicas del host externo siguen pendientes. El loader depende de loadstring compatible con Luau y game:HttpGet proporcionados por un host autorizado; esas funciones no habilitan código remoto desde un LocalScript normal publicado. El script no intenta eludir esas restricciones.
 
 El loader anterior estaba fijado a otro commit y continuará cargando esa versión. Hay que sustituir su línea por el Raw nuevo publicado; actualizar solamente main no modifica el código que descarga aquel enlace.
+
+La versión corregida está publicada en el commit `817e81df4cfce3936f8e3b10beaff1561dfebe3f`. [Raw nuevo, verificado HTTP 200 y byte por byte](https://raw.githubusercontent.com/sedonkkk/sedon-/817e81df4cfce3936f8e3b10beaff1561dfebe3f/PinkDotLock.lua): 105.054 bytes; SHA-256 `c6afb5156e853aff3a17ba0aa3943a3d0250de703c365d92ffc5236d9ca2a1d5`.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/817e81df4cfce3936f8e3b10beaff1561dfebe3f/PinkDotLock.lua"))()
+```
