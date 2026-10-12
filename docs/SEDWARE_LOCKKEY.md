@@ -37,3 +37,13 @@ Compilador oficial Luau 0.695. **30 pruebas de LockKey y 292 comprobaciones**, c
 Total: **156 pruebas de Pink/SEDWARE + 96 anteriores = 252 pruebas, 78.279 comprobaciones, 0 fallos**. Los casos de cliente usan el bundle real con dobles deterministas. **No se ejecutaron Roblox Studio ni Da Hood real.** La corrección elimina el rechazo reproducido; la ejecución en el entorno del usuario requiere sus APIs nativas y no se certifica mediante estos dobles.
 
 Para comprobar qué versión ejecutas, busca `[SEDWARE][Execution][START] SEDWARE startup v3` y después `Configuration READY`, `Input READY`, `Session ACTIVE`. Si aparece otro FAIL, conserva su explicación y el stack completo. DebugMode informa la tecla detectada y los resultados de selección. El loader fijado al commit anterior continuará ejecutando el código antiguo; debe usarse el enlace de la publicación nueva.
+
+## Publicación verificada
+
+La corrección está publicada en el commit `02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7`. [Raw nuevo](https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua): HTTP 200, 107.988 bytes coincidentes con el archivo compilado y probado; SHA-256 `1237403a663b604ac77ea070850d0c087a013a151062e9be80596c09a7e861ec`.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua"))()
+```
+
+PinkLoader.lua se actualizó a este nuevo commit. La entrada SEDWARE.lua de main mantiene su dirección y carga el payload vigente; usa la línea fijada anterior si necesitas ejecutar exactamente esta versión v3. Ambas vías requieren un host autorizado compatible con Luau y las APIs del cliente.

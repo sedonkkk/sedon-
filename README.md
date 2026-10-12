@@ -20,7 +20,7 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [SEDWARE.lua](SEDWARE.lua) ofrece una entrada estable que carga PinkDotLock.lua de main; recibe futuras correcciones usando la misma URL.
 
-[Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/817e81df4cfce3936f8e3b10beaff1561dfebe3f/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 126 pruebas de Pink/SEDWARE y 96 anteriores pasan; motor de Studio y Da Hood sin comprobar.
+[Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 156 pruebas de Pink/SEDWARE y 96 anteriores pasan; motor de Studio y Da Hood sin comprobar.
 
 ## Ejecutar
 

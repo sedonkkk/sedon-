@@ -1,5 +1,5 @@
 -- SEDWARE: verified public payload pinned to a specific commit.
-local rawURL = "https://raw.githubusercontent.com/sedonkkk/sedon-/817e81df4cfce3936f8e3b10beaff1561dfebe3f/PinkDotLock.lua"
+local rawURL = "https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua"
 print("[SEDWARE][Loader][START] Retrieving the verified payload")
 assert(type(loadstring)=="function", "[SEDWARE][Loader][FAIL] Host must provide a Luau-compatible loadstring")
 local ok, source = pcall(function() return game:HttpGet(rawURL) end)
