@@ -30,6 +30,8 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Controles, fórmulas, diagnóstico y pruebas](docs/SEDWARE_CAM_LOCK.md) · [Lugar para probar con dos clientes](studio/SedwareCamLock.rbxlx). `python3 scripts/check_cam.py` comprueba el archivo real con dobles; falta ejecución nativa en Roblox y no integra armas de Da Hood.
 
+[Raw Cam Lock verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/SedwareCamLock.lua) · [CamLoader.lua](CamLoader.lua). 62 pruebas de la nueva variante y 342 anteriores pasan; ambos proyectos SEDWARE tienen cargadores separados.
+
 ## Ejecutar el laboratorio original
 
 Abre [`build/AimLab.rbxlx`](build/AimLab.rbxlx) con Roblox Studio y pulsa **Play**. Selecciona un bot con el cursor, mantén **RMB** para orientar la cámara y dispara con **F** o el botón. Puedes minimizar y mover el panel. Sus seis secciones incluyen los controles de predicción, blancos, armas y diagnósticos.

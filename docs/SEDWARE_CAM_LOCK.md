@@ -79,6 +79,37 @@ python3 scripts/check_cam.py
 
 El builder comprueba dependencias y genera el archivo y el lugar XML. El check usa el compilador oficial Luau y pruebas de predicción, cámara y eventos que ejecutan el **archivo autónomo real** mediante dobles explícitos de APIs. Comprueba controles, posición predicha, escrituras CFrame, prioridades, FPS, vida del objetivo, inicialización, reinicio y desconexiones. Los dobles no verifican renderizado, movimiento ni respuesta real de Roblox; la comprobación nativa anterior sigue pendiente.
 
-Resultados de la variante antes de publicar el loader: **59 pruebas, 1.536 comprobaciones, cero fallos**. Incluyen 13 pruebas de predicción, 10 de orientación/FPS y 36 del archivo autónomo con GUI/eventos. También pasan las 342 pruebas de los proyectos anteriores sin modificar sus módulos ni archivos autónomos. La compilación oficial y el contenido del lugar XML se verifican por separado.
+Resultados: **62 pruebas, 1.544 comprobaciones, cero fallos**, además de compilación oficial de 17 archivos de la variante y correspondencia exacta de la fuente incluida en el lugar XML.
 
-El enlace Raw del commit publicado se añade después de comprobar que entrega exactamente los bytes probados.
+| Pruebas | Casos | Comprobaciones | Alcance |
+| --- | ---: | ---: | --- |
+| Predicción | 13 | 914 | Configuración, X/Y, ganancia, Memory, Auto y curva de ping. |
+| Cámara | 10 | 148 | Orientación y posición, respuesta 30/60/144 FPS, intervalos irregulares y direcciones verticales. |
+| Archivo autónomo con GUI | 36 | 474 | Eventos reales del bundle bajo dobles de APIs: controles, C, orden de render, persistencia, avisos, espera limitada, fallos, cancelación, reinicio y limpieza. |
+| Loader | 3 | 8 | Texto del loader publicado bajo un host simulado: carga completa, fallo HTTP y error de compilación. |
+
+También pasan las **342 pruebas anteriores**, con 80.528 comprobaciones, sin modificar sus módulos ni archivos autónomos. Total del repositorio: 404 pruebas y 82.072 comprobaciones. Estos resultados no representan una ejecución nativa en Roblox ni Da Hood.
+
+## Entrega publicada
+
+Archivo del commit **ed6faa918328294d1ca8d865343f865a1b6fad78**, distinto de los commits anteriores de PinkDotLock:
+
+- [SedwareCamLock.lua Raw](https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/SedwareCamLock.lua): HTTP 200, 132.257 bytes; SHA-256 `b8e04b27d49a8c67d000da592ef628c80cd336faec6a4612f3d33bae30dc0d95`.
+- [Lugar de Studio Raw](https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/studio/SedwareCamLock.rbxlx): HTTP 200, 135.873 bytes; SHA-256 `f397d6c0e7411a42813e271472f0ca35a33177d999a80f8bb8f221a4b2a8a59b`.
+- [CamLoader.lua](../CamLoader.lua): cargador breve con diagnóstico HTTP/compilación/ejecución. Toda la lógica permanece en SedwareCamLock.lua.
+
+Ambas respuestas Raw se compararon byte por byte con los archivos locales probados. El comando directo es:
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/SedwareCamLock.lua"))()
+```
+
+Si necesitas descargar la sesión después, guarda el resultado:
+
+```lua
+local api = loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/SedwareCamLock.lua"))()
+-- Cuando quieras limpiar todos sus recursos:
+api.Unload()
+```
+
+Este enlace queda fijado a esa versión. Para publicar una actualización, vuelve a construir/probar, publica su nuevo commit y ejecuta `scripts/publish_cam_loader.py --raw-url URL_RAW_REAL`; el script exige un commit existente y bytes coincidentes antes de generar el cargador. No basta actualizar main para cambiar un enlace que contiene un commit fijo.
