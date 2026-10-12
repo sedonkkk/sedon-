@@ -140,11 +140,11 @@ test("first-person reference is viewport center without mouse or inset", functio
 	near(reference.Y, 540)
 end)
 
-test("third-person reference subtracts the inset exactly once", function()
+test("third-person reference uses screen mouse coordinates without topbar subtraction", function()
 	local viewport = { X = 1280, Y = 720 }
 	local reference = Selection.reference("ThirdPerson", viewport, { X = 520, Y = 300 }, { X = 4, Y = 36 })
-	near(reference.X, 516)
-	near(reference.Y, 264)
+	near(reference.X, 520)
+	near(reference.Y, 300)
 	local noInset = Selection.reference("ThirdPerson", viewport, { X = 520, Y = 300 })
 	near(noInset.X, 520)
 	near(noInset.Y, 300)
@@ -158,7 +158,7 @@ test("reference rejects invalid modes and nonfinite dimensions or coordinates", 
 	check(Selection.reference("ThirdPerson", viewport, nil) == nil)
 	check(Selection.reference("ThirdPerson", viewport, { X = 1, Y = 0 / 0 }) == nil)
 	check(Selection.reference("ThirdPerson", viewport, { X = 1, Y = 1 }, { X = 0, Y = math.huge }) == nil)
-	check(Selection.reference("ThirdPerson", viewport, { X = 1e308, Y = 0 }, { X = -1e308, Y = 0 }) == nil)
+	check(Selection.reference("ThirdPerson", viewport, { X = 1e308, Y = 0 }, { X = -1e308, Y = 0 }) ~= nil)
 end)
 
 test("nearest valid candidate uses screen distance rather than world distance", function()

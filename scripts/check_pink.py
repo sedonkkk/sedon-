@@ -29,7 +29,8 @@ def main():
     harness.write_text('local mock=require("./PinkMock").new()\nlocal source='+literal+'\n'
         'local function reloadBundle(env)\n local chunk=assert(loadstring(source,"PinkDotLock.bundleTest"))\n'
         ' setfenv(chunk,env)\n return chunk()\nend\n'
-        'local bundle=reloadBundle(mock.env)\nrequire("./pink_gui_body")(mock,bundle,reloadBundle)\n',encoding='utf-8')
+        'local bundle=reloadBundle(mock.env)\nrequire("./pink_gui_body")(mock,bundle,reloadBundle)\n'
+        'require("./pink_startup_body")(reloadBundle)\n',encoding='utf-8')
     try: subprocess.run([runner,str(harness)],cwd=ROOT,check=True)
     finally: harness.unlink(missing_ok=True)
 

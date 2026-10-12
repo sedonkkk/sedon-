@@ -42,9 +42,9 @@ function Selection.reference(mode, viewportSize, mousePosition, inset)
 			return nil
 		end
 	end
-	-- UserInputService.GetMouseLocation includes the GUI inset, while projected
-	-- candidates use WorldToViewportPoint. Convert exactly once.
-	local x, y = mouseX - insetX, mouseY - insetY
+	-- GetMouseLocation and WorldToViewportPoint share the screen/viewport origin
+	-- used by IgnoreGuiInset=true. No topbar subtraction is appropriate here.
+	local x, y = mouseX, mouseY
 	if not finite(x) or not finite(y) then
 		return nil
 	end

@@ -1,10 +1,12 @@
 # PINK DOT LOCK
 
+La versión actual usa la marca **SEDWARE** y corrige el arranque. [Diagnóstico, causas reproducidas y guía de consola](SEDWARE_INITIALIZATION.md).
+
 Proyecto independiente de DH PREDICTION LAB: C selecciona un personaje, muestra un DOT Hot Pink sobre su parte actual y C lo libera. No hay menú. El código lee la cámara para proyectar y seleccionar; nunca escribe su CFrame, Focus, CameraSubject ni mueve el mouse o gira al personaje. No modifica el sistema de disparo de Da Hood.
 
 ## Archivos y arranque
 
-- `PinkDotLock.lua`: archivo autónomo, con 12 módulos integrados y configuración editable al principio. No requiere otros archivos Lua, HTTP ni APIs de un ejecutor para su lógica.
+- `PinkDotLock.lua`: archivo autónomo, con 13 módulos integrados y configuración editable al principio. No requiere otros archivos Lua, HTTP ni APIs de un ejecutor para su lógica.
 - `src/pink/`: configuración, detección de cámara, selección, predicción X/Y, overlay, auditoría de APIs, adaptador de disparo y ciclo de vida.
 - `src/shared/`: se reutilizan **sin cambios** Settings, MotionHistory, Latency y Ballistics de DH PREDICTION LAB.
 - `src/pink_demo/`: cliente y servidor opcionales del disparo propio de prueba. Estos scripts funcionan exclusivamente en Studio.
@@ -19,17 +21,17 @@ python3 scripts/build_pink.py
 
 También se incluyen las mismas copias listas para abrir en [`studio/PinkDotLock.rbxlx`](../studio/PinkDotLock.rbxlx) y [`studio/PinkDotLockTest.rbxlx`](../studio/PinkDotLockTest.rbxlx), para descargarlas desde GitHub sin instalar el compilador ni Python.
 
-Después de comprobar reloj, viewport, entrada, servicios e inicializar recursos aparece abajo al centro **PINK DOT LOCK — Successfully Loaded | Press C to Lock**, durante 4 segundos. Locked, Unlocked y Target Lost usan el mismo aviso compacto durante 2 segundos. Una sola notificación reutilizada evita acumulación. Las APIs ausentes o los fallos críticos impiden anunciar éxito y generan un informe en consola; si quedan disponibles las APIs de GUI, aparece **PINK DOT LOCK | Load Failed** durante 2 segundos.
+Después de comprobar reloj, viewport, entrada, servicios e inicializar recursos aparece abajo al centro **SEDWARE — Successfully Loaded | Press C to Lock**, durante 4 segundos. Locked, Unlocked y Target Lost usan el mismo aviso compacto durante 2 segundos. C sin candidatos muestra **SEDWARE — No valid target**. Una sola notificación reutilizada evita acumulación. Las APIs ausentes o los fallos críticos impiden anunciar éxito y generan un informe en consola; si quedan disponibles las APIs de GUI, aparece **SEDWARE | Load Failed** con la explicación durante 2 segundos. Los recursos temporales tienen una espera global de 8 segundos por defecto.
 
 ## Selección y cámara libre
 
-Primera persona usa el centro del viewport con radio `FirstPersonFOV=120` píxeles. Tercera persona usa el cursor, convertido al viewport restando una vez `GuiService:GetGuiInset()`, con radio `ThirdPersonFOV=180`. Se elige el personaje válido más cercano en pantalla. La adquisición requiere vida, parte válida, distancia permitida, posición visible en pantalla y, cuando está activado, raycast de visibilidad.
+Primera persona usa el centro del viewport con radio `FirstPersonFOV=120` píxeles. Tercera persona usa las coordenadas del cursor, con radio `ThirdPersonFOV=180`. Las coordenadas de GetMouseLocation/WorldToViewportPoint se usan directamente para esta GUI con IgnoreGuiInset=true; no se suma/resta el margen de la barra superior. Se elige el personaje válido más cercano en pantalla. La adquisición requiere vida, parte válida, distancia permitida, posición visible en pantalla y, cuando está activado, raycast de visibilidad.
 
 `LockMode="Auto"` combina CameraMode.LockFirstPerson, la identidad del sujeto local y las distancias cámara-cabeza y cámara-Focus. La entrada/salida automática usa umbrales distintos de 0.75/1.5 studs y confirmación de 0.2 segundos. Una cabeza cercana por sí sola no confirma primera persona. Es una heurística pública: cámaras personalizadas pueden necesitar `"FirstPerson"` o `"ThirdPerson"` explícitos.
 
 Con `TargetPersistence=true`, mover cursor/cámara, cambiar de modo, salir del FOV o quedar oculto no cambia el objetivo. Fuera de pantalla se oculta el DOT y se conserva el bloqueo. Muerte, eliminación, respawn, pérdida de parte o superar `MaxDistance` lo invalidan. No se busca un sustituto automáticamente. Con persistencia desactivada, perder FOV o visibilidad también libera el objetivo.
 
-El DOT sigue **TargetPart.Position actual**, cada RenderStepped, con corrección del inset; no usa la predicción ni su suavizado. Por defecto mide 6 píxeles, es circular, `#FF69B4`, opaco y tiene contorno blanco de 1 píxel. Los avisos y el DOT son pasivos, sin botones ni captura de entrada. C se ignora si Roblox procesó la entrada o se está escribiendo en un TextBox.
+El DOT sigue **TargetPart.Position actual**, cada RenderStepped, usando coordenadas del viewport; no usa la predicción ni su suavizado. Por defecto mide 6 píxeles, es circular, `#FF69B4`, opaco y tiene contorno blanco de 1 píxel. Los avisos y el DOT son pasivos, sin botones ni captura de entrada. C se ignora si Roblox procesó la entrada o se está escribiendo en un TextBox; DebugMode informa ese rechazo. El DOT permanece oculto hasta seleccionar un objetivo válido.
 
 ## Configuración y unidades
 
@@ -38,6 +40,7 @@ Edita `local Config = {...}` al principio del archivo autónomo antes de ejecuta
 | Campos | Efecto |
 | --- | --- |
 | Enabled, LockKey | Activa el arranque; tecla de bloqueo. False no crea recursos y descarga una instancia anterior. |
+| InitializationTimeout, InitializationPollInterval | Tiempo máximo global de preparación y sondeo en segundos; 8 y 0,05 por defecto. |
 | LockMode, FirstPersonFOV, ThirdPersonFOV | Referencia y radio de selección en píxeles. |
 | ModeEnterDistance, ModeExitDistance, ModeDwellSeconds | Umbrales en studs y confirmación temporal de Auto. |
 | TargetPart, TargetPersistence, VisibilityCheck, MaxDistance | Parte observada, retención, visibilidad de adquisición y límite en studs. |
@@ -55,7 +58,7 @@ Edita `local Config = {...}` al principio del archivo autónomo antes de ejecuta
 | MaxFlightSeconds | Límite de vuelo para proyectiles configurados explícitamente. |
 | ShowDot, DotSize, DotColor, DotTransparency, DotOutline, DotOutlineColor | Apariencia y visibilidad reales del DOT. |
 | ShowNotifications, WelcomeNotification, WelcomeDuration, NotificationDuration | Avisos y duración, sin menú persistente. |
-| DebugMode | Una línea por segundo en consola con objetivo, modo, ping, X/Y, velocidad, posiciones, distancia, edad, error y estado. |
+| DebugMode | Diagnóstico de cada pulsación de C y línea por segundo con objetivo, modo, ping, X/Y, velocidad, posiciones, distancia, edad, error y estado. Las trazas críticas de arranque siempre están activas. |
 
 Para esta implementación elegimos segundos como unidad de PredictionX/Y. No convertimos las escalas antiguas 14.20 o 13.37. Los valores proporcionados son **referencias de calibración**, no precisión garantizada ni propiedades de Da Hood.
 
@@ -129,12 +132,12 @@ python3 scripts/check.py
 
 Herramienta oficial Luau 0.695, commit `1f6ff5d6f0072f2fab2adf35d1ffbaae7d848ad0`. La primera orden verifica que el archivo coincide con sus fuentes, compila y ejecuta pruebas matemáticas, del adaptador y del **archivo completo** mediante dobles de eventos/APIs. La segunda conserva las pruebas anteriores. Los mensajes Load Failed de las pruebas corresponden a fallos provocados deliberadamente.
 
-Resultados verificados: **89 pruebas nuevas, 1.740 comprobaciones, 0 fallos**; **96 pruebas anteriores, 75.895 comprobaciones, 0 fallos**. Total **185 pruebas, 77.635 comprobaciones**. El archivo autónomo integra 12 módulos, no contiene requires externos y pesa aproximadamente 86 KB. Las fuentes anteriores de DH PREDICTION LAB se preservan.
+Resultados verificados: **123 pruebas de Pink/SEDWARE, 2.082 comprobaciones, 0 fallos**, incluidas **34 pruebas de arranque nuevas**; **96 pruebas anteriores, 75.895 comprobaciones, 0 fallos**. Total **219 pruebas, 77.977 comprobaciones**. El archivo autónomo integra 13 módulos y no contiene requires externos. Las fuentes anteriores de DH PREDICTION LAB se preservan.
 
 | Requisito de las 23 comprobaciones | Evidencia automatizada | Studio / Da Hood real |
 | --- | --- | --- |
 | 1–2 Inicialización y bienvenida | Archivo completo: recursos, texto, fade y caducidad, sin éxito ante fallo | Pendiente verificar render real |
-| 3–5 Selección en primera/tercera persona y desbloqueo con C | Entrada real del bundle con dobles, referencia central/cursor/inset y FOV | Pendiente probar entrada/cámara del motor |
+| 3–5 Selección en primera/tercera persona y desbloqueo con C | Entrada real del bundle con dobles, referencia central/cursor, espacio de coordenadas y FOV | Pendiente probar entrada/cámara del motor |
 | 6 Persistencia | Retención sin rescan con cursor distinto, occlusión y fuera de pantalla | Pendiente escena real |
 | 7–8 Color y seguimiento del DOT | Propiedades Hot Pink, 6px y coordenadas observadas distintas de la predicción | Pendiente render/salto real |
 | 9–10 Cambio de modo y cámara libre | Histéresis, dwell, lock retenido; espías registran cero escrituras de cámara/mouse | Pendiente cámara personalizada del juego |

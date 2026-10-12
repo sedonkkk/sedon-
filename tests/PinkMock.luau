@@ -26,9 +26,32 @@ local Mock = {}
 -- Kept independent of RobloxMock so DH PREDICTION LAB tests remain unchanged.
 
 function Mock.new()
-	local instances, connections = {}, {}
+	local instances, connections, logs = {}, {}, {}
 	local counters = {candidateScans = 0, projections = 0, raycasts = 0, cameraWrites = 0, mouseWrites = 0}
 	local clock, scheduled = 1, {}
+	local function pumpScheduled()
+		-- Only scheduled callbacks run during task.wait. RenderStepped is fired
+		-- explicitly by advance(), so readiness tests control each phase.
+		for _ = 1, 1000 do
+			local nextIndex, nextDue
+			for index, pending in ipairs(scheduled) do
+				if pending.due <= clock and (not nextDue or pending.due < nextDue) then
+					nextIndex, nextDue = index, pending.due
+				end
+			end
+			if not nextIndex then return end
+			local pending = table.remove(scheduled, nextIndex)
+			pending.callback(table.unpack(pending.arguments))
+		end
+		error("mock scheduled callback limit exceeded")
+	end
+	local function logger(level)
+		return function(...)
+			local parts = {}
+			for index = 1, select("#", ...) do parts[index] = tostring(select(index, ...)) end
+			table.insert(logs, {level = level, text = table.concat(parts, " ")})
+		end
+	end
 	local function signal()
 		local self = {listeners = {}}
 		function self:Connect(callback)
@@ -330,6 +353,8 @@ function Mock.new()
 	end
 	makeCharacter(player, Vector3.new(0, 0, 0))
 	camera.CameraSubject = player.Character:FindFirstChildOfClass("Humanoid")
+	local mockOs = table.clone(os)
+	mockOs.clock = function() return clock end
 	local env = setmetatable({game = game, workspace = world, Vector2 = Vector2, Vector3 = Vector3,
 		UDim = UDim, UDim2 = UDim2, Color3 = Color3, Enum = Enum, Instance = Instance,
 		DHPREDICTION_NO_AUTOSTART = true, PINK_DOT_NO_AUTOSTART = true,
@@ -354,8 +379,15 @@ function Mock.new()
 			delay = function(delay, callback, ...)
 				table.insert(scheduled, {due = clock + delay, callback = callback, arguments = {...}})
 			end,
-			wait = function() return 0 end},
-		warn = print,
+			wait = function(seconds)
+				local duration = seconds or 0.03
+				assert(type(duration) == "number" and duration >= 0 and duration < math.huge, "mock invalid wait duration")
+				clock += duration
+				pumpScheduled()
+				return duration
+			end},
+		os = mockOs,
+		print = logger("print"), warn = logger("warn"),
 		typeof = function(value)
 			if type(value) == "table" then
 				if value._mockType then return value._mockType end
@@ -365,12 +397,28 @@ function Mock.new()
 			return typeof(value)
 		end,
 	}, {__index = getfenv()})
-	local result = {env = env, services = services, instances = instances, connections = connections,
+	local result = {env = env, services = services, instances = instances, connections = connections, logs = logs,
 		Vector2 = Vector2, playerGui = playerGui, camera = camera, world = world, signal = signal, counters = counters}
 	function result:countConnections()
 		local count = 0
 		for _, connection in ipairs(connections) do if connection.Connected then count += 1 end end
 		return count
+	end
+	function result:countSignalConnections(event)
+		local count = 0
+		for _, connection in ipairs(event.listeners) do if connection.Connected then count += 1 end end
+		return count
+	end
+	function result:hasLog(fragment)
+		for _, entry in ipairs(logs) do
+			if string.find(entry.text, fragment, 1, true) then return true end
+		end
+		return false
+	end
+	function result:logText()
+		local parts = {}
+		for _, entry in ipairs(logs) do table.insert(parts, entry.text) end
+		return table.concat(parts, "\n")
 	end
 	function result:find(nameOrText, root)
 		root = root or playerGui
@@ -381,12 +429,11 @@ function Mock.new()
 	end
 	function result:setPointer(x, y) pointer = Vector2.new(x, y) end
 	function result:setTime(seconds) clock = seconds end
+	function result:getTime() return clock end
+	function result:schedule(seconds, callback) env.task.delay(seconds, callback) end
 	function result:advance(seconds)
 		clock += seconds
-		for index = #scheduled, 1, -1 do
-			local pending = scheduled[index]
-			if pending.due <= clock then table.remove(scheduled, index); pending.callback(table.unpack(pending.arguments)) end
-		end
+		pumpScheduled()
 		services.RunService.RenderStepped:Fire(seconds)
 	end
 	function result:resetCounters()

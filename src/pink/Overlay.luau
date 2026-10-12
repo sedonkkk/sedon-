@@ -25,7 +25,7 @@ end
 
 function Overlay.new(playerGui, config)
 	local self = setmetatable({ config = config or {}, owned = {}, destroyed = false }, Overlay)
-	local ok, problem = pcall(function()
+	local ok, problem = xpcall(function()
 		local settings = self.config
 		local hotPink, white = Color3.fromRGB(255, 105, 180), Color3.fromRGB(255, 255, 255)
 		self.gui = create(self, "ScreenGui", {
@@ -74,6 +74,8 @@ function Overlay.new(playerGui, config)
 			TextYAlignment = Enum.TextYAlignment.Center, TextWrapped = true,
 			Position = UDim2.fromOffset(17, 37), Size = UDim2.new(1, -32, 0, 25), ZIndex = 6,
 		}, self.toast)
+	end,function(problem)
+		return if debug and type(debug.traceback)=="function" then debug.traceback(tostring(problem),2) else tostring(problem)
 	end)
 	if not ok then
 		self:destroy()
@@ -86,9 +88,9 @@ function Overlay:setDot(viewportPoint, onScreen, inset)
 	if self.destroyed then return false end
 	local x, y = xy(viewportPoint)
 	if not onScreen or self.config.ShowDot == false or not x then self:hideDot(); return false end
-	local insetX, insetY = xy(inset)
-	-- WorldToViewportPoint omits the GUI inset; this full-screen GUI includes it.
-	self.dot.Position = UDim2.fromOffset(x + (insetX or 0), y + (insetY or 0))
+	-- IgnoreGuiInset=true uses viewport coordinates directly; adding the topbar
+	-- inset here displaced the dot away from its observed target.
+	self.dot.Position = UDim2.fromOffset(x, y)
 	self.dot.Visible = true
 	return true
 end
@@ -151,4 +153,26 @@ function Overlay:destroy()
 	table.clear(self.owned)
 end
 
+-- Minimal failure display has no dependency on Config, CanvasGroup or a clock.
+function Overlay.showFailure(playerGui,message)
+	if not playerGui then return false end
+	assert(task and type(task.delay)=="function","No task.delay available to clean up the error notification")
+	local display=setmetatable({owned={},destroyed=false},Overlay)
+	local ok,problem=xpcall(function()
+		local old=playerGui:FindFirstChild("PinkDotLock_LoadFailure")
+		if old then old:Destroy() end
+		display.gui=create(display,"ScreenGui",{Name="PinkDotLock_LoadFailure",IgnoreGuiInset=true,ResetOnSpawn=false,DisplayOrder=50},playerGui)
+		local frame=create(display,"Frame",{Name="Notification",Active=false,BackgroundColor3=Color3.fromRGB(0,0,0),
+			BackgroundTransparency=0.25,BorderSizePixel=0,AnchorPoint=Vector2.new(0.5,1),
+			Position=UDim2.new(0.5,0,1,-28),Size=UDim2.new(0.85,0,0,90)},display.gui)
+		create(display,"UISizeConstraint",{MaxSize=Vector2.new(420,90)},frame)
+		create(display,"TextLabel",{Name="Title",Active=false,BackgroundTransparency=1,Text="SEDWARE | Load Failed",
+			TextColor3=Color3.fromRGB(255,105,180),TextSize=15,Size=UDim2.new(1,-20,0,26),Position=UDim2.fromOffset(10,5)},frame)
+		create(display,"TextLabel",{Name="Body",Active=false,BackgroundTransparency=1,Text=string.sub(tostring(message),1,280),TextWrapped=true,
+			TextColor3=Color3.fromRGB(255,255,255),TextSize=11,Size=UDim2.new(1,-20,0,50),Position=UDim2.fromOffset(10,33)},frame)
+		task.delay(2,function() display:destroy() end)
+	end,function(err) return if debug and type(debug.traceback)=="function" then debug.traceback(tostring(err),2) else tostring(err) end)
+	if not ok then display:destroy();error(problem,2) end
+	return true
+end
 return Overlay

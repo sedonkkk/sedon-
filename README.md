@@ -8,11 +8,13 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Instalación y controles](docs/STANDALONE.md) · [GitHub y loader](docs/DISTRIBUTION.md) · [Compatibilidad y límites para Da Hood](docs/DA_HOOD_COMPATIBILITY.md) · [Pruebas](docs/VALIDATION.md)
 
-## PINK DOT LOCK — proyecto independiente
+## SEDWARE / PINK DOT LOCK — proyecto independiente
 
 [`PinkDotLock.lua`](PinkDotLock.lua): C selecciona un personaje con mira central en primera persona o cursor en tercera persona y C lo libera. DOT Hot Pink de 6 píxeles, cámara libre, avisos compactos y configuración al principio del archivo; sin menú. Reutiliza Memory, latencia y balística, añade predicción X/Z e Y por separado y conserva DH PREDICTION LAB. No integra el sistema de disparo de Da Hood.
 
 [Configuración, API, demo de disparo propio y pruebas](docs/PINK_DOT_LOCK.md). `python3 scripts/build_pink.py` genera el archivo y los lugares de Studio; `python3 scripts/check_pink.py` ejecuta sus comprobaciones.
+
+[Corrección de inicialización y guía de consola SEDWARE](docs/SEDWARE_INITIALIZATION.md): espera limitada de recursos, diagnósticos por fase y de C; valores X/Y conservados.
 
 [Raw de Pink verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/837ef39140063c4576a7aa9166cda4cf2e4ceec3/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 89 pruebas nuevas y 96 anteriores pasan; motor de Studio y Da Hood sin comprobar.
 

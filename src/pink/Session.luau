@@ -17,9 +17,12 @@ local function disconnect(list)
  for _, c in list do pcall(function() c:Disconnect() end) end
  table.clear(list)
 end
-local function connect(list, signal, callback)
+local function connect(list, signal, callback,label)
+ label=label or "Event"
  local c = signal:Connect(callback)
+ assert(c and type(c.Disconnect)=="function",label.." did not return a disconnectable connection")
  table.insert(list,c)
+ assert(c.Connected==true,label.." connection is not active")
  return c
 end
 
@@ -38,17 +41,20 @@ function Session:_origin()
  return camera and camera.CFrame and camera.CFrame.Position
 end
 function Session:_targetData(player)
- if self.destroyed or not player or player==self.player or player.Parent~=self.services.Players then return nil end
+ if self.destroyed then return nil,"session unloaded" end
+ if not player then return nil,"no player" end
+ if player==self.player then return nil,"local player" end
+ if player.Parent~=self.services.Players then return nil,"player removed" end
  local character=player.Character
- if not character or not character:IsDescendantOf(self.world) then return nil end
+ if not character or not character:IsDescendantOf(self.world) then return nil,"character absent" end
  local humanoid=character:FindFirstChildOfClass("Humanoid")
  local part=character:FindFirstChild(self.config.TargetPart)
- if not humanoid or not finite(humanoid.Health) or humanoid.Health<=0
-  or not part or not part:IsA("BasePart") or not part:IsDescendantOf(character) or not vector(part.Position) then return nil end
+ if not humanoid or not finite(humanoid.Health) or humanoid.Health<=0 then return nil,"humanoid dead or absent" end
+ if not part or not part:IsA("BasePart") or not part:IsDescendantOf(character) or not vector(part.Position) then return nil,"target part invalid" end
  local origin=self:_origin()
- if not vector(origin) then return nil end
+ if not vector(origin) then return nil,"origin unavailable" end
  local distance=(part.Position-origin).Magnitude
- if not finite(distance) or distance>self.config.MaxDistance then return nil end
+ if not finite(distance) or distance>self.config.MaxDistance then return nil,"distance exceeds MaxDistance" end
  return {player=player,character=character,part=part,humanoid=humanoid,distanceStuds=distance,valid=true}
 end
 function Session:IsValidTarget(player)
@@ -117,22 +123,37 @@ function Session:LockTarget(player)
  local t=self:_clock()
  local camera,inset,reference,fov=self:_view(t)
  local selected
- if player then
-  local data=self:_targetData(player)
-  if data then
-   local candidate=self:_candidate(data,camera)
-   if Selection.within(candidate,reference,fov) then selected=candidate end
+ local candidates={}
+ local evaluated,valid=0,0
+ local rejections={}
+ -- Enumerate players only on an explicit lock request, never each render.
+ local players=if player then {player} else self.services.Players:GetPlayers()
+ for _,p in players do
+  if p~=self.player then
+   evaluated+=1
+   local data,reason=self:_targetData(p)
+   if data then
+    local candidate=self:_candidate(data,camera)
+    if not candidate.onScreen then reason="offscreen or behind camera"
+    elseif not candidate.visible then reason="occluded"
+    elseif not Selection.within(candidate,reference,fov) then reason="outside FOV"
+    else valid+=1;table.insert(candidates,candidate) end
+   end
+   if reason and self.config.DebugMode then table.insert(rejections,tostring(p.Name)..":"..reason) end
   end
- else
-  -- Enumerate players only on an explicit lock request, never each render.
-  local candidates={}
-  for _, p in self.services.Players:GetPlayers() do
-   local data=self:_targetData(p)
-   if data then table.insert(candidates,self:_candidate(data,camera)) end
-  end
-  selected=Selection.nearest(candidates,reference,fov)
  end
- if not selected then return false,"No valid visible target in FOV" end
+ selected=Selection.nearest(candidates,reference,fov)
+ self.lastSelection={mode=self.mode,reference=reference,evaluated=evaluated,valid=valid,rejections=rejections,
+  selected=selected and selected.player.Name or nil}
+ if self.config.DebugMode then
+  Runtime.trace(self.report,"Selection",if selected then "SELECTED" else "REJECT",
+   "mode="..self.mode.." reference=("..reference.X..","..reference.Y..") evaluated="..evaluated.." valid="..valid
+   .." rejections="..tostring(evaluated-valid).." ["..table.concat(rejections,"; ").."] selected="..tostring(self.lastSelection.selected))
+ end
+ if not selected then
+  self:_notify("SEDWARE","No valid target")
+  return false,"No valid visible target in FOV"
+ end
  self.locked=selected
  self.prediction:reset()
  self.nextPing=nil
@@ -205,7 +226,7 @@ function Session:_step(t)
  if self.config.DebugMode and (not self.nextDebug or t>=self.nextDebug) then
   self.nextDebug=t+1
   local p=self:GetPrediction()
-  print("[PINK DOT LOCK]", "target="..tostring(self:GetLockedTarget()),"mode="..tostring(self.mode),
+  print("[SEDWARE]", "target="..tostring(self:GetLockedTarget()),"mode="..tostring(self.mode),
    "pingRTTms="..tostring(p and p.rawPingMs),"smoothedRTTms="..tostring(p and p.smoothedPingMs),
    "X="..tostring(p and p.predictionX),"Y="..tostring(p and p.predictionY),
    "velocity="..tostring(p and p.velocity),"current="..tostring(p and p.currentPosition),
@@ -259,47 +280,44 @@ function Session:destroy()
  if self.prediction then self.prediction:reset() end
  if self.overlay then self.overlay:destroy() end
  if self.owner then self.owner:Destroy() end
+ if self.active then Runtime.trace(self.report,"Session","STOPPED","All session connections and owned graphics removed") end
+ self.active=false
 end
 Session.Unload=Session.destroy
 
 function Session.notifyFailure(report,message)
+ if report and report.failureNotified then return end
+ if report then report.failureNotified=true end
  Runtime.reportFailure(message)
- -- A failure toast owns a short-lived GUI only; it never registers a session.
- if not report or not report.playerGui or not task or type(task.delay)~="function" then return end
- local overlay
- local ok=pcall(function()
-  local timeOK,t=pcall(function() return report.world:GetServerTimeNow() end)
-  if not timeOK or not finite(t) then t=os.clock() end
-  local previous=report.playerGui:FindFirstChild("PinkDotLock_LoadFailure")
-  if previous then previous:Destroy() end
-  local cfg=assert(Config.new({ShowDot=false,ShowNotifications=true}))
-  overlay=Overlay.new(report.playerGui,cfg)
-  overlay.gui.Name="PinkDotLock_LoadFailure"
-  overlay:notify("PINK DOT LOCK | Load Failed",t,2)
-  overlay:step(t+0.18)
-  task.delay(2,function() overlay:destroy() end)
- end)
- if not ok and overlay then overlay:destroy() end
+ -- Independent Frame toast: no CanvasGroup, valid Config or server clock needed.
+ local ok,result=xpcall(function() return Overlay.showFailure(report and report.playerGui,message) end,Runtime.traceback)
+ Runtime.trace(report,"FailureNotification",if ok and result then "READY" else "FAIL",
+  if ok and result then "Short error notification displayed" elseif ok then "PlayerGui unavailable; see console error" else result)
 end
 function Session.init(options,report)
  local config,message=Config.new(options)
  assert(config,message)
- report=report or Runtime.check(config)
+ report=report or Runtime.awaitReady(config)
  assert(report.ready,Runtime.errorMessage(report))
  local self=setmetatable({config=config,services=report.services,player=report.player,world=report.world,
-  playerGui=report.playerGui,connections={},targetConnections={},adapters={},destroyed=false},Session)
+  playerGui=report.playerGui,connections={},targetConnections={},adapters={},destroyed=false,report=report},Session)
  local old=report.playerGui:FindFirstChild(OWNER_NAME)
  if old and not old:IsA("BindableEvent") then error("Owner namespace is occupied by another object") end
  if not config.Enabled then
   if old then old:Fire() end
   self.destroyed=true
+  Runtime.trace(report,"Session","DISABLED","Enabled=false; no GUI or input listeners created")
   return self
  end
- local ok,err=pcall(function()
+ local stage="Prediction"
+ local ok,err=xpcall(function()
   self.prediction=Prediction.new(config)
   self.modeDetector=ModeDetector.new(config)
+  stage="Graphics"
   self.overlay=Overlay.new(self.playerGui,config)
   self.ui=self.overlay
+  assert(self.overlay.gui.Parent==self.playerGui,"ScreenGui was not parented to PlayerGui")
+  Runtime.trace(report,"Graphics","READY","DOT and notification objects created in PlayerGui")
   connect(self.connections,self.overlay.gui.Destroying,function() self:destroy() end)
   if typeof(script)=="Instance" and script.Destroying then
    connect(self.connections,script.Destroying,function() self:destroy() end)
@@ -315,41 +333,65 @@ function Session.init(options,report)
   connect(self.connections,self.services.Players.PlayerRemoving,function(player)
    if self.locked and self.locked.player==player then self:UnlockTarget("Target Lost") end
   end)
-  connect(self.connections,self.services.UserInputService.InputBegan,function(input,processed)
-   if self.destroyed or processed or self.services.UserInputService:GetFocusedTextBox()~=nil then return end
+  stage="Input"
+  self.inputConnection=connect(self.connections,self.services.UserInputService.InputBegan,function(input,processed)
+   local succeeded,problem=xpcall(function()
    if input.KeyCode==self.config.LockKey then
-    local succeeded,problem=pcall(function()
-     if self.locked then self:UnlockTarget() else self:LockTarget() end
-    end)
-    if not succeeded then
-     self:destroy()
-     Session.notifyFailure(report,tostring(problem))
+    if self.config.DebugMode then Runtime.trace(report,"Input","KEY","key="..tostring(input.KeyCode).." detected; mode="..tostring(self.mode)) end
+    if self.destroyed or processed or self.services.UserInputService:GetFocusedTextBox()~=nil then
+     if self.config.DebugMode then
+      Runtime.trace(report,"Selection","REJECT","mode="..tostring(self.mode).." reference=(not evaluated) evaluated=0 valid=0 rejections=1 selected=nil reason="
+       ..(if processed then "Roblox processed input" else "TextBox focused or session inactive"))
+     end
+     return
     end
+    if self.locked then
+     if self.config.DebugMode then
+      local _,_,reference=self:_view(self:_clock())
+      Runtime.trace(report,"Selection","UNLOCKED","mode="..self.mode.." reference=("..reference.X..","..reference.Y
+       ..") evaluated=0 valid=0 rejections=0 selected=nil reason=LockKey toggled existing lock")
+     end
+     self:UnlockTarget()
+    else self:LockTarget() end
    end
-  end)
+   end,Runtime.traceback)
+   if not succeeded then
+    self:destroy()
+    Session.notifyFailure(report,"InputBegan: "..tostring(problem))
+   end
+  end,"InputBegan")
+  Runtime.trace(report,"Input","READY","InputBegan connected; LockKey="..tostring(config.LockKey))
+  stage="View"
   -- Exercise view/clock/inset before announcing successful initialization.
   self:_step(self:_clock())
-  connect(self.connections,self.services.RunService.RenderStepped,function()
-   local succeeded,problem=pcall(function() self:_step(self:_clock()) end)
+  stage="Render"
+  self.renderConnection=connect(self.connections,self.services.RunService.RenderStepped,function()
+   local succeeded,problem=xpcall(function() self:_step(self:_clock()) end,Runtime.traceback)
    if not succeeded then
     self:destroy()
     Session.notifyFailure(report,tostring(problem))
+   elseif not self.firstRendered and not self.destroyed then
+    self.firstRendered=true
+    Runtime.trace(report,"Render","READY","First RenderStepped update completed; notification fade and observed DOT update are running")
    end
-  end)
- end)
- if not ok then self:destroy();error(err,2) end
+  end,"RenderStepped")
+ end,Runtime.traceback)
+ if not ok then report.failurePhase=stage;self:destroy();error(err,2) end
  -- Keep the previous running session until the replacement is fully initialized.
- local committed,problem=pcall(function()
+ local committed,problem=xpcall(function()
   -- Starting the toast at zero opacity can still fail; preserve the old owner
   -- until the replacement's final public-API writes have succeeded.
   if config.WelcomeNotification then
    local key=if typeof(config.LockKey)=="EnumItem" then config.LockKey.Name else tostring(config.LockKey)
-   self:_notify("PINK DOT LOCK","Successfully Loaded | Press "..key.." to Lock",config.WelcomeDuration)
+   self:_notify("SEDWARE","Successfully Loaded | Press "..key.." to Lock",config.WelcomeDuration)
   end
   self.owner.Parent=self.playerGui
   if old then old:Fire() end
- end)
- if not committed then self:destroy();error(problem,2) end
+  assert(not self.destroyed and self.inputConnection.Connected and self.renderConnection.Connected,"Session became inactive during startup")
+ end,Runtime.traceback)
+ if not committed then report.failurePhase="Session";self:destroy();error(problem,2) end
+ self.active=true
+ Runtime.trace(report,"Session","ACTIVE","SEDWARE initialized; camera remains free")
  return self
 end
 return Session

@@ -29,14 +29,18 @@ def main():
         remote=response.read(2*1024*1024+1)
     if remote!=local: raise ValueError('Remote payload differs from tested PinkDotLock.lua')
     loader='\n'.join((
-        '-- PINK DOT LOCK: verified public payload pinned to a specific commit.',
+        '-- SEDWARE: verified public payload pinned to a specific commit.',
         'local rawURL = '+json.dumps(args.raw_url),
-        'assert(type(loadstring)=="function", "This authorized host must provide loadstring")',
+        'print("[SEDWARE][Loader][START] Retrieving the verified payload")',
+        'assert(type(loadstring)=="function", "[SEDWARE][Loader][FAIL] Host must provide a Luau-compatible loadstring")',
         'local ok, source = pcall(function() return game:HttpGet(rawURL) end)',
-        'assert(ok and type(source)=="string", "Unable to retrieve the public PinkDotLock payload")',
+        'assert(ok, "[SEDWARE][Loader][HTTP FAIL] "..tostring(source))',
+        'assert(type(source)=="string", "[SEDWARE][Loader][HTTP FAIL] Expected script text")',
         'local chunk, problem = loadstring(source, "PinkDotLock")',
-        'assert(chunk, problem)',
-        'return chunk()', '',
+        'assert(chunk, "[SEDWARE][Loader][COMPILE FAIL] "..tostring(problem))',
+        'local ran, result = xpcall(chunk,function(err) return debug and debug.traceback and debug.traceback(tostring(err),2) or tostring(err) end)',
+        'assert(ran, "[SEDWARE][Loader][EXECUTION FAIL] "..tostring(result))',
+        'return result', '',
     ))
     (ROOT/'PinkLoader.lua').write_text(loader,encoding='utf-8')
     output=ROOT/'build/pink-publication.json'

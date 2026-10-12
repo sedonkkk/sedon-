@@ -180,10 +180,22 @@ print("PINK DOT LOCK owned Studio probe ready: C locks another player; F fires t
       <Properties>
         <string name="Name">PinkDotLock</string>
         <ProtectedString name="Source">--!nonstrict
--- PINK DOT LOCK | edit Config here. X/Y and all offsets are seconds.
+-- SEDWARE startup v2 | PinkDotLock.lua. Edit Config below; X/Y are seconds.
 -- The dot shows the observed part, never the predicted aim point.
 -- Camera stays free. Public client APIs only; no weapon integration for Da Hood.
-local Config = {
+local function bootTraceback(problem)
+ local message=tostring(problem)
+ local available,traceback=pcall(function() return debug and debug.traceback end)
+ if available and type(traceback)=="function" then local ok,trace=pcall(traceback,message,2);if ok then return trace end end
+ return message
+end
+local function bootLog(phase,status,detail)
+ local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn
+ if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end
+end
+bootLog("Execution","START","SEDWARE startup v2 payload began execution")
+local Config
+local configBuilt,headerError=xpcall(function() Config = {
  Enabled=true, LockKey=(Enum and Enum.KeyCode.C or "C"), LockMode="Auto",
  FirstPersonFOV=120, ThirdPersonFOV=180,
  PredictionX=0.1205, PredictionY=0.0800, AutoPrediction=false,
@@ -196,6 +208,7 @@ local Config = {
  DotOutline=true, DotOutlineColor=(Color3 and Color3.fromRGB(255,255,255) or {R=255/255,G=255/255,B=255/255}),
  ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=4, NotificationDuration=2,
  WeaponProfile="Revolver", CloseOffset=0, MediumOffset=0, LongOffset=0, DebugMode=false,
+ InitializationTimeout=8, InitializationPollInterval=0.05,
  UpdateHz=30, PingHz=5, StaleAfter=0.6, ModeDwellSeconds=0.2, ModeEnterDistance=0.75, ModeExitDistance=1.5, MaxDistance=350,
  CloseDistance=40, MediumDistance=120,
  HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
@@ -206,7 +219,8 @@ local Config = {
   Default={PredictionXOffset=0, PredictionYOffset=0, LatencyOffsetSeconds=0, CloseOffset=0, MediumOffset=0, LongOffset=0, Kind="Unknown", Speed=0, Gravity=0},
   Custom={PredictionXOffset=0, PredictionYOffset=0, LatencyOffsetSeconds=0, CloseOffset=0, MediumOffset=0, LongOffset=0, Kind="Unknown", Speed=0, Gravity=0},
  },
-}
+} end,bootTraceback)
+if configBuilt then headerError=nil else bootLog("Configuration","FAIL",headerError) end
 -- Generated from src/pink and existing shared algorithms. No remote dependencies.
 local factories, cache, loading = {}, {}, {}
 local function loadModule(name)
@@ -499,7 +513,7 @@ end
 return Ballistics
 end
 -- END Ballistics
--- BEGIN Config | sha256 633f476f01181c7bda115304534382c7468f974cccdb7f580872dac8ca5123c2
+-- BEGIN Config | sha256 f7eab8e4f9b8282f5c4d0285cff12fcdf67f7a7cc2a5ad9b8b0f5706e0e55cb5
 factories["Config"] = function(loadModule)
 --!nonstrict
 -- PINK DOT LOCK configuration. Prediction X/Y and offsets are seconds;
@@ -521,6 +535,7 @@ Config.sourceLiteral = [=[{
  DotOutline=true, DotOutlineColor=Color3.fromRGB(255,255,255),
  ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=4, NotificationDuration=2,
  WeaponProfile="Revolver", CloseOffset=0, MediumOffset=0, LongOffset=0, DebugMode=false,
+ InitializationTimeout=8, InitializationPollInterval=0.05,
  UpdateHz=30, PingHz=5, StaleAfter=0.6, ModeDwellSeconds=0.2, ModeEnterDistance=0.75, ModeExitDistance=1.5, MaxDistance=350,
  CloseDistance=40, MediumDistance=120,
  HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
@@ -555,6 +570,7 @@ function Config.defaults()
  DotOutline=true, DotOutlineColor=color(255,255,255),
  ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=4, NotificationDuration=2,
  WeaponProfile="Revolver", CloseOffset=0, MediumOffset=0, LongOffset=0, DebugMode=false,
+ InitializationTimeout=8, InitializationPollInterval=0.05,
  UpdateHz=30, PingHz=5, StaleAfter=0.6, ModeDwellSeconds=0.2, ModeEnterDistance=0.75, ModeExitDistance=1.5, MaxDistance=350,
  CloseDistance=40, MediumDistance=120,
  HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
@@ -595,6 +611,7 @@ local limits={
  PingSmoothing={0.05,10},MinPredictionX={0,0.6},MaxPredictionX={0,0.6},MinPredictionY={0,0.6},MaxPredictionY={0,0.6},
  PredictionSlew={0.001,2},PredictionSmoothing={0,2},DotSize={1,40},DotTransparency={0,1},
  WelcomeDuration={0.1,30},NotificationDuration={0.1,30},CloseOffset={-0.2,0.2},MediumOffset={-0.2,0.2},LongOffset={-0.2,0.2},
+ InitializationTimeout={0.1,30},InitializationPollInterval={0.01,1},
  UpdateHz={5,60},PingHz={0.5,20},StaleAfter={0.05,2},ModeDwellSeconds={0.01,2},ModeEnterDistance={0.05,5},ModeExitDistance={0.1,10},
  MaxDistance={10,2000},CloseDistance={1,2000},MediumDistance={2,2000},
  HistoryCapacity={2,64},HistoryWindow={0.05,1},VelocitySmoothing={0.001,1},AccelerationSmoothing={0.01,2},
@@ -846,7 +863,7 @@ end
 return ModeDetector
 end
 -- END ModeDetector
--- BEGIN Selection | sha256 6eba2e0a7820977b4839c9ec9b24a83b60aa7fc387931309ef4df2b20d0498cf
+-- BEGIN Selection | sha256 19df1c78d47a07bdbee85e995ff539a76d6d2caefe235f35180684a30c956816
 factories["Selection"] = function(loadModule)
 --!nonstrict
 -- Pure screen-space acquisition. Persistence and character lifetime belong
@@ -892,9 +909,9 @@ function Selection.reference(mode, viewportSize, mousePosition, inset)
 			return nil
 		end
 	end
-	-- UserInputService.GetMouseLocation includes the GUI inset, while projected
-	-- candidates use WorldToViewportPoint. Convert exactly once.
-	local x, y = mouseX - insetX, mouseY - insetY
+	-- GetMouseLocation and WorldToViewportPoint share the screen/viewport origin
+	-- used by IgnoreGuiInset=true. No topbar subtraction is appropriate here.
+	local x, y = mouseX, mouseY
 	if not finite(x) or not finite(y) then
 		return nil
 	end
@@ -1150,7 +1167,7 @@ end
 return Prediction
 end
 -- END Prediction
--- BEGIN Overlay | sha256 8a5aea0b51469e96358086fa8d314ff60572997860da0a10493735aa913bfd8d
+-- BEGIN Overlay | sha256 d5ca7d428339552f7b5f005c12bd13f0c19418055626cc7390744d918472f762
 factories["Overlay"] = function(loadModule)
 --!nonstrict
 -- Display-only overlay: the dot receives an observed position, never a prediction.
@@ -1179,7 +1196,7 @@ end
 
 function Overlay.new(playerGui, config)
 	local self = setmetatable({ config = config or {}, owned = {}, destroyed = false }, Overlay)
-	local ok, problem = pcall(function()
+	local ok, problem = xpcall(function()
 		local settings = self.config
 		local hotPink, white = Color3.fromRGB(255, 105, 180), Color3.fromRGB(255, 255, 255)
 		self.gui = create(self, "ScreenGui", {
@@ -1228,6 +1245,8 @@ function Overlay.new(playerGui, config)
 			TextYAlignment = Enum.TextYAlignment.Center, TextWrapped = true,
 			Position = UDim2.fromOffset(17, 37), Size = UDim2.new(1, -32, 0, 25), ZIndex = 6,
 		}, self.toast)
+	end,function(problem)
+		return if debug and type(debug.traceback)=="function" then debug.traceback(tostring(problem),2) else tostring(problem)
 	end)
 	if not ok then
 		self:destroy()
@@ -1240,9 +1259,9 @@ function Overlay:setDot(viewportPoint, onScreen, inset)
 	if self.destroyed then return false end
 	local x, y = xy(viewportPoint)
 	if not onScreen or self.config.ShowDot == false or not x then self:hideDot(); return false end
-	local insetX, insetY = xy(inset)
-	-- WorldToViewportPoint omits the GUI inset; this full-screen GUI includes it.
-	self.dot.Position = UDim2.fromOffset(x + (insetX or 0), y + (insetY or 0))
+	-- IgnoreGuiInset=true uses viewport coordinates directly; adding the topbar
+	-- inset here displaced the dot away from its observed target.
+	self.dot.Position = UDim2.fromOffset(x, y)
 	self.dot.Visible = true
 	return true
 end
@@ -1305,46 +1324,118 @@ function Overlay:destroy()
 	table.clear(self.owned)
 end
 
+-- Minimal failure display has no dependency on Config, CanvasGroup or a clock.
+function Overlay.showFailure(playerGui,message)
+	if not playerGui then return false end
+	assert(task and type(task.delay)=="function","No task.delay available to clean up the error notification")
+	local display=setmetatable({owned={},destroyed=false},Overlay)
+	local ok,problem=xpcall(function()
+		local old=playerGui:FindFirstChild("PinkDotLock_LoadFailure")
+		if old then old:Destroy() end
+		display.gui=create(display,"ScreenGui",{Name="PinkDotLock_LoadFailure",IgnoreGuiInset=true,ResetOnSpawn=false,DisplayOrder=50},playerGui)
+		local frame=create(display,"Frame",{Name="Notification",Active=false,BackgroundColor3=Color3.fromRGB(0,0,0),
+			BackgroundTransparency=0.25,BorderSizePixel=0,AnchorPoint=Vector2.new(0.5,1),
+			Position=UDim2.new(0.5,0,1,-28),Size=UDim2.new(0.85,0,0,90)},display.gui)
+		create(display,"UISizeConstraint",{MaxSize=Vector2.new(420,90)},frame)
+		create(display,"TextLabel",{Name="Title",Active=false,BackgroundTransparency=1,Text="SEDWARE | Load Failed",
+			TextColor3=Color3.fromRGB(255,105,180),TextSize=15,Size=UDim2.new(1,-20,0,26),Position=UDim2.fromOffset(10,5)},frame)
+		create(display,"TextLabel",{Name="Body",Active=false,BackgroundTransparency=1,Text=string.sub(tostring(message),1,280),TextWrapped=true,
+			TextColor3=Color3.fromRGB(255,255,255),TextSize=11,Size=UDim2.new(1,-20,0,50),Position=UDim2.fromOffset(10,33)},frame)
+		task.delay(2,function() display:destroy() end)
+	end,function(err) return if debug and type(debug.traceback)=="function" then debug.traceback(tostring(err),2) else tostring(err) end)
+	if not ok then display:destroy();error(problem,2) end
+	return true
+end
 return Overlay
 end
 -- END Overlay
--- BEGIN Runtime | sha256 928acec346a1874296db3f92cd79488d30f7dd4865390cc6e47fb4bdd993d02d
+-- BEGIN Runtime | sha256 7f89e3c53bea65650c255a3e091eaa869ac8c167c97aa6a62e89181886bd7f50
 factories["Runtime"] = function(loadModule)
 --!nonstrict
--- Read-only audit: no Instances, event connections, camera writes or remote calls.
--- A ready report means the public client APIs used here exist, not that a
--- third-party experience's shot integration has been implemented or verified.
+-- Read-only audit and bounded readiness wait: no Instances, event connections,
+-- camera writes or remote calls. A ready report only verifies the public client
+-- APIs used here; it does not verify a third-party experience or its weapons.
 local Runtime = {}
 
+local function text(value)
+	local ok, result = pcall(tostring, value)
+	return if ok then result else "&lt;error could not be converted to text&gt;"
+end
+local function finite(value)
+	return type(value) == "number" and value == value and math.abs(value) &lt; math.huge
+end
 local function member(object, key)
-	if object == nil then return nil end
+	if object == nil then return nil, nil end
 	local ok, result = pcall(function() return object[key] end)
-	return if ok then result else nil
+	if ok then return result, nil end
+	return nil, text(result)
 end
 local function callable(object, key)
 	return type(member(object, key)) == "function"
 end
 local function call(object, key, ...)
-	local method = member(object, key)
-	if type(method) ~= "function" then return false end
+	local method, problem = member(object, key)
+	if type(method) ~= "function" then return false, problem or (key .. " is unavailable") end
 	return pcall(method, object, ...)
 end
+local function missing(report, description, problem)
+	table.insert(report.missing, description .. (if problem then ": " .. text(problem) else ""))
+end
 local function requireMethod(report, object, key, description)
-	if callable(object, key) then return true end
-	table.insert(report.missing, description or key)
+	local method, problem = member(object, key)
+	if type(method) == "function" then return true end
+	missing(report, description or key, problem)
 	return false
 end
 local function requireSignal(report, object, key, description)
-	local signal = member(object, key)
-	if signal and callable(signal, "Connect") then return true end
-	table.insert(report.missing, description or key)
+	local signal, problem = member(object, key)
+	if problem then missing(report, description or key, problem); return false end
+	local connectMethod, connectProblem = member(signal, "Connect")
+	if type(connectMethod) == "function" then return true end
+	missing(report, description or key, connectProblem)
 	return false
+end
+local function pending(report, description)
+	table.insert(report.pending, description)
+end
+
+function Runtime.traceback(problem)
+	local message = text(problem)
+	local traceback = member(debug, "traceback")
+	if type(traceback) == "function" then
+		local ok, stack = pcall(traceback, message, 2)
+		if ok and type(stack) == "string" then return stack end
+	end
+	return message
+end
+
+-- Logging must never make a recoverable initialization error into a new error.
+-- It is always enabled; DebugMode controls detailed targeting logs only.
+function Runtime.trace(report, phase, status, detail)
+	local phaseText, statusText, detailText = text(phase), text(status), text(detail or "")
+	pcall(function()
+		if type(report) == "table" then
+			report.phase = phaseText
+			if type(report.events) ~= "table" then report.events = {} end
+			if #report.events &gt;= 64 then table.remove(report.events, 1) end
+			table.insert(report.events, {phase = phaseText, status = statusText, detail = detailText})
+		end
+	end)
+	local logger = if statusText == "FAIL" and type(warn) == "function" then warn
+		elseif type(print) == "function" then print elseif type(warn) == "function" then warn else nil
+	local message = "[SEDWARE][" .. phaseText .. "][" .. statusText .. "] " .. detailText
+	if logger then
+		local logged = pcall(logger, message)
+		if not logged and logger ~= print and type(print) == "function" then pcall(print, message) end
+	end
+	return statusText
 end
 
 function Runtime.check(config)
 	config = config or {}
-	local report = { ready = false, missing = {}, warnings = {}, services = {},
-		capabilities = { networkPing = false, camera = false, visibility = false } }
+	local report = {ready = false, missing = {}, pending = {}, warnings = {}, services = {}, events = {},
+		phase = "Services", resources = {},
+		capabilities = {networkPing = false, camera = false, visibility = false}}
 	for _, requirement in {
 		{"Instance.new", Instance, "new"}, {"Vector3.new", Vector3, "new"},
 		{"Vector2.new", Vector2, "new"}, {"UDim.new", UDim, "new"},
@@ -1355,44 +1446,57 @@ function Runtime.check(config)
 	} do requireMethod(report, requirement[2], requirement[3], requirement[1]) end
 	if Enum == nil or type(Enum) == "boolean" or type(Enum) == "number" or type(Enum) == "string"
 		or type(Enum) == "function" then
-		table.insert(report.missing, "Enum de Roblox")
+		missing(report, "Enum de Roblox")
 	end
-	if type(typeof) ~= "function" then table.insert(report.missing, "typeof de Luau") end
+	if type(typeof) ~= "function" then missing(report, "typeof de Luau") end
 	if config.VisibilityCheck ~= false then
 		requireMethod(report, RaycastParams, "new", "RaycastParams.new para VisibilityCheck")
 	end
 
-	if not callable(game, "GetService") then
-		table.insert(report.missing, "game:GetService del cliente Roblox")
-	else
+	if requireMethod(report, game, "GetService", "game:GetService del cliente Roblox") then
 		for _, name in {"Players", "RunService", "UserInputService", "GuiService", "Workspace"} do
 			local ok, service = call(game, "GetService", name)
 			if ok and service then report.services[name] = service
-			else table.insert(report.missing, "Servicio " .. name) end
+			else missing(report, "Servicio " .. name, if ok then "GetService devolvió nil" else service) end
 		end
 	end
 	local services = report.services
 	if services.RunService then
 		local ok, client = call(services.RunService, "IsClient")
-		if not ok or client ~= true then table.insert(report.missing, "RunService:IsClient() debe ser true") end
+		if not ok then missing(report, "RunService:IsClient()", client)
+		elseif client ~= true then missing(report, "RunService:IsClient() debe ser true") end
 		requireSignal(report, services.RunService, "RenderStepped", "RunService.RenderStepped.Connect")
 	end
 	if services.Players then
 		requireMethod(report, services.Players, "GetPlayers", "Players:GetPlayers")
 		requireSignal(report, services.Players, "PlayerRemoving", "Players.PlayerRemoving.Connect")
-		report.player = member(services.Players, "LocalPlayer")
-		if not report.player then table.insert(report.missing, "Players.LocalPlayer")
+		local player, problem = member(services.Players, "LocalPlayer")
+		report.player = player
+		if problem then
+			missing(report, "Players.LocalPlayer", problem)
+			report.resources.LocalPlayer = "FAIL"
+		elseif not player then
+			pending(report, "Players.LocalPlayer")
+			report.resources.LocalPlayer = "WAIT"
+			report.resources.PlayerGui = "WAIT"
 		else
-			if requireMethod(report, report.player, "FindFirstChild", "LocalPlayer:FindFirstChild") then
-				local ok, gui = call(report.player, "FindFirstChild", "PlayerGui")
-				if ok and gui then report.playerGui = gui
-				else table.insert(report.missing, "LocalPlayer.PlayerGui") end
-			end
-			requireMethod(report, report.player, "WaitForChild", "LocalPlayer:WaitForChild")
+			report.resources.LocalPlayer = "READY"
+			if requireMethod(report, player, "FindFirstChild", "LocalPlayer:FindFirstChild") then
+				local ok, gui = call(player, "FindFirstChild", "PlayerGui")
+				if not ok then
+					missing(report, "LocalPlayer:FindFirstChild(\"PlayerGui\")", gui)
+					report.resources.PlayerGui = "FAIL"
+				elseif not gui then
+					pending(report, "LocalPlayer.PlayerGui")
+					report.resources.PlayerGui = "WAIT"
+				else
+					report.playerGui = gui
+					report.resources.PlayerGui = if requireMethod(report, gui, "FindFirstChild", "PlayerGui:FindFirstChild") then "READY" else "FAIL"
+				end
+			else report.resources.PlayerGui = "FAIL" end
 		end
-		if report.playerGui then
-			requireMethod(report, report.playerGui, "FindFirstChild", "PlayerGui:FindFirstChild")
-		end
+	else
+		report.resources.LocalPlayer, report.resources.PlayerGui = "FAIL", "FAIL"
 	end
 	if services.UserInputService then
 		local input = services.UserInputService
@@ -1402,44 +1506,177 @@ function Runtime.check(config)
 	end
 	if services.GuiService then requireMethod(report, services.GuiService, "GetGuiInset", "GuiService:GetGuiInset") end
 	report.world = services.Workspace or workspace
-	if not report.world then table.insert(report.missing, "Workspace de Roblox")
+	if not report.world then
+		missing(report, "Workspace de Roblox")
+		report.resources.CurrentCamera = "FAIL"
 	else
 		requireMethod(report, report.world, "GetServerTimeNow", "Workspace:GetServerTimeNow")
 		report.capabilities.visibility = callable(report.world, "Raycast")
 		if config.VisibilityCheck ~= false then requireMethod(report, report.world, "Raycast", "Workspace:Raycast para VisibilityCheck") end
-		local camera = member(report.world, "CurrentCamera")
-		if not camera then table.insert(report.missing, "Workspace.CurrentCamera")
+		local camera, problem = member(report.world, "CurrentCamera")
+		report.camera = camera
+		if problem then
+			missing(report, "Workspace.CurrentCamera", problem)
+			report.resources.CurrentCamera = "FAIL"
+		elseif not camera then
+			pending(report, "Workspace.CurrentCamera")
+			report.resources.CurrentCamera = "WAIT"
+		elseif not requireMethod(report, camera, "WorldToViewportPoint", "Camera:WorldToViewportPoint") then
+			report.resources.CurrentCamera = "FAIL"
 		else
-			report.capabilities.camera = requireMethod(report, camera, "WorldToViewportPoint", "Camera:WorldToViewportPoint")
+			local size, sizeProblem = member(camera, "ViewportSize")
+			local x, xProblem = member(size, "X")
+			local y, yProblem = member(size, "Y")
+			if sizeProblem or xProblem or yProblem then
+				missing(report, "CurrentCamera.ViewportSize", sizeProblem or xProblem or yProblem)
+				report.resources.CurrentCamera = "FAIL"
+			elseif not finite(x) or not finite(y) or x &lt;= 0 or y &lt;= 0 then
+				pending(report, "CurrentCamera.ViewportSize (" .. text(x) .. " x " .. text(y) .. ")")
+				report.resources.CurrentCamera = "WAIT"
+			else
+				report.capabilities.camera = true
+				report.resources.CurrentCamera = "READY"
+			end
 		end
 	end
 	report.capabilities.networkPing = callable(report.player, "GetNetworkPing")
-	if not report.capabilities.networkPing then
-		table.insert(report.warnings, "GetNetworkPing no está disponible; AutoPrediction debe usar los valores manuales de PredictionX/Y.")
+	if report.player and not report.capabilities.networkPing then
+		table.insert(report.warnings, "GetNetworkPing no está disponible; AutoPrediction usa los valores manuales de PredictionX/Y.")
 	end
-	if not report.player or not report.playerGui or not report.capabilities.camera then
-		table.insert(report.warnings, "El cliente aún no está listo; vuelve a iniciar después de cargar LocalPlayer, PlayerGui y CurrentCamera.")
+	report.ready = #report.missing == 0 and #report.pending == 0
+	return report
+end
+
+local function traceResources(report, previous)
+	for _, phase in {"LocalPlayer", "PlayerGui", "CurrentCamera"} do
+		local status = report.resources[phase] or "FAIL"
+		if previous[phase] ~= status then
+			previous[phase] = status
+			local detail = if status == "READY" then phase .. " preparado."
+				elseif status == "WAIT" then phase .. " todavía no está preparado."
+				else phase .. " no se pudo validar; consulta el error de Services."
+			Runtime.trace(report, phase, status, detail)
+		end
 	end
-	report.ready = #report.missing == 0
+end
+
+function Runtime.awaitReady(config, initialReport, cancelled)
+	config = config or {}
+	local report = initialReport or Runtime.check(config)
+	local events, previous = report.events or {}, {}
+	report.events = events
+	local function stopIfCancelled()
+		if type(cancelled) ~= "function" then return false end
+		local ok, result = xpcall(cancelled, Runtime.traceback)
+		if not ok then
+			missing(report, "Comprobación de cancelación de inicialización", result)
+			report.ready = false
+			return true
+		end
+		if result then
+			report.ready, report.cancelled = false, true
+			Runtime.trace(report, "Startup", "CANCELLED", "Una inicialización más reciente reemplazó esta espera.")
+			return true
+		end
+		return false
+	end
+	if stopIfCancelled() then return report end
+	local timeout, interval = config.InitializationTimeout or 8, config.InitializationPollInterval or 0.05
+	if not finite(timeout) or timeout &lt; 0.1 or timeout &gt; 30
+		or not finite(interval) or interval &lt; 0.01 or interval &gt; 1 then
+		missing(report, "InitializationTimeout/InitializationPollInterval fuera de los límites seguros")
+		report.ready = false
+		return report
+	end
+	traceResources(report, previous)
+	report.phase = "Services"
+	if stopIfCancelled() then return report end
+	if #report.missing &gt; 0 then return report end
+	if report.ready then
+		Runtime.trace(report, "Services", "READY", "Servicios y recursos del cliente preparados.")
+		return report
+	end
+	if not callable(task, "wait") then
+		missing(report, "task.wait para esperar recursos temporales de Roblox")
+		report.ready = false
+		return report
+	end
+	if not callable(os, "clock") then
+		missing(report, "os.clock para limitar la espera de inicialización")
+		report.ready = false
+		return report
+	end
+	local ok, started = pcall(os.clock)
+	if not ok or not finite(started) then
+		missing(report, "os.clock durante la inicialización", if ok then "devolvió un valor no finito" else started)
+		report.ready = false
+		return report
+	end
+	Runtime.trace(report, "Services", "WAIT", "Esperando hasta " .. text(timeout) .. "s: " .. table.concat(report.pending, "; "))
+	local elapsed, iterations, previousClock = 0, 0, started
+	local deadlineTolerance = math.min(interval * 1e-6, 1e-6)
+	-- A second bound also protects against a broken external task.wait/clock
+	-- implementation that returns immediately without advancing monotonic time.
+	local maxIterations = math.ceil(timeout / interval) + 1
+	while elapsed &lt; timeout - deadlineTolerance and iterations &lt; maxIterations do
+		if stopIfCancelled() then return report end
+		iterations += 1
+		local waited, problem = xpcall(function() task.wait(math.min(interval, timeout - elapsed)) end, Runtime.traceback)
+		if stopIfCancelled() then return report end
+		if not waited then
+			missing(report, "task.wait durante la inicialización", problem)
+			report.ready = false
+			return report
+		end
+		local nowOK, now = pcall(os.clock)
+		if not nowOK or not finite(now) or now &lt; previousClock then
+			missing(report, "os.clock durante la inicialización", if not nowOK then now else "reloj no finito o retrocedió")
+			report.ready = false
+			return report
+		end
+		previousClock = now
+		elapsed = now - started
+		if stopIfCancelled() then return report end
+		local nextReport = Runtime.check(config)
+		nextReport.events = events
+		nextReport.waitedSeconds, nextReport.waitIterations = elapsed, iterations
+		report = nextReport
+		traceResources(report, previous)
+		report.phase = "Services"
+		if stopIfCancelled() then return report end
+		if #report.missing &gt; 0 then return report end
+		if report.ready then
+			Runtime.trace(report, "Services", "READY", "Recursos preparados después de " .. text(elapsed) .. "s.")
+			return report
+		end
+	end
+	report.ready, report.timedOut = false, true
+	report.waitedSeconds, report.waitIterations = elapsed, iterations
+	report.phase = "Services"
+	report.timeoutSeconds = timeout
+	report.waitFailure = if elapsed &gt;= timeout - deadlineTolerance then "Se agotó el tiempo máximo de inicialización (" .. text(timeout) .. "s)."
+		else "Se alcanzó el límite seguro de " .. text(maxIterations) .. " consultas; task.wait/os.clock no avanzaron normalmente."
 	return report
 end
 
 function Runtime.errorMessage(report)
 	if type(report) ~= "table" then return "No se pudo comprobar el cliente nativo de Roblox." end
-	local missing = {}
-	for _, item in report.missing or {} do
-		if type(item) == "string" then table.insert(missing, item) end
-	end
-	if #missing == 0 then
+	local reasons = {}
+	if type(report.waitFailure) == "string" then table.insert(reasons, report.waitFailure) end
+	for _, item in report.missing or {} do table.insert(reasons, text(item)) end
+	if #(report.pending or {}) &gt; 0 then table.insert(reasons, "Recursos pendientes: " .. table.concat(report.pending, "; ")) end
+	if #reasons == 0 then
 		return if report.ready then "Cliente nativo de Roblox disponible." else "El cliente de Roblox no está listo."
 	end
-	return "PINK DOT LOCK no se puede iniciar. Falta: " .. table.concat(missing, "; ") .. "."
+	return "SEDWARE no se puede iniciar [" .. text(report.phase or "Services") .. "]. " .. table.concat(reasons, "; ")
 end
 function Runtime.reportFailure(message)
 	local logger = if type(warn) == "function" then warn elseif type(print) == "function" then print else nil
 	if logger then
-		local text = if type(message) == "string" then message else Runtime.errorMessage(message)
-		pcall(logger, "[PINK DOT LOCK | Load Failed] " .. text)
+		local description = if type(message) == "string" then message else Runtime.errorMessage(message)
+		local output = "[SEDWARE][Load Failed] " .. description
+		local logged = pcall(logger, output)
+		if not logged and logger ~= print and type(print) == "function" then pcall(print, output) end
 	end
 end
 
@@ -1656,7 +1893,7 @@ end
 return ShotAdapter
 end
 -- END ShotAdapter
--- BEGIN Session | sha256 c6567adc41636c5d57c37882ed4a773ed9aaac93b43e6c374f33a2291b0e3bdd
+-- BEGIN Session | sha256 9049bffd86d233a1c3533770bf49931acf1cf1603cb70afc9ea3480a1b517149
 factories["Session"] = function(loadModule)
 --!nonstrict
 -- Public client APIs only. Selection and prediction never write camera,
@@ -1677,9 +1914,12 @@ local function disconnect(list)
  for _, c in list do pcall(function() c:Disconnect() end) end
  table.clear(list)
 end
-local function connect(list, signal, callback)
+local function connect(list, signal, callback,label)
+ label=label or "Event"
  local c = signal:Connect(callback)
+ assert(c and type(c.Disconnect)=="function",label.." did not return a disconnectable connection")
  table.insert(list,c)
+ assert(c.Connected==true,label.." connection is not active")
  return c
 end
 
@@ -1698,17 +1938,20 @@ function Session:_origin()
  return camera and camera.CFrame and camera.CFrame.Position
 end
 function Session:_targetData(player)
- if self.destroyed or not player or player==self.player or player.Parent~=self.services.Players then return nil end
+ if self.destroyed then return nil,"session unloaded" end
+ if not player then return nil,"no player" end
+ if player==self.player then return nil,"local player" end
+ if player.Parent~=self.services.Players then return nil,"player removed" end
  local character=player.Character
- if not character or not character:IsDescendantOf(self.world) then return nil end
+ if not character or not character:IsDescendantOf(self.world) then return nil,"character absent" end
  local humanoid=character:FindFirstChildOfClass("Humanoid")
  local part=character:FindFirstChild(self.config.TargetPart)
- if not humanoid or not finite(humanoid.Health) or humanoid.Health&lt;=0
-  or not part or not part:IsA("BasePart") or not part:IsDescendantOf(character) or not vector(part.Position) then return nil end
+ if not humanoid or not finite(humanoid.Health) or humanoid.Health&lt;=0 then return nil,"humanoid dead or absent" end
+ if not part or not part:IsA("BasePart") or not part:IsDescendantOf(character) or not vector(part.Position) then return nil,"target part invalid" end
  local origin=self:_origin()
- if not vector(origin) then return nil end
+ if not vector(origin) then return nil,"origin unavailable" end
  local distance=(part.Position-origin).Magnitude
- if not finite(distance) or distance&gt;self.config.MaxDistance then return nil end
+ if not finite(distance) or distance&gt;self.config.MaxDistance then return nil,"distance exceeds MaxDistance" end
  return {player=player,character=character,part=part,humanoid=humanoid,distanceStuds=distance,valid=true}
 end
 function Session:IsValidTarget(player)
@@ -1777,22 +2020,37 @@ function Session:LockTarget(player)
  local t=self:_clock()
  local camera,inset,reference,fov=self:_view(t)
  local selected
- if player then
-  local data=self:_targetData(player)
-  if data then
-   local candidate=self:_candidate(data,camera)
-   if Selection.within(candidate,reference,fov) then selected=candidate end
+ local candidates={}
+ local evaluated,valid=0,0
+ local rejections={}
+ -- Enumerate players only on an explicit lock request, never each render.
+ local players=if player then {player} else self.services.Players:GetPlayers()
+ for _,p in players do
+  if p~=self.player then
+   evaluated+=1
+   local data,reason=self:_targetData(p)
+   if data then
+    local candidate=self:_candidate(data,camera)
+    if not candidate.onScreen then reason="offscreen or behind camera"
+    elseif not candidate.visible then reason="occluded"
+    elseif not Selection.within(candidate,reference,fov) then reason="outside FOV"
+    else valid+=1;table.insert(candidates,candidate) end
+   end
+   if reason and self.config.DebugMode then table.insert(rejections,tostring(p.Name)..":"..reason) end
   end
- else
-  -- Enumerate players only on an explicit lock request, never each render.
-  local candidates={}
-  for _, p in self.services.Players:GetPlayers() do
-   local data=self:_targetData(p)
-   if data then table.insert(candidates,self:_candidate(data,camera)) end
-  end
-  selected=Selection.nearest(candidates,reference,fov)
  end
- if not selected then return false,"No valid visible target in FOV" end
+ selected=Selection.nearest(candidates,reference,fov)
+ self.lastSelection={mode=self.mode,reference=reference,evaluated=evaluated,valid=valid,rejections=rejections,
+  selected=selected and selected.player.Name or nil}
+ if self.config.DebugMode then
+  Runtime.trace(self.report,"Selection",if selected then "SELECTED" else "REJECT",
+   "mode="..self.mode.." reference=("..reference.X..","..reference.Y..") evaluated="..evaluated.." valid="..valid
+   .." rejections="..tostring(evaluated-valid).." ["..table.concat(rejections,"; ").."] selected="..tostring(self.lastSelection.selected))
+ end
+ if not selected then
+  self:_notify("SEDWARE","No valid target")
+  return false,"No valid visible target in FOV"
+ end
  self.locked=selected
  self.prediction:reset()
  self.nextPing=nil
@@ -1865,7 +2123,7 @@ function Session:_step(t)
  if self.config.DebugMode and (not self.nextDebug or t&gt;=self.nextDebug) then
   self.nextDebug=t+1
   local p=self:GetPrediction()
-  print("[PINK DOT LOCK]", "target="..tostring(self:GetLockedTarget()),"mode="..tostring(self.mode),
+  print("[SEDWARE]", "target="..tostring(self:GetLockedTarget()),"mode="..tostring(self.mode),
    "pingRTTms="..tostring(p and p.rawPingMs),"smoothedRTTms="..tostring(p and p.smoothedPingMs),
    "X="..tostring(p and p.predictionX),"Y="..tostring(p and p.predictionY),
    "velocity="..tostring(p and p.velocity),"current="..tostring(p and p.currentPosition),
@@ -1919,47 +2177,44 @@ function Session:destroy()
  if self.prediction then self.prediction:reset() end
  if self.overlay then self.overlay:destroy() end
  if self.owner then self.owner:Destroy() end
+ if self.active then Runtime.trace(self.report,"Session","STOPPED","All session connections and owned graphics removed") end
+ self.active=false
 end
 Session.Unload=Session.destroy
 
 function Session.notifyFailure(report,message)
+ if report and report.failureNotified then return end
+ if report then report.failureNotified=true end
  Runtime.reportFailure(message)
- -- A failure toast owns a short-lived GUI only; it never registers a session.
- if not report or not report.playerGui or not task or type(task.delay)~="function" then return end
- local overlay
- local ok=pcall(function()
-  local timeOK,t=pcall(function() return report.world:GetServerTimeNow() end)
-  if not timeOK or not finite(t) then t=os.clock() end
-  local previous=report.playerGui:FindFirstChild("PinkDotLock_LoadFailure")
-  if previous then previous:Destroy() end
-  local cfg=assert(Config.new({ShowDot=false,ShowNotifications=true}))
-  overlay=Overlay.new(report.playerGui,cfg)
-  overlay.gui.Name="PinkDotLock_LoadFailure"
-  overlay:notify("PINK DOT LOCK | Load Failed",t,2)
-  overlay:step(t+0.18)
-  task.delay(2,function() overlay:destroy() end)
- end)
- if not ok and overlay then overlay:destroy() end
+ -- Independent Frame toast: no CanvasGroup, valid Config or server clock needed.
+ local ok,result=xpcall(function() return Overlay.showFailure(report and report.playerGui,message) end,Runtime.traceback)
+ Runtime.trace(report,"FailureNotification",if ok and result then "READY" else "FAIL",
+  if ok and result then "Short error notification displayed" elseif ok then "PlayerGui unavailable; see console error" else result)
 end
 function Session.init(options,report)
  local config,message=Config.new(options)
  assert(config,message)
- report=report or Runtime.check(config)
+ report=report or Runtime.awaitReady(config)
  assert(report.ready,Runtime.errorMessage(report))
  local self=setmetatable({config=config,services=report.services,player=report.player,world=report.world,
-  playerGui=report.playerGui,connections={},targetConnections={},adapters={},destroyed=false},Session)
+  playerGui=report.playerGui,connections={},targetConnections={},adapters={},destroyed=false,report=report},Session)
  local old=report.playerGui:FindFirstChild(OWNER_NAME)
  if old and not old:IsA("BindableEvent") then error("Owner namespace is occupied by another object") end
  if not config.Enabled then
   if old then old:Fire() end
   self.destroyed=true
+  Runtime.trace(report,"Session","DISABLED","Enabled=false; no GUI or input listeners created")
   return self
  end
- local ok,err=pcall(function()
+ local stage="Prediction"
+ local ok,err=xpcall(function()
   self.prediction=Prediction.new(config)
   self.modeDetector=ModeDetector.new(config)
+  stage="Graphics"
   self.overlay=Overlay.new(self.playerGui,config)
   self.ui=self.overlay
+  assert(self.overlay.gui.Parent==self.playerGui,"ScreenGui was not parented to PlayerGui")
+  Runtime.trace(report,"Graphics","READY","DOT and notification objects created in PlayerGui")
   connect(self.connections,self.overlay.gui.Destroying,function() self:destroy() end)
   if typeof(script)=="Instance" and script.Destroying then
    connect(self.connections,script.Destroying,function() self:destroy() end)
@@ -1975,75 +2230,185 @@ function Session.init(options,report)
   connect(self.connections,self.services.Players.PlayerRemoving,function(player)
    if self.locked and self.locked.player==player then self:UnlockTarget("Target Lost") end
   end)
-  connect(self.connections,self.services.UserInputService.InputBegan,function(input,processed)
-   if self.destroyed or processed or self.services.UserInputService:GetFocusedTextBox()~=nil then return end
+  stage="Input"
+  self.inputConnection=connect(self.connections,self.services.UserInputService.InputBegan,function(input,processed)
+   local succeeded,problem=xpcall(function()
    if input.KeyCode==self.config.LockKey then
-    local succeeded,problem=pcall(function()
-     if self.locked then self:UnlockTarget() else self:LockTarget() end
-    end)
-    if not succeeded then
-     self:destroy()
-     Session.notifyFailure(report,tostring(problem))
+    if self.config.DebugMode then Runtime.trace(report,"Input","KEY","key="..tostring(input.KeyCode).." detected; mode="..tostring(self.mode)) end
+    if self.destroyed or processed or self.services.UserInputService:GetFocusedTextBox()~=nil then
+     if self.config.DebugMode then
+      Runtime.trace(report,"Selection","REJECT","mode="..tostring(self.mode).." reference=(not evaluated) evaluated=0 valid=0 rejections=1 selected=nil reason="
+       ..(if processed then "Roblox processed input" else "TextBox focused or session inactive"))
+     end
+     return
     end
+    if self.locked then
+     if self.config.DebugMode then
+      local _,_,reference=self:_view(self:_clock())
+      Runtime.trace(report,"Selection","UNLOCKED","mode="..self.mode.." reference=("..reference.X..","..reference.Y
+       ..") evaluated=0 valid=0 rejections=0 selected=nil reason=LockKey toggled existing lock")
+     end
+     self:UnlockTarget()
+    else self:LockTarget() end
    end
-  end)
+   end,Runtime.traceback)
+   if not succeeded then
+    self:destroy()
+    Session.notifyFailure(report,"InputBegan: "..tostring(problem))
+   end
+  end,"InputBegan")
+  Runtime.trace(report,"Input","READY","InputBegan connected; LockKey="..tostring(config.LockKey))
+  stage="View"
   -- Exercise view/clock/inset before announcing successful initialization.
   self:_step(self:_clock())
-  connect(self.connections,self.services.RunService.RenderStepped,function()
-   local succeeded,problem=pcall(function() self:_step(self:_clock()) end)
+  stage="Render"
+  self.renderConnection=connect(self.connections,self.services.RunService.RenderStepped,function()
+   local succeeded,problem=xpcall(function() self:_step(self:_clock()) end,Runtime.traceback)
    if not succeeded then
     self:destroy()
     Session.notifyFailure(report,tostring(problem))
+   elseif not self.firstRendered and not self.destroyed then
+    self.firstRendered=true
+    Runtime.trace(report,"Render","READY","First RenderStepped update completed; notification fade and observed DOT update are running")
    end
-  end)
- end)
- if not ok then self:destroy();error(err,2) end
+  end,"RenderStepped")
+ end,Runtime.traceback)
+ if not ok then report.failurePhase=stage;self:destroy();error(err,2) end
  -- Keep the previous running session until the replacement is fully initialized.
- local committed,problem=pcall(function()
+ local committed,problem=xpcall(function()
   -- Starting the toast at zero opacity can still fail; preserve the old owner
   -- until the replacement's final public-API writes have succeeded.
   if config.WelcomeNotification then
    local key=if typeof(config.LockKey)=="EnumItem" then config.LockKey.Name else tostring(config.LockKey)
-   self:_notify("PINK DOT LOCK","Successfully Loaded | Press "..key.." to Lock",config.WelcomeDuration)
+   self:_notify("SEDWARE","Successfully Loaded | Press "..key.." to Lock",config.WelcomeDuration)
   end
   self.owner.Parent=self.playerGui
   if old then old:Fire() end
- end)
- if not committed then self:destroy();error(problem,2) end
+  assert(not self.destroyed and self.inputConnection.Connected and self.renderConnection.Connected,"Session became inactive during startup")
+ end,Runtime.traceback)
+ if not committed then report.failurePhase="Session";self:destroy();error(problem,2) end
+ self.active=true
+ Runtime.trace(report,"Session","ACTIVE","SEDWARE initialized; camera remains free")
  return self
 end
 return Session
 end
 -- END Session
-local Modules = setmetatable({}, {__index=function(_, name) return loadModule(name) end})
-local API = {Modules=Modules, getModule=loadModule, Config=Config}
-function API.checkCompatibility(options) return loadModule("Runtime").check(options or Config) end
-function API.tryInit(options)
- local normalized, problem = loadModule("Config").new(options or Config)
- local report = API.checkCompatibility(normalized or Config)
- API.compatibility = report
- if not normalized then report.ready=false;table.insert(report.missing,tostring(problem)) end
- if not report.ready then return nil, report end
- local ok, session = pcall(function() return loadModule("Session").init(normalized,report) end)
- if not ok then report.ready=false;table.insert(report.missing,"Initialization: "..tostring(session));return nil,report end
- API.session=session
- return session, report
-end
-function API.init(options)
- local session, report=API.tryInit(options)
- if not session then error(loadModule("Runtime").errorMessage(report),2) end
- return session
-end
-for _, name in {"GetLockedTarget","GetPredictedPosition","GetPrediction","LockTarget","UnlockTarget","IsValidTarget","CreateShotAdapter","SetEnabled","Unload"} do
- API[name]=function(...)
-  if not API.session then return nil,"Not initialized" end
-  return API.session[name](API.session,...)
+-- BEGIN Bootstrap | sha256 c9468f387fce8f8f96009e5e90d116056fecb8043589c8e5c633b843acd7c195
+factories["Bootstrap"] = function(loadModule)
+--!nonstrict
+-- Protected startup orchestration. Runtime owns readiness; Session owns resources.
+local Runtime = loadModule("Runtime")
+local Bootstrap = {}
+
+function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
+ local API={Config=initialConfig,getModule=getModule}
+ API.Modules=setmetatable({}, {__index=function(_,name) return getModule(name) end})
+ local generation=0
+ function API.checkCompatibility(options)
+  return Runtime.check(options or initialConfig)
  end
+ function API.tryInit(options)
+  generation+=1
+  local request=generation
+  local report={ready=false,missing={},pending={},warnings={},events={}}
+  API.compatibility=report
+  local phase="Modules"
+  Runtime.trace(report,"Execution","START","SEDWARE startup v2")
+  local normalized
+  local ok,result=xpcall(function()
+   for _,name in moduleNames do getModule(name) end
+   Runtime.trace(report,"Modules","READY",tostring(#moduleNames).." embedded modules loaded")
+   phase="Configuration"
+   if options==nil and headerError then error(headerError,0) end
+   local problem
+   normalized,problem=getModule("Config").new(if options~=nil then options else initialConfig)
+   assert(normalized,problem)
+   Runtime.trace(report,"Configuration","READY","PredictionX="..normalized.PredictionX.." PredictionY="..normalized.PredictionY
+    .." Enabled="..tostring(normalized.Enabled).." WelcomeNotification="..tostring(normalized.WelcomeNotification)
+    .." ShowNotifications="..tostring(normalized.ShowNotifications))
+   phase="Services"
+   local audit=Runtime.check(normalized)
+   audit.events=report.events
+   report=Runtime.awaitReady(normalized,audit,function() return request~=generation end)
+   if request~=generation or report.cancelled then return nil end
+   API.compatibility=report
+   if not report.ready then error(Runtime.errorMessage(report),0) end
+   for _,warning in report.warnings do Runtime.trace(report,"Compatibility","WARN",warning) end
+   phase="Session"
+   local session=getModule("Session").init(normalized,report)
+   API.session=session
+   return session
+  end,Runtime.traceback)
+  if request~=generation or report.cancelled then
+   report.ready=false;report.cancelled=true
+   Runtime.trace(report,"Session","CANCELLED","A newer initialization replaced this request")
+   return nil,report
+  end
+  API.compatibility=report
+  if ok then return result,report end
+  -- Configuration/module errors can occur before the audit. Find PlayerGui
+  -- without waiting on an invalid configuration so an error toast can be shown.
+  if not report.playerGui then
+   local audited,audit=pcall(Runtime.check,normalized)
+   if audited then
+    report.services=report.services or audit.services
+    report.playerGui=audit.playerGui;report.player=audit.player;report.world=audit.world
+   end
+  end
+  phase=report.failurePhase or phase
+  report.ready=false;report.error=tostring(result)
+  table.insert(report.missing,phase..": "..tostring(result))
+  Runtime.trace(report,phase,"FAIL",result)
+  local notified,notifyError=pcall(function() getModule("Session").notifyFailure(report,phase..": "..tostring(result)) end)
+  if not notified then
+   Runtime.reportFailure(phase..": "..tostring(result))
+   Runtime.trace(report,"FailureNotification","FAIL",notifyError)
+   -- Overlay has no Config/Session dependency; module failures can still show
+   -- an error when this small independent public-API display remains usable.
+   local shown,fallbackError=pcall(function() return getModule("Overlay").showFailure(report.playerGui,phase..": "..tostring(result)) end)
+   if not shown then Runtime.trace(report,"FailureNotification","FAIL",fallbackError) end
+  end
+  return nil,report
+ end
+ function API.init(options)
+  local session,report=API.tryInit(options)
+  if not session then error(Runtime.errorMessage(report),2) end
+  return session
+ end
+ for _,name in {"GetLockedTarget","GetPredictedPosition","GetPrediction","LockTarget","UnlockTarget","IsValidTarget","CreateShotAdapter","SetEnabled","Unload"} do
+  API[name]=function(...)
+   if not API.session then return nil,"Not initialized" end
+   return API.session[name](API.session,...)
+  end
+ end
+ return API
 end
-if game and not PINK_DOT_NO_AUTOSTART then
- local session,report=API.tryInit(Config)
- if not session then loadModule("Session").notifyFailure(report,loadModule("Runtime").errorMessage(report)) end
+return Bootstrap
 end
+-- END Bootstrap
+local built,API=xpcall(function()
+ return loadModule("Bootstrap").new(Config,loadModule,{"Settings", "Latency", "MotionHistory", "Ballistics", "Config", "ModeDetector", "Selection", "Prediction", "Overlay", "Runtime", "ShotAdapter", "Session", "Bootstrap"},headerError)
+end,bootTraceback)
+if not built then
+ bootLog("Modules","FAIL",API)
+ local problem=tostring(API)
+ local shown,issue=pcall(function()
+  local players=game:GetService("Players")
+  local player=players.LocalPlayer
+  return loadModule("Overlay").showFailure(player and player:FindFirstChild("PlayerGui"),"Modules: "..problem)
+ end)
+ if not shown then bootLog("FailureNotification","FAIL",issue) end
+ return {compatibility={ready=false,missing={tostring(API)}},error=tostring(API)}
+end
+if not PINK_DOT_NO_AUTOSTART then
+ local started,problem=xpcall(function() return API.tryInit() end,bootTraceback)
+ if not started then
+  bootLog("AutoInit","FAIL",problem)
+  local notified,issue=pcall(function() loadModule("Session").notifyFailure(API.compatibility,problem) end)
+  if not notified then bootLog("FailureNotification","FAIL",issue) end
+ end
+else bootLog("AutoInit","SKIPPED","PINK_DOT_NO_AUTOSTART=true; call API.init() to start") end
 return API
 </ProtectedString>
       </Properties>
