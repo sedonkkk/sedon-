@@ -77,3 +77,7 @@ Corta (`<40 studs`), media (`40–120`) y larga (`≥120`) son categorías de di
 El servidor publica a 20 Hz; el cliente estima/selecciona a 30 Hz por defecto, mide predicción a 5 Hz y actualiza texto a 10 Hz. Por frame solo dibuja y orienta la cámara. Los historiales, métricas, colas de observación y proyectiles tienen límites. Se desconectan eventos al destruir los scripts/GUI y se limpian datos al retirar jugadores. Todos los remotes pertenecen a este proyecto; el servidor valida origen, tipos, cooldown, blanco y límites de recursos, y calcula los impactos.
 
 Los ajustes de la UI duran la sesión. Para conservar defaults cambia `Settings.luau`; las características de disparo autoritativas se editan en `Weapons.luau`, no en remotes de juegos ajenos.
+
+## Descargar desde GitHub
+
+[DaHoodPrediction.lua](https://github.com/sedonkkk/sedon-/blob/main/DaHoodPrediction.lua) · [Raw verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/47a278a38ae3b7ce48fa2184bcf7ff0bd12bcedf/DaHoodPrediction.lua) · [Loader.lua](Loader.lua)

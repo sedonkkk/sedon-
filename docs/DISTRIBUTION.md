@@ -16,7 +16,7 @@ La validación automática del proyecto no prueba un ejecutor específico ni una
 2. Abre el archivo publicado y pulsa **Raw**. Copia la URL de la barra del navegador. Debe ser una dirección HTTPS real de `raw.githubusercontent.com` que termine en `DaHoodPrediction.lua`. Para mantener la versión estable, abre antes el archivo en un commit concreto y copia su Raw; un enlace de rama cambia cuando se actualiza esa rama.
 3. Verifica que el enlace se pueda abrir sin iniciar sesión y muestre el código completo. No pegues tokens ni enlaces con credenciales en el loader. Un repositorio privado normalmente requiere autenticación, por lo que ese enlace no sirve para una distribución pública sin credenciales.
 
-El proyecto se prepara para subida; esta tarea no crea commits ni publica código. No se ha inventado una URL de descarga ni se ha generado un comando final apuntando a un archivo inexistente.
+El proyecto fue subido a `sedonkkk/sedon-`, rama `main`, con autorización del usuario. El enlace Raw del commit inicial fue comprobado por HTTPS y sus bytes coinciden con el archivo local; la URL no se ha inventado.
 
 ## Comando de una sola línea
 
@@ -54,3 +54,13 @@ Sin `--raw-url`, el último comando **no realiza solicitudes de red**. Empaqueta
 `build/distribution-manifest.json` registra SHA-256 de cada archivo empaquetado; el script comprueba también que las copias descargables coincidan. No incluye `.git`, credenciales, cachés, archivos subidos por el usuario ni dependencias ajenas. Ejecuta la preparación después de que terminen los cambios y la validación, para que los ZIP representen la versión final.
 
 La plantilla puede inspeccionarse localmente sin ninguna URL. Un loader que llama código descargado requiere un runtime que permita esas APIs; sus errores no se solucionan desactivando la seguridad, alterando anticheat o manipulando remotes protegidos.
+
+## Publicación verificada
+
+[Archivo en GitHub](https://github.com/sedonkkk/sedon-/blob/main/DaHoodPrediction.lua) · [Raw de la versión verificada](https://raw.githubusercontent.com/sedonkkk/sedon-/47a278a38ae3b7ce48fa2184bcf7ff0bd12bcedf/DaHoodPrediction.lua)
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/47a278a38ae3b7ce48fa2184bcf7ff0bd12bcedf/DaHoodPrediction.lua"))()
+```
+
+`Loader.lua` usa ese enlace fijo. La verificación del Raw confirma distribución e integridad de esa versión; no certifica la ejecución en un ejecutor ni Da Hood.
