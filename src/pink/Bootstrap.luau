@@ -16,7 +16,7 @@ function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
   local report={ready=false,missing={},pending={},warnings={},events={}}
   API.compatibility=report
   local phase="Modules"
-  Runtime.trace(report,"Execution","START","SEDWARE startup v2")
+  Runtime.trace(report,"Execution","START","SEDWARE startup v3; robust LockKey normalization")
   local normalized
   local ok,result=xpcall(function()
    for _,name in moduleNames do getModule(name) end

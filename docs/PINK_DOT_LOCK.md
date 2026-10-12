@@ -2,6 +2,8 @@
 
 La versión actual usa la marca **SEDWARE** y corrige el arranque. [Diagnóstico, causas reproducidas y guía de consola](SEDWARE_INITIALIZATION.md).
 
+[Corrección de LockKey en startup v3](SEDWARE_LOCKKEY.md): el valor editable `"C"` y Enum.KeyCode.C se normalizan por pertenencia e identidad, sin comparar el texto de EnumType.
+
 Proyecto independiente de DH PREDICTION LAB: C selecciona un personaje, muestra un DOT Hot Pink sobre su parte actual y C lo libera. No hay menú. El código lee la cámara para proyectar y seleccionar; nunca escribe su CFrame, Focus, CameraSubject ni mueve el mouse o gira al personaje. No modifica el sistema de disparo de Da Hood.
 
 ## Archivos y arranque
@@ -39,7 +41,7 @@ Edita `local Config = {...}` al principio del archivo autónomo antes de ejecuta
 
 | Campos | Efecto |
 | --- | --- |
-| Enabled, LockKey | Activa el arranque; tecla de bloqueo. False no crea recursos y descarga una instancia anterior. |
+| Enabled, LockKey | Activa el arranque; tecla de bloqueo como `"C"` o Enum.KeyCode.C. Se valida y normaliza a Enum nativo. False no crea recursos y descarga una instancia anterior. |
 | InitializationTimeout, InitializationPollInterval | Tiempo máximo global de preparación y sondeo en segundos; 8 y 0,05 por defecto. |
 | LockMode, FirstPersonFOV, ThirdPersonFOV | Referencia y radio de selección en píxeles. |
 | ModeEnterDistance, ModeExitDistance, ModeDwellSeconds | Umbrales en studs y confirmación temporal de Auto. |
@@ -132,7 +134,7 @@ python3 scripts/check.py
 
 Herramienta oficial Luau 0.695, commit `1f6ff5d6f0072f2fab2adf35d1ffbaae7d848ad0`. La primera orden verifica que el archivo coincide con sus fuentes, compila y ejecuta pruebas matemáticas, del adaptador y del **archivo completo** mediante dobles de eventos/APIs. La segunda conserva las pruebas anteriores. Los mensajes Load Failed de las pruebas corresponden a fallos provocados deliberadamente.
 
-Resultados verificados: **126 pruebas de Pink/SEDWARE, 2.092 comprobaciones, 0 fallos**, incluidas **34 pruebas de arranque nuevas y 3 del loader**; **96 pruebas anteriores, 75.895 comprobaciones, 0 fallos**. Total **222 pruebas, 77.987 comprobaciones**. El archivo autónomo integra 13 módulos y no contiene requires externos. Las fuentes anteriores de DH PREDICTION LAB se preservan.
+Resultados verificados: **156 pruebas de Pink/SEDWARE, 2.384 comprobaciones, 0 fallos**, incluidas **34 de arranque, 30 de LockKey y 3 del loader**; **96 pruebas anteriores, 75.895 comprobaciones, 0 fallos**. Total **252 pruebas, 78.279 comprobaciones**. El archivo autónomo integra 13 módulos y no contiene requires externos. Las fuentes anteriores de DH PREDICTION LAB se preservan.
 
 | Requisito de las 23 comprobaciones | Evidencia automatizada | Studio / Da Hood real |
 | --- | --- | --- |

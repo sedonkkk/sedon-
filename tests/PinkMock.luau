@@ -106,13 +106,42 @@ function Mock.new()
 	function Color3.new(r, g, b) return {R = r or 0, G = g or 0, B = b or 0, _mockType = "Color3"} end
 	function Color3.fromRGB(r, g, b) return Color3.new(r / 255, g / 255, b / 255) end
 	function Color3.fromHSV(h, s, v) return {H = h, S = s, V = v} end
+	-- Native Enum types stringify as "KeyCode", not "Enum.KeyCode". Keep
+	-- KeyCode finite and canonical: an Enum-like forged table or invented name
+	-- must not pass a production Config check just because this is a double.
+	local keyNames = {
+		"Unknown", "None", "Backspace", "Tab", "Clear", "Return", "Pause", "Escape", "Space",
+		"QuotedDouble", "Hash", "Dollar", "Percent", "Ampersand", "Quote", "LeftParenthesis",
+		"RightParenthesis", "Asterisk", "Plus", "Comma", "Minus", "Period", "Slash",
+		"Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+		"Colon", "Semicolon", "LessThan", "Equals", "GreaterThan", "Question", "At",
+		"LeftBracket", "BackSlash", "RightBracket", "Caret", "Underscore", "Backquote",
+		"LeftControl", "RightControl", "LeftShift", "RightShift", "LeftAlt", "RightAlt",
+		"LeftMeta", "RightMeta", "CapsLock", "NumLock", "ScrollLock", "Delete", "Insert",
+		"Home", "End", "PageUp", "PageDown", "Up", "Down", "Left", "Right",
+		"ButtonA", "ButtonB", "ButtonX", "ButtonY", "ButtonL1", "ButtonR1", "ButtonL2", "ButtonR2",
+		"ButtonL3", "ButtonR3", "ButtonStart", "ButtonSelect", "DPadLeft", "DPadRight", "DPadUp", "DPadDown",
+		"Thumbstick1", "Thumbstick2",
+	}
+	for code = string.byte("A"), string.byte("Z") do table.insert(keyNames, string.char(code)) end
+	for number = 1, 15 do table.insert(keyNames, "F" .. number) end
+	for _,digit in ipairs({"Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine"}) do table.insert(keyNames,"Keypad"..digit) end
 	local Enum = setmetatable({}, {__index = function(enum, category)
-		local values = setmetatable({}, {__tostring = function() return "Enum." .. category end, __index = function(group, name)
-			local value = setmetatable({Name = name, EnumType = group, _mockType = "EnumItem"},
-				{__tostring=function() return "Enum."..category.."."..name end})
-			rawset(group, name, value)
+		local items = {}
+		local values
+		local function makeItem(name)
+			local value = setmetatable({Name = name, EnumType = values, _mockType = "EnumItem"},
+				{__tostring = function() return "Enum." .. category .. "." .. name end})
+			rawset(values, name, value)
+			table.insert(items, value)
 			return value
+		end
+		values = setmetatable({}, {__tostring = function() return category end, __index = function(_, name)
+			if category == "KeyCode" then error(tostring(name) .. " is not a valid member of Enum.KeyCode") end
+			return makeItem(name)
 		end})
+		function values:GetEnumItems() return table.clone(items) end
+		if category == "KeyCode" then for _, name in ipairs(keyNames) do makeItem(name) end end
 		rawset(enum, category, values)
 		return values
 	end})

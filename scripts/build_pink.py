@@ -28,7 +28,7 @@ def source_bundle(check=False):
     manifest = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in MODULES.items()}
     lines = [
         '--!nonstrict',
-        '-- SEDWARE startup v2 | PinkDotLock.lua. Edit Config below; X/Y are seconds.',
+        '-- SEDWARE startup v3 | robust LockKey normalization. Edit Config below; X/Y are seconds.',
         '-- The dot shows the observed part, never the predicted aim point.',
         '-- Camera stays free. Public client APIs only; no weapon integration for Da Hood.',
         'local function bootTraceback(problem)',
@@ -41,7 +41,7 @@ def source_bundle(check=False):
         ' local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn',
         ' if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end',
         'end',
-        'bootLog("Execution","START","SEDWARE startup v2 payload began execution")',
+        'bootLog("Execution","START","SEDWARE startup v3 payload began execution; LockKey normalization enabled")',
         'local Config',
         'local configBuilt,headerError=xpcall(function() Config = '+ config_literal+' end,bootTraceback)',
         'if configBuilt then headerError=nil else bootLog("Configuration","FAIL",headerError) end',

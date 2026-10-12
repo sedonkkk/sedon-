@@ -1,5 +1,5 @@
 --!nonstrict
--- SEDWARE startup v2 | PinkDotLock.lua. Edit Config below; X/Y are seconds.
+-- SEDWARE startup v3 | robust LockKey normalization. Edit Config below; X/Y are seconds.
 -- The dot shows the observed part, never the predicted aim point.
 -- Camera stays free. Public client APIs only; no weapon integration for Da Hood.
 local function bootTraceback(problem)
@@ -12,10 +12,10 @@ local function bootLog(phase,status,detail)
  local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn
  if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end
 end
-bootLog("Execution","START","SEDWARE startup v2 payload began execution")
+bootLog("Execution","START","SEDWARE startup v3 payload began execution; LockKey normalization enabled")
 local Config
 local configBuilt,headerError=xpcall(function() Config = {
- Enabled=true, LockKey=(Enum and Enum.KeyCode.C or "C"), LockMode="Auto",
+ Enabled=true, LockKey="C", LockMode="Auto",
  FirstPersonFOV=120, ThirdPersonFOV=180,
  PredictionX=0.1205, PredictionY=0.0800, AutoPrediction=false,
  PingCompensation=true, PingSmoothing=0.8,
@@ -332,7 +332,7 @@ end
 return Ballistics
 end
 -- END Ballistics
--- BEGIN Config | sha256 f7eab8e4f9b8282f5c4d0285cff12fcdf67f7a7cc2a5ad9b8b0f5706e0e55cb5
+-- BEGIN Config | sha256 fdccd05cf587c0ba8d690c9a4dfaa076899c7864dc3100d7e37b6d9f56fdcf0e
 factories["Config"] = function(loadModule)
 --!nonstrict
 -- PINK DOT LOCK configuration. Prediction X/Y and offsets are seconds;
@@ -342,7 +342,7 @@ local Config = {}
 
 -- The standalone builder copies this native literal to the editable file header.
 Config.sourceLiteral = [=[{
- Enabled=true, LockKey=Enum.KeyCode.C, LockMode="Auto",
+ Enabled=true, LockKey="C", LockMode="Auto",
  FirstPersonFOV=120, ThirdPersonFOV=180,
  PredictionX=0.1205, PredictionY=0.0800, AutoPrediction=false,
  PingCompensation=true, PingSmoothing=0.8,
@@ -371,13 +371,9 @@ local function color(r,g,b)
  if Color3 and type(Color3.fromRGB)=="function" then return Color3.fromRGB(r,g,b) end
  return {R=r/255,G=g/255,B=b/255}
 end
-local function lockKey()
- if Enum and Enum.KeyCode then return Enum.KeyCode.C end
- return "C"
-end
 function Config.defaults()
  return {
- Enabled=true, LockKey=lockKey(), LockMode="Auto",
+ Enabled=true, LockKey="C", LockMode="Auto",
  FirstPersonFOV=120, ThirdPersonFOV=180,
  PredictionX=0.1205, PredictionY=0.0800, AutoPrediction=false,
  PingCompensation=true, PingSmoothing=0.8,
@@ -418,7 +414,10 @@ local function copy(value)
 end
 local function merge(into, overrides)
  for key,value in overrides do
-  if typeof(value)=="EnumItem" or typeof(value)=="Color3" then into[key]=value
+  -- LockKey was validated before merge. Preserve its canonical reference even
+  -- when an external host reports a different typeof; never clone an Enum.
+  if key=="LockKey" then into[key]=value
+  elseif typeof(value)=="EnumItem" or typeof(value)=="Color3" then into[key]=value
   elseif key=="PingReferences" then into[key]=copy(value)
   elseif type(value)=="table" and type(into[key])=="table" then merge(into[key],value)
   else into[key]=copy(value) end
@@ -456,15 +455,76 @@ local function colorOK(value)
  for key in value do if key~="R" and key~="G" and key~="B" then return false end end
  return bounded(value.R,0,1) and bounded(value.G,0,1) and bounded(value.B,0,1)
 end
-local function keyOK(value)
- if typeof(value)=="EnumItem" then return tostring(value.EnumType)=="Enum.KeyCode" end
- if type(value)=="string" then return #value>0 and #value<=32 and string.match(value,"^%w+$")~=nil end
- -- Native-enum-shaped test doubles let numerical tests run without Roblox.
- if type(value)=="table" and getmetatable(value)==nil then
-  for key in value do if key~="Name" and key~="EnumType" then return false end end
-  return type(value.Name)=="string" and value.EnumType=="KeyCode"
+local function describe(problem)
+ local ok,message=pcall(tostring,problem)
+ return if ok then message else "error de API sin representación textual"
+end
+local function sameEnum(a,b)
+ if rawequal(a,b) then return true end
+ -- Native userdata may use value equality across engine wrappers. Plain Lua
+ -- tables must be the actual canonical reference, so __eq cannot forge keys.
+ if type(a)=="userdata" and type(b)=="userdata" then
+  local ok,equal=pcall(function() return a==b end)
+  return ok and equal
  end
  return false
+end
+-- Without Roblox, numerical CLI tests may retain known key names as text.
+-- A client still requires native Enum/services in Runtime; never use arbitrary
+-- strings or enum-shaped tables as a substitute for a usable native key.
+local offlineKeys={}
+for code=string.byte("A"),string.byte("Z") do offlineKeys[string.char(code)]=true end
+for i=1,15 do offlineKeys["F"..i]=true end
+for name in string.gmatch("Zero One Two Three Four Five Six Seven Eight Nine Space Tab Return Escape Backspace Delete Insert Home End PageUp PageDown Up Down Left Right LeftShift RightShift LeftControl RightControl LeftAlt RightAlt CapsLock NumLock ScrollLock", "%S+") do
+ offlineKeys[name]=true
+end
+function Config.normalizeLockKey(value)
+ local name=if type(value)=="string" then value else nil
+ if name and (#name==0 or #name>32 or not string.match(name,"^[A-Za-z][A-Za-z0-9]*$")) then
+  return nil,"LockKey inválido: utiliza un nombre de Enum.KeyCode, por ejemplo C"
+ end
+ if Enum==nil then
+  if name and offlineKeys[name] then return name end
+  return nil,"LockKey inválido o inexistente; sin Enum nativo solo se admiten nombres conocidos para pruebas numéricas"
+ end
+ local enumOK,keyCode=pcall(function() return Enum.KeyCode end)
+ if not enumOK or not keyCode then
+  return nil,"LockKey: Enum.KeyCode no está disponible: "..describe(keyCode)
+ end
+ local candidate=value
+ if name then
+  local found,resolved=pcall(function() return keyCode[name] end)
+  if not found or resolved==nil then
+   return nil,"LockKey inexistente en Enum.KeyCode: "..name..(if found then "" else "; "..describe(resolved))
+  end
+  candidate=resolved
+ elseif type(value)~="userdata" and type(value)~="table" then
+  return nil,"LockKey inválido: se requiere un nombre o elemento de Enum.KeyCode"
+ end
+ local listed,items=pcall(function() return keyCode:GetEnumItems() end)
+ if not listed or type(items)~="table" or #items==0 then
+  return nil,"LockKey: no se pudieron validar los miembros de Enum.KeyCode: "..describe(items)
+ end
+ for _,canonical in ipairs(items) do
+  if sameEnum(candidate,canonical) then
+   local inspected,keyName,parent,indexed=pcall(function()
+    local canonicalName=canonical.Name
+    return canonicalName,canonical.EnumType,keyCode[canonicalName]
+   end)
+   if not inspected then return nil,"LockKey: error al verificar Enum.KeyCode: "..describe(keyName) end
+   if type(keyName)~="string" or not sameEnum(parent,keyCode) or not sameEnum(indexed,canonical) then
+    return nil,"LockKey inválido: no corresponde a un miembro canónico de Enum.KeyCode"
+   end
+   if keyName=="Unknown" or keyName=="None" then return nil,"LockKey inválido: "..keyName.." no identifica una tecla de bloqueo" end
+   return canonical
+  end
+ end
+ return nil,"LockKey inválido: el valor no pertenece a Enum.KeyCode"
+end
+function Config.keyName(value)
+ if type(value)=="string" then return value end
+ local ok,name=pcall(function() return value.Name end)
+ return if ok and type(name)=="string" then name else "?"
 end
 local function validate(config)
  local defaults=Config.defaults()
@@ -478,7 +538,8 @@ local function validate(config)
  end
  if config.HistoryCapacity%1~=0 then return false,"HistoryCapacity debe ser entero" end
  if config.LockMode~="Auto" and config.LockMode~="FirstPerson" and config.LockMode~="ThirdPerson" then return false,"LockMode desconocido" end
- if not keyOK(config.LockKey) then return false,"LockKey debe ser Enum.KeyCode" end
+ local resolvedKey,keyMessage=Config.normalizeLockKey(config.LockKey)
+ if not resolvedKey then return false,keyMessage end
  if not colorOK(config.DotColor) or not colorOK(config.DotOutlineColor) then return false,"Color del DOT inválido" end
  if type(config.TargetPart)~="string" or #config.TargetPart==0 or #config.TargetPart>80 then return false,"TargetPart inválido" end
  if config.MinPredictionX>config.MaxPredictionX or config.MinPredictionY>config.MaxPredictionY then return false,"Límites de predicción invertidos" end
@@ -535,7 +596,7 @@ local function validateOverrides(overrides, defaults, path)
  return true
 end
 function Config.new(overrides)
- if overrides==nil then return Config.defaults() end
+ if overrides==nil then overrides={} end
  local defaults=Config.defaults()
  local ok,message=validateOverrides(overrides,defaults,"Config")
  if not ok then return nil,message end
@@ -544,7 +605,8 @@ function Config.new(overrides)
  for _,key in {"DotColor","DotOutlineColor"} do
   if overrides[key]~=nil and not colorOK(overrides[key]) then return nil,"Color del DOT inválido" end
  end
- if overrides.LockKey~=nil and not keyOK(overrides.LockKey) then return nil,"LockKey inválido" end
+ local resolvedKey,keyMessage=Config.normalizeLockKey(if overrides.LockKey~=nil then overrides.LockKey else defaults.LockKey)
+ if not resolvedKey then return nil,keyMessage end
  if overrides.PingReferences~=nil then
   -- A shallow shape check prevents recursive-copying of cyclic point objects.
   local points=overrides.PingReferences
@@ -556,11 +618,7 @@ function Config.new(overrides)
   end
  end
  local normalized=merge(defaults,overrides)
- if type(normalized.LockKey)=="string" and Enum then
-  local resolved,key=pcall(function() return Enum.KeyCode[normalized.LockKey] end)
-  if not resolved or key==nil then return nil,"LockKey no existe en Enum.KeyCode" end
-  normalized.LockKey=key
- end
+ normalized.LockKey=resolvedKey
  ok,message=validate(normalized)
  if not ok then return nil,message end
  return normalized
@@ -1712,7 +1770,7 @@ end
 return ShotAdapter
 end
 -- END ShotAdapter
--- BEGIN Session | sha256 9049bffd86d233a1c3533770bf49931acf1cf1603cb70afc9ea3480a1b517149
+-- BEGIN Session | sha256 62fc0e244344ea399576063987d1022420120b5e84dc24e917cf2d8234fcb9e4
 factories["Session"] = function(loadModule)
 --!nonstrict
 -- Public client APIs only. Selection and prediction never write camera,
@@ -2098,7 +2156,7 @@ function Session.init(options,report)
   -- Starting the toast at zero opacity can still fail; preserve the old owner
   -- until the replacement's final public-API writes have succeeded.
   if config.WelcomeNotification then
-   local key=if typeof(config.LockKey)=="EnumItem" then config.LockKey.Name else tostring(config.LockKey)
+   local key=Config.keyName(config.LockKey)
    self:_notify("SEDWARE","Successfully Loaded | Press "..key.." to Lock",config.WelcomeDuration)
   end
   self.owner.Parent=self.playerGui
@@ -2113,7 +2171,7 @@ end
 return Session
 end
 -- END Session
--- BEGIN Bootstrap | sha256 c9468f387fce8f8f96009e5e90d116056fecb8043589c8e5c633b843acd7c195
+-- BEGIN Bootstrap | sha256 4a14c23d803f759ec12f9676f1419bd6bff6d18f75f643d8a9debbe976e550e7
 factories["Bootstrap"] = function(loadModule)
 --!nonstrict
 -- Protected startup orchestration. Runtime owns readiness; Session owns resources.
@@ -2133,7 +2191,7 @@ function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
   local report={ready=false,missing={},pending={},warnings={},events={}}
   API.compatibility=report
   local phase="Modules"
-  Runtime.trace(report,"Execution","START","SEDWARE startup v2")
+  Runtime.trace(report,"Execution","START","SEDWARE startup v3; robust LockKey normalization")
   local normalized
   local ok,result=xpcall(function()
    for _,name in moduleNames do getModule(name) end

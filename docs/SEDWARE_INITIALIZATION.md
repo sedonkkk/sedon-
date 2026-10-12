@@ -1,5 +1,7 @@
 # SEDWARE: corrección de inicialización
 
+La versión v3 también corrige el rechazo de la tecla C. [Causa, normalización y pruebas de LockKey](SEDWARE_LOCKKEY.md).
+
 Entrada estable publicada en [SEDWARE.lua](../SEDWARE.lua): carga la versión actual de PinkDotLock.lua en main, por lo que conserva la misma dirección cuando se publiquen nuevas correcciones. Su Raw se verificó contra el payload corregido. A diferencia del enlace de un commit, esta entrada recibe las actualizaciones del repositorio.
 
 ```lua
@@ -91,7 +93,7 @@ python3 scripts/check_pink.py
 python3 scripts/check.py
 ```
 
-Compilación con Luau oficial 0.695 correcta. Resultado: **126 pruebas de Pink/SEDWARE y 96 anteriores: 222 pruebas, 77.987 comprobaciones, 0 fallos**. Las 34 pruebas nuevas de arranque abarcan todos los diez casos pedidos, más timeout conjunto, viewport, LocalPlayer, excepciones, cancelación, error del encabezado y autoinicio sin game. Otras 3 pruebas ejercitan el loader real, la causa original de un error HTTP y la identificación de un fallo de compilación.
+Compilación con Luau oficial 0.695 correcta. Resultado actual: **156 pruebas de Pink/SEDWARE y 96 anteriores: 252 pruebas, 78.279 comprobaciones, 0 fallos**. Las 34 pruebas de arranque abarcan todos los diez casos pedidos, más timeout conjunto, viewport, LocalPlayer, excepciones, cancelación, error del encabezado y autoinicio sin game. Otras 3 pruebas ejercitan el loader real, la causa original de un error HTTP y la identificación de un fallo de compilación. La actualización v3 añade 30 pruebas específicas de LockKey.
 
 La lógica de arranque y los callbacks se ejecutaron sobre el archivo autónomo real con dobles deterministas. **No son pruebas de Roblox Studio ni Da Hood real.** Esas ejecuciones y las limitaciones específicas del host externo siguen pendientes. El loader depende de loadstring compatible con Luau y game:HttpGet proporcionados por un host autorizado; esas funciones no habilitan código remoto desde un LocalScript normal publicado. El script no intenta eludir esas restricciones.
 

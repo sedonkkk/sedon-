@@ -382,7 +382,7 @@ function Session.init(options,report)
   -- Starting the toast at zero opacity can still fail; preserve the old owner
   -- until the replacement's final public-API writes have succeeded.
   if config.WelcomeNotification then
-   local key=if typeof(config.LockKey)=="EnumItem" then config.LockKey.Name else tostring(config.LockKey)
+   local key=Config.keyName(config.LockKey)
    self:_notify("SEDWARE","Successfully Loaded | Press "..key.." to Lock",config.WelcomeDuration)
   end
   self.owner.Parent=self.playerGui
