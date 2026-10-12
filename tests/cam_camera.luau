@@ -178,8 +178,14 @@ end)
 test("vertical aim and crossing a pole produce orthogonal finite camera axes",function()
  local c,cam=controller(0),camera()
  for _,goal in {V.new(0,100,0),V.new(0,100,0.001),V.new(0,100,-0.001),V.new(0,-100,0),V.new(0,0,100)} do
-  check(c:update(cam,goal,1/60))
-  vectorNear(cam.CFrame.LookVector,normalize(goal),1e-8)
+  -- Near a pole, heading is held within the documented small cone. Exiting
+  -- it can require a bounded yaw transition instead of an instantaneous flip.
+  for _=1,16 do
+   check(c:update(cam,goal,1/60))
+   near(cam.CFrame.RightVector.Y,0,1e-8)
+   check(cam.CFrame.UpVector.Y>=-1e-9,"vertical transition inverted the horizon")
+  end
+  vectorNear(cam.CFrame.LookVector,normalize(goal),4e-4)
   near(cam.CFrame.LookVector:Dot(cam.CFrame.UpVector),0,1e-8)
   near(cam.CFrame.RightVector.Magnitude,1,1e-8)
   near(cam.CFrame.UpVector.Magnitude,1,1e-8)

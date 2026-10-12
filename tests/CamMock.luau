@@ -63,6 +63,10 @@ function CamMock.new()
 		end
 		return frame(V.new(x or 0, y or 0, z or 0))
 	end
+	function Frame.fromMatrix(position, right, up, back)
+		back = back or right:Cross(up)
+		return frame(position, -back, up)
+	end
 	function Frame:Lerp(other, alpha)
 		local a, b = quaternion(self), quaternion(other)
 		local dot = 0

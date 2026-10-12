@@ -30,7 +30,7 @@ def source_bundle(check=False):
     manifest = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in MODULES.items()}
     lines = [
         '--!nonstrict',
-        '-- SEDWARE CAM LOCK v1 | separate variant; edit Config below.',
+        '-- SEDWARE CAM LOCK v1 | zero-roll yaw/pitch correction; edit Config below.',
         '-- Prediction X/Y are seconds. CamPrediction is a gain: value / 13.80.',
         '-- Enabled=false opens the GUI without controlling the camera.',
         '-- Public client APIs only. No remote weapon integration or bypass.',
@@ -162,6 +162,29 @@ def studio_place(source_path, check=False):
         output.parent.mkdir(exist_ok=True)
         output.write_bytes(build_path.read_bytes())
     print(f'Packaged Studio Cam place: {output} (native runtime verification pending)')
+    # Native regression runner is distributed in its own place. The ordinary
+    # Cam GUI, layout, controls and startup remain unchanged.
+    regression = ROOT/'tests/studio/CamRollRegression.client.luau'
+    if regression.exists():
+        starter_script = document.find('.//Item[@class="LocalScript"]')
+        starter_script.find('Properties/string[@name="Name"]').text = 'CamRollRegression'
+        starter_script.find('Properties/ProtectedString[@name="Source"]').text = regression.read_text(encoding='utf-8')
+        storage, _ = item(document, 'ReplicatedStorage', 'ReplicatedStorage')
+        _, module_props = item(storage, 'ModuleScript', 'SedwareCamLock')
+        ET.SubElement(module_props, 'ProtectedString', name='Source').text = source_path.read_text(encoding='utf-8')
+        ET.indent(document, space='  ')
+        regression_build = ROOT/'build/SedwareCamRollTest.rbxlx'
+        ET.ElementTree(document).write(regression_build, encoding='utf-8', xml_declaration=True)
+        regression_delivery = ROOT/'studio/SedwareCamRollTest.rbxlx'
+        embedded = ET.parse(regression_build).findall('.//ProtectedString[@name="Source"]')
+        assert sorted(node.text for node in embedded) == sorted([
+            source_path.read_text(encoding='utf-8'), regression.read_text(encoding='utf-8')])
+        if check:
+            if not regression_delivery.exists() or regression_delivery.read_bytes() != regression_build.read_bytes():
+                raise RuntimeError('Native Cam roll place differs: run scripts/build_cam.py')
+        else:
+            regression_delivery.write_bytes(regression_build.read_bytes())
+        print(f'Packaged native roll regression place: {regression_delivery} (not executed in this Linux environment)')
 
 
 if __name__ == '__main__':

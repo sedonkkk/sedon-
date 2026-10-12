@@ -30,7 +30,7 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Controles, fórmulas, diagnóstico y pruebas](docs/SEDWARE_CAM_LOCK.md) · [Lugar para probar con dos clientes](studio/SedwareCamLock.rbxlx). `python3 scripts/check_cam.py` comprueba el archivo real con dobles; falta ejecución nativa en Roblox y no integra armas de Da Hood.
 
-[Raw Cam Lock verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/SedwareCamLock.lua) · [CamLoader.lua](CamLoader.lua). 62 pruebas de la nueva variante y 342 anteriores pasan; ambos proyectos SEDWARE tienen cargadores separados.
+[SedwareCamLock.lua](SedwareCamLock.lua). [Corrección de Camera Roll](docs/SEDWARE_CAMERA_ROLL.md): yaw/pitch nivelados respecto a Y global y sin transportar UpVector. 85 pruebas de Cam Lock y 342 anteriores pasan. [Runner nativo de Studio](studio/SedwareCamRollTest.rbxlx) preparado; ejecución nativa pendiente.
 
 ## Ejecutar el laboratorio original
 

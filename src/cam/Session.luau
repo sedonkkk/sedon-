@@ -110,6 +110,14 @@ function Session:_pause(reason,now)
  if reason~=self.pauseReason then Runtime.trace(self.report,"CamTracking","PAUSED",reason) end
  self.pauseReason=reason
 end
+function Session:_cameraDiagnostic(now)
+ if not self.config.CameraDebugMode or (self.nextCameraDiagnostic and now<self.nextCameraDiagnostic) then return end
+ self.nextCameraDiagnostic=now+self.config.CameraDebugInterval
+ local data=self.controller:GetDiagnostics()
+ Runtime.trace(self.report,"CamCamera",data.state,string.format(
+  "yaw=%.3f pitch=%.3f roll=%.6f targetAngle=%.3f deltaTime=%.6f angularError=%.3f",
+  data.yaw,data.pitch,data.roll,data.targetAngle,data.deltaTime,data.angularError))
+end
 function Session:_step(dt)
  if self.destroyed then return end
  local now=self:_clock()
@@ -138,6 +146,7 @@ function Session:_step(dt)
  end
  if not finite(dt) or dt<=0 then return end
  local moved,message=self.controller:update(camera,self.predictionOutput.position,dt)
+ self:_cameraDiagnostic(now)
  if not moved then self:_pause(message,now);return end
  if self.pauseReason then Runtime.trace(self.report,"CamTracking","RESUMED","Predicted Hit Part tracking resumed") end
  self.pauseReason=nil
@@ -167,6 +176,7 @@ function Session.init(options,report)
  local run=report.services.RunService
  assert(type(run.BindToRenderStep)=="function" and type(run.UnbindFromRenderStep)=="function","Cam Lock requires BindToRenderStep and UnbindFromRenderStep")
  assert(CFrame and type(CFrame.lookAt)=="function" and type(CFrame.new)=="function","Cam Lock requires native CFrame.lookAt/new")
+ assert(type(CFrame.fromMatrix)=="function","Cam Lock requires native CFrame.fromMatrix for level yaw/pitch orientation")
  local priority=Enum.RenderPriority.Camera.Value
  assert(finite(priority),"Roblox camera render priority unavailable")
  local old=report.playerGui:FindFirstChild(OWNER,true)

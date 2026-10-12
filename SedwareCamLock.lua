@@ -1,5 +1,5 @@
 --!nonstrict
--- SEDWARE CAM LOCK v1 | separate variant; edit Config below.
+-- SEDWARE CAM LOCK v1 | zero-roll yaw/pitch correction; edit Config below.
 -- Prediction X/Y are seconds. CamPrediction is a gain: value / 13.80.
 -- Enabled=false opens the GUI without controlling the camera.
 -- Public client APIs only. No remote weapon integration or bypass.
@@ -23,6 +23,7 @@ local configBuilt,headerError=xpcall(function() Config = {
  PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
  MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
  MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+ CameraDebugMode=false, CameraDebugInterval=0.5,
  PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
  MaxDistance=350, AcquisitionInterval=0.25,
  CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,
@@ -1455,7 +1456,7 @@ end
 return Overlay
 end
 -- END Overlay
--- BEGIN Config | sha256 5a27425f6a6366acdec525c531fa3b199b10822e6f3cc2004cc2164235896f6a
+-- BEGIN Config | sha256 8ff0039846d1a2b57044da7ef8c97aec2c67b706cc606eac2bcc3b3c8ac82e04
 factories["Config"] = function(loadModule)
 --!nonstrict
 -- SEDWARE CAM LOCK. CamPrediction is a dimensionless gain, NOT seconds.
@@ -1474,6 +1475,7 @@ Config.sourceLiteral = [=[{
  PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
  MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
  MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+ CameraDebugMode=false, CameraDebugInterval=0.5,
  PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
  MaxDistance=350, AcquisitionInterval=0.25,
  CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,
@@ -1489,6 +1491,7 @@ Config.HitParts = {"Head", "UpperTorso", "HumanoidRootPart"}
 Config.hitParts = Config.HitParts
 Config.numericLimits = {
  CamPrediction={0,69}, PredictionX={0,0.6}, PredictionY={0,0.6}, Smoothness={0,1}, Radius={1,2000},
+ CameraDebugInterval={0.1,10},
  PingSmoothing={0.05,10}, MinPredictionX={0,0.6}, MaxPredictionX={0,0.6}, MinPredictionY={0,0.6}, MaxPredictionY={0,0.6},
  PredictionSlew={0.001,2}, PredictionSmoothing={0,2}, MaxDistance={10,2000}, AcquisitionInterval={0.05,2},
  CloseDistance={1,2000}, MediumDistance={2,2000}, CloseOffset={-0.2,0.2}, MediumOffset={-0.2,0.2}, LongOffset={-0.2,0.2},
@@ -1522,6 +1525,7 @@ function Config.defaults()
   PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
   MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
   MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+  CameraDebugMode=false, CameraDebugInterval=0.5,
   PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
   MaxDistance=350, AcquisitionInterval=0.25,
   CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,
@@ -2175,7 +2179,7 @@ end
 return TargetSelector
 end
 -- END TargetSelector
--- BEGIN CameraController | sha256 67c2e6c5689785acd92b934964025fab7f544ad2763b3f36326441f625f20bcd
+-- BEGIN CameraController | sha256 4a4e2bc3aaaab4e9e0f54ce97f5d19978ff815ca26a1fa0325fa7a74956523c0
 factories["CameraController"] = function(loadModule)
 --!nonstrict
 -- Orientation-only camera tracking. The session runs this AFTER Roblox's camera
@@ -2185,6 +2189,11 @@ local CameraController = {}
 CameraController.__index = CameraController
 
 local EPSILON = 1e-6
+local TAU, HALF_PI = 2*math.pi, math.pi/2
+-- Yaw is undefined at the poles. This small hysteresis cone suppresses
+-- numerical noise; up to 0.023 degrees of aim error is possible inside it.
+local POLE_ENTER, POLE_EXIT = 1e-4, 2e-4
+local POLAR_BAND, POLAR_YAW_RATE = math.sin(math.rad(3)), math.rad(720)
 local function finite(value)
  return type(value)=="number" and value==value and math.abs(value)<math.huge
 end
@@ -2211,6 +2220,16 @@ local function unit(value)
  if not vectorOK(value) or value.Magnitude<=EPSILON then return nil end
  return value/value.Magnitude
 end
+local function wrap(value) return (value+math.pi)%TAU-math.pi end
+local function shortest(value)
+ local delta=wrap(value)
+ -- Choose a deterministic direction for the exactly opposite heading.
+ return if math.abs(delta+math.pi)<1e-12 then math.pi else delta
+end
+local function angle(a,b) return math.deg(math.acos(math.clamp(dot(a,b),-1,1))) end
+local function diagnostic(state)
+ return {yaw=0,pitch=0,roll=0,targetAngle=0,deltaTime=0,angularError=0,state=state}
+end
 
 -- Smoothness is a dimensionless 0..1 strength control, not a per-frame Lerp
 -- fraction. Default .405 => tau=.019683 s and ~59 ms to close 95% of an angular
@@ -2231,18 +2250,20 @@ function CameraController.alpha(smoothness,dt)
 end
 
 local function nativeVector(x,y,z) return Vector3.new(x,y,z) end
-local function nativeLookAt(position,target,up) return CFrame.lookAt(position,target,up) end
-local function nativeRebase(frame,position) return CFrame.new(position)*frame.Rotation end
-local function nativeLerp(frame,goal,alpha) return frame:Lerp(goal,alpha) end
+local function nativeFromBasis(position,right,up,look) return CFrame.fromMatrix(position,right,up,-look) end
 
 -- Adapters are deliberately optional: production always uses native Roblox
--- Vector3/CFrame APIs. Numerical CLI checks can inject these four operations.
+-- Vector3/CFrame APIs. Numerical CLI checks inject vector construction/lookAt.
 function CameraController.new(config,callbacks)
  assert(type(config)=="table","CameraController requires a Config table")
  callbacks=callbacks or {}
- return setmetatable({config=config,camera=nil,lastFrame=nil,
-  newVector=callbacks.newVector or nativeVector,lookAt=callbacks.lookAt or nativeLookAt,
-  rebase=callbacks.rebase or nativeRebase,lerp=callbacks.lerp or nativeLerp},CameraController)
+ local fromBasis=callbacks.fromBasis
+ if not fromBasis and callbacks.lookAt then
+  fromBasis=function(position,right,up,look) return callbacks.lookAt(position,position+look,up) end
+ end
+ return setmetatable({config=config,camera=nil,lastFrame=nil,diagnostics=diagnostic("IDLE"),
+  newVector=callbacks.newVector or nativeVector,fromBasis=fromBasis or nativeFromBasis,
+ },CameraController)
 end
 function CameraController:setConfig(config)
  if type(config)~="table" then return false,"Config must be a table" end
@@ -2254,21 +2275,37 @@ function CameraController:reset()
 -- CameraType, CameraSubject, Focus, mouse and character properties are untouched.
  self.camera=nil
  self.lastFrame=nil
+ self.yaw=nil;self.pitch=nil;self.polarHold=nil;self.polarTurn=nil
+ self.diagnostics=diagnostic("RESET")
 end
 function CameraController:destroy() self:reset() end
+function CameraController:GetDiagnostics() return table.clone(self.diagnostics) end
 
-function CameraController:_stableUp(direction,frame)
- -- Project the previous up vector onto the new view plane. This parallel
--- transports the orientation through vertical aim without world-up singularities.
- local up=unit(frame.UpVector-direction*dot(frame.UpVector,direction))
- if up then return up end
- -- A sudden 90-degree turn can point exactly along the previous UpVector.
- -- The previous LookVector then supplies a perpendicular reference.
- up=unit(frame.LookVector-direction*dot(frame.LookVector,direction))
- if up then return up end
- -- Defensive fallback for malformed adapters; choose the least parallel axis.
- local reference=if math.abs(direction.Y)<0.9 then self.newVector(0,1,0) else self.newVector(1,0,0)
- return unit(reference-direction*dot(reference,direction))
+function CameraController:_level(position,yaw,pitch)
+ -- This is the world-Y yaw/pitch basis, including the exact pole. Right.Y=0,
+ -- Up.Y=cos(pitch)>=0. Analytic Up is the normalized world-Y projection
+ -- away from the pole and its heading-defined limit at the pole: no division
+ -- by a nearly zero cross product and no inherited previous UpVector.
+ local sy,cy,sp,cp=math.sin(yaw),math.cos(yaw),math.sin(pitch),math.cos(pitch)
+ local look=self.newVector(sy*cp,sp,-cy*cp)
+ local up=self.newVector(-sy*sp,cp,cy*sp)
+ local right=self.newVector(cy,0,sy)
+ -- fromMatrix does not subtract two large world positions to recover a unit
+ -- direction. It preserves the zero-roll basis even at float32 map distances.
+ return self.fromBasis(position,right,up,look),look,up,right
+end
+function CameraController:_angles(frame)
+ local look=unit(frame.LookVector)
+ local horizontal=math.sqrt(look.X*look.X+look.Z*look.Z)
+ local yaw
+ if horizontal>POLE_ENTER then yaw=math.atan2(look.X,-look.Z)
+ else
+  -- Heading cannot be recovered from a vertical LookVector. A horizontal
+  -- projection of Right gives a finite initial heading without reusing roll.
+  local right=frame.RightVector
+  yaw=if right.X*right.X+right.Z*right.Z>EPSILON*EPSILON then math.atan2(right.Z,right.X) else 0
+ end
+ return wrap(yaw),math.atan2(look.Y,horizontal)
 end
 
 function CameraController:_update(camera,predicted,dt)
@@ -2282,30 +2319,54 @@ function CameraController:_update(camera,predicted,dt)
  local direction=unit(predicted-current.Position)
  if not direction then return false,"Predicted position coincides with camera position" end
 
- -- Roblox may replace its CFrame before every camera callback. Retain our last
--- OUTPUT rotation so smoothing actually converges, but repivot at the live
--- position every frame. A replacement Camera starts from its own orientation.
- local previous=if self.camera==camera and self.lastFrame then self.lastFrame else current
- local base=self.rebase(previous,current.Position)
- local up=self:_stableUp(direction,base)
- if not up then return false,"Cannot construct a stable camera up vector" end
- local goal=self.lookAt(current.Position,predicted,up)
- if not frameOK(goal) then return false,"Camera orientation is invalid" end
- local result=if alpha==1 then goal else self.lerp(base,goal,alpha)
- -- Rebase after interpolation as well, guaranteeing the live position is the
--- sole translation source, including when injected adapters round positions.
- result=self.rebase(result,current.Position)
+ -- Retain only our scalar yaw/pitch, never a previous UpVector/quaternion.
+ -- Roblox can replace its CFrame every frame; the current position remains
+ -- the sole translation source. A different Camera discards angular state.
+ local sameCamera=self.camera==camera and self.yaw~=nil and self.pitch~=nil
+ local previousYaw,previousPitch
+ if sameCamera then previousYaw,previousPitch=self.yaw,self.pitch
+ else previousYaw,previousPitch=self:_angles(current) end
+ local horizontal=math.sqrt(direction.X*direction.X+direction.Z*direction.Z)
+ local wasHeld=sameCamera and self.polarHold==true
+ local held=horizontal<=(if wasHeld then POLE_EXIT else POLE_ENTER)
+ local targetYaw=if held then previousYaw else math.atan2(direction.X,-direction.Z)
+ local targetPitch=math.atan2(direction.Y,horizontal)
+ local yawDelta=shortest(targetYaw-previousYaw)
+ local polarTurn=sameCamera and self.polarTurn==true
+ if wasHeld and not held and math.abs(yawDelta)>1e-3 then polarTurn=true end
+ local yawStep=yawDelta*alpha
+ -- Only the singular polar transition has a speed guard. It prevents an
+ -- instant 180-degree heading flip on exit even with Smoothness=0, without
+ -- adding another smoothing filter to ordinary tracking.
+ local guarded=not held and (polarTurn or horizontal<POLAR_BAND)
+ if guarded then yawStep=math.clamp(yawStep,-POLAR_YAW_RATE*dt,POLAR_YAW_RATE*dt) end
+ local resultYaw=wrap(previousYaw+yawStep)
+ local resultPitch=math.clamp(previousPitch+(targetPitch-previousPitch)*alpha,-HALF_PI,HALF_PI)
+ if math.abs(shortest(targetYaw-resultYaw))<1e-3 then polarTurn=false end
+ local base,previousLook=self:_level(current.Position,previousYaw,previousPitch)
+ if not frameOK(base) then return false,"Leveled initial camera CFrame is invalid" end
+ local goal=self:_level(current.Position,targetYaw,targetPitch)
+ if not frameOK(goal) then return false,"Leveled target camera CFrame is invalid" end
+ local result,_,referenceUp,referenceRight=self:_level(current.Position,resultYaw,resultPitch)
  if not frameOK(result) then return false,"Interpolated camera CFrame is invalid" end
+ if math.abs(result.RightVector.Y)>1e-5 or result.UpVector.Y< -1e-6 then return false,"Camera orientation lost its world-Y horizon" end
  camera.CFrame=result
  self.camera=camera
  self.lastFrame=result
+ self.yaw=resultYaw;self.pitch=resultPitch;self.polarHold=held;self.polarTurn=polarTurn
+ local data=self.diagnostics
+ data.yaw=math.deg(resultYaw);data.pitch=math.deg(resultPitch)
+ data.roll=math.deg(math.atan2(dot(result.RightVector,referenceUp),dot(result.RightVector,referenceRight)))
+ data.targetAngle=angle(previousLook,direction);data.deltaTime=dt;data.angularError=angle(result.LookVector,direction)
+ data.state=if held then "POLAR_HOLD" elseif guarded then "POLAR_TURN" else "TRACKING"
  return true
 end
 function CameraController:update(camera,predicted,dt)
  -- Missing/destroyed cameras and engine errors are skipped without throwing out
 -- of RenderStepped. All validation precedes the single CFrame assignment.
  local ok,updated,message=pcall(self._update,self,camera,predicted,dt)
- if not ok then return false,"Camera update failed: "..tostring(updated) end
+ if not ok then self.diagnostics.state="ERROR";return false,"Camera update failed: "..tostring(updated) end
+ if not updated then self.diagnostics.state="ERROR" end
  return updated,message
 end
 
@@ -2419,7 +2480,7 @@ end
 return Cleanup
 end
 -- END Cleanup
--- BEGIN Session | sha256 226097975f7702aa3ac5209c86d94e3ffac7001c64ab265fa063bf4e22e2cc48
+-- BEGIN Session | sha256 3367a9d7262b99b0b5ce7ff59921b529a2434aec9e104b86b8d72ccfd29174d7
 factories["Session"] = function(loadModule)
 --!nonstrict
 local Config=loadModule("Config")
@@ -2533,6 +2594,14 @@ function Session:_pause(reason,now)
  if reason~=self.pauseReason then Runtime.trace(self.report,"CamTracking","PAUSED",reason) end
  self.pauseReason=reason
 end
+function Session:_cameraDiagnostic(now)
+ if not self.config.CameraDebugMode or (self.nextCameraDiagnostic and now<self.nextCameraDiagnostic) then return end
+ self.nextCameraDiagnostic=now+self.config.CameraDebugInterval
+ local data=self.controller:GetDiagnostics()
+ Runtime.trace(self.report,"CamCamera",data.state,string.format(
+  "yaw=%.3f pitch=%.3f roll=%.6f targetAngle=%.3f deltaTime=%.6f angularError=%.3f",
+  data.yaw,data.pitch,data.roll,data.targetAngle,data.deltaTime,data.angularError))
+end
 function Session:_step(dt)
  if self.destroyed then return end
  local now=self:_clock()
@@ -2561,6 +2630,7 @@ function Session:_step(dt)
  end
  if not finite(dt) or dt<=0 then return end
  local moved,message=self.controller:update(camera,self.predictionOutput.position,dt)
+ self:_cameraDiagnostic(now)
  if not moved then self:_pause(message,now);return end
  if self.pauseReason then Runtime.trace(self.report,"CamTracking","RESUMED","Predicted Hit Part tracking resumed") end
  self.pauseReason=nil
@@ -2590,6 +2660,7 @@ function Session.init(options,report)
  local run=report.services.RunService
  assert(type(run.BindToRenderStep)=="function" and type(run.UnbindFromRenderStep)=="function","Cam Lock requires BindToRenderStep and UnbindFromRenderStep")
  assert(CFrame and type(CFrame.lookAt)=="function" and type(CFrame.new)=="function","Cam Lock requires native CFrame.lookAt/new")
+ assert(type(CFrame.fromMatrix)=="function","Cam Lock requires native CFrame.fromMatrix for level yaw/pitch orientation")
  local priority=Enum.RenderPriority.Camera.Value
  assert(finite(priority),"Roblox camera render priority unavailable")
  local old=report.playerGui:FindFirstChild(OWNER,true)

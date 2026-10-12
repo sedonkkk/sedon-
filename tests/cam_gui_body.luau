@@ -70,6 +70,24 @@ return function(reloadBundle)
 	local function angle(actual, desired)
 		return math.acos(math.clamp(actual.Unit:Dot(desired.Unit), -1, 1))
 	end
+	local function leveled(frame)
+		for _, vector in ipairs({frame.Position, frame.LookVector, frame.RightVector, frame.UpVector}) do
+			for _, component in ipairs({vector.X, vector.Y, vector.Z}) do
+				check(component == component and math.abs(component) < math.huge, "nonfinite camera component")
+			end
+		end
+		-- With yaw/pitch only, right is horizontal and up stays on the upright
+		-- hemisphere, including near either vertical pole. This inspects the
+		-- actual camera frame rather than trusting a diagnostic's roll field.
+		near(frame.RightVector.Y, 0, 1e-8)
+		check(frame.UpVector.Y >= -1e-8, "camera inverted its upright reference")
+		near(frame.LookVector.Magnitude, 1, 1e-8)
+		near(frame.RightVector.Magnitude, 1, 1e-8)
+		near(frame.UpVector.Magnitude, 1, 1e-8)
+		near(frame.LookVector:Dot(frame.RightVector), 0, 1e-8)
+		near(frame.LookVector:Dot(frame.UpVector), 0, 1e-8)
+		near(frame.RightVector:Dot(frame.UpVector), 0, 1e-8)
+	end
 
 	test("executing the actual standalone bundle autostarts the disabled GUI and welcome", function(mock)
 		mock.env.SEDWARE_CAM_NO_AUTOSTART=false
@@ -456,6 +474,186 @@ return function(reloadBundle)
 		local last=angle(mock.camera.CFrame.LookVector,session:GetPredictedPosition()-mock.camera.CFrame.Position)
 		check(last < first/20,"default camera resets prevented convergence")
 		check(session.controller.lastFrame == mock.camera.CFrame)
+	end)
+
+	test("first active frame removes inherited camera roll without changing GUI or prediction settings", function(mock, create)
+		local V, F = mock.env.Vector3, mock.env.CFrame
+		local position = V.new(0,2,20)
+		local rolled = F.lookAt(position, position+V.new(0.1,0.2,-1), V.new(0.8,1,0.2))
+		check(math.abs(rolled.RightVector.Y) > 0.3, "fixture must contain camera roll")
+		mock:setDefaultCamera(mock.camera, rolled)
+		mock.camera._props.CFrame = rolled
+		local target = mock:addPlayer("InheritedRoll", V.new(15,0,-50))
+		local session = create({Enabled=true,Smoothness=0.9})
+		local expected = {HitPart="UpperTorso",CamPrediction=13.8,PredictionX=0.1205,
+			PredictionY=0.08,Smoothness=0.9,Radius=50}
+		local subject = mock.camera.CameraSubject
+		mock:resetCounters()
+		for _=1,60 do
+			mock:advance(1/60)
+			leveled(mock.camera.CFrame)
+			vectorNear(mock.camera.CFrame.Position,position)
+			check(session:GetLockedTarget() == target)
+		end
+		for field,value in pairs(expected) do
+			check(session.config[field] == value and session.ui.values[field] == value,
+				"roll correction changed existing field "..field)
+		end
+		near(size(session.ui.controls),7)
+		near(session.ui.panel.Size.X.Offset,310);near(session.ui.panel.Size.Y.Offset,324)
+		check(session.ui.title.Text == "SEDWARE" and session.ui.subtitle.Text == "CAM LOCK")
+		check(mock.camera.CameraSubject == subject)
+		near(mock:cameraWritesFor(mock.camera,"CameraSubject"),0)
+		near(mock:cameraWritesFor(mock.camera,"CameraType"),0)
+		near(mock:cameraWritesFor(mock.camera,"Focus"),0)
+		check(session.prediction.history ~= nil and session:GetPrediction() ~= nil)
+	end)
+
+	test("circles with jumping falling and passage behind never accumulate roll in the actual bundle", function(mock, create)
+		local V = mock.env.Vector3
+		local position = V.new(0,2,20)
+		local target = mock:addPlayer("CircleJumpFall",V.new(0,1,-30))
+		local session = create({Enabled=true,MaxDistance=1000})
+		local sawBehind,sawRising,sawFalling = false,false,false
+		mock:resetCounters()
+		for index=1,720 do
+			local phase = index*2*math.pi/240
+			local nextPosition = position+V.new(math.sin(phase)*50,math.sin(phase*2)*12-1,-math.cos(phase)*50)
+			mock:move(target,nextPosition)
+			mock:advance(1/60)
+			leveled(mock.camera.CFrame)
+			vectorNear(mock.camera.CFrame.Position,position)
+			check(session:GetLockedTarget() == target and not session.destroyed)
+			local prediction = session:GetPrediction()
+			check(prediction ~= nil)
+			if nextPosition.Z > position.Z then sawBehind=true end
+			if prediction.velocity.Y > 1 then sawRising=true end
+			if prediction.velocity.Y < -1 then sawFalling=true end
+		end
+		check(sawBehind and sawRising and sawFalling,"motion fixture omitted a required direction")
+		near(mock.counters.candidateScans,0)
+		near(mock:cameraWritesFor(mock.camera,"CFrame"),720)
+		near(mock:cameraWritesFor(mock.camera,"CameraSubject"),0)
+		near(mock.counters.mouseWrites,0)
+	end)
+
+	test("exact targets above and below remain finite upright and converge through 180 degrees", function(mock, create)
+		local V = mock.env.Vector3
+		local position = V.new(0,2,20)
+		local target = mock:addPlayer("VerticalPoles",V.new(5,0,-50))
+		local session = create({Enabled=true,CamPrediction=0})
+		mock:advance(0.04)
+		for _, height in ipairs({60,-60,60,-60}) do
+			mock:move(target,position+V.new(0,height-1,0))
+			for _=1,40 do
+				mock:advance(0.04)
+				leveled(mock.camera.CFrame)
+				vectorNear(mock.camera.CFrame.Position,position)
+				check(session:GetLockedTarget() == target and not session.destroyed)
+			end
+			local desired = if height > 0 then V.yAxis else -V.yAxis
+			check(angle(mock.camera.CFrame.LookVector,desired) < 1e-5,"camera failed to converge at a vertical pole")
+		end
+	end)
+
+	test("repeated Enable cycles and target changes discard tilted interpolation state", function(mock, create)
+		local V,F = mock.env.Vector3,mock.env.CFrame
+		local first = mock:addPlayer("CycleFirst",V.new(0,0,-50))
+		local second = mock:addPlayer("CycleSecond",V.new(15,0,-50))
+		local session = create()
+		for index=1,20 do
+			local position = V.new(index*0.1,2,20)
+			local rolled = F.lookAt(position,position+V.new(0.2,0.1,-1),V.new(-0.7,1,0.1))
+			mock:setDefaultCamera(mock.camera,rolled)
+			mock.camera._props.CFrame=rolled
+			enable(session)
+			check(session:GetLockedTarget() == first)
+			mock:advance(1/60);leveled(mock.camera.CFrame)
+			session:UnlockTarget()
+			check(session.controller.lastFrame == nil)
+			check(session:LockTarget(second))
+			mock:advance(1/60);leveled(mock.camera.CFrame)
+			check(session:GetLockedTarget() == second)
+			enable(session)
+			check(session.controller.lastFrame == nil and session.controller.camera == nil)
+			check(session:GetPrediction() == nil and session:GetLockedTarget() == nil)
+			mock:resetCounters();mock:advance(1/60)
+			near(mock.counters.cameraWrites,0)
+			near(mock:countRenderBindings(),1)
+		end
+	end)
+
+	test("first and third person transitions use each live camera position and preserve target and subject", function(mock, create)
+		local V,F = mock.env.Vector3,mock.env.CFrame
+		local target = mock:addPlayer("PerspectiveTransition",V.new(15,0,-50))
+		local session = create({Enabled=true})
+		local subject = mock.camera.CameraSubject
+		for index=1,12 do
+			local firstPerson = index%2==1
+			mock.services.Players.LocalPlayer.CameraMode = mock.env.Enum.CameraMode[if firstPerson then "LockFirstPerson" else "Classic"]
+			local position = V.new(index*0.3,2+index*0.1,if firstPerson then 0.2 else 20)
+			local rolled = F.lookAt(position,position+V.new(0.1,0.1,-1),V.new(0.6,1,0.2))
+			mock:setDefaultCamera(mock.camera,rolled)
+			mock:resetCounters();mock:advance(1/60)
+			leveled(mock.camera.CFrame)
+			vectorNear(mock.camera.CFrame.Position,position)
+			check(session:GetLockedTarget() == target and mock.camera.CameraSubject == subject)
+			near(mock:cameraWritesFor(mock.camera,"Focus"),0)
+			near(mock:cameraWritesFor(mock.camera,"CameraSubject"),0)
+			near(mock:cameraWritesFor(mock.camera,"CameraType"),0)
+		end
+	end)
+
+	test("actual bundle roll removal and angular response agree at 30 60 120 and 144 FPS", function(mock, create)
+		local V,F = mock.env.Vector3,mock.env.CFrame
+		local position = V.new(0,2,20)
+		local rolled = F.lookAt(position,position+V.new(-0.4,0.25,-1),V.new(0.8,1,0.3))
+		mock:addPlayer("FPSComparison",V.new(20,15,-50))
+		local responses={}
+		for _,fps in ipairs({30,60,120,144}) do
+			mock:setDefaultCamera(mock.camera,rolled)
+			mock.camera._props.CFrame=rolled
+			local session=create({Enabled=true,Smoothness=0.9,CamPrediction=0})
+			for _=1,fps/2 do
+				mock:advance(1/fps)
+				leveled(mock.camera.CFrame)
+				vectorNear(mock.camera.CFrame.Position,position)
+			end
+			table.insert(responses,mock.camera.CFrame.LookVector)
+			session:destroy()
+		end
+		for _,response in ipairs(responses) do vectorNear(response,responses[1],1e-7) end
+	end)
+
+	test("optional internal camera diagnostics are finite throttled and add no GUI controls", function(mock, create)
+		mock:addPlayer("CameraDebug",mock.env.Vector3.new(10,0,-50))
+		local session=create({Enabled=true})
+		check(session.config.CameraDebugMode == false)
+		for _=1,60 do mock:advance(1/60) end
+		check(not mock:hasLog("[CamCamera]"),"camera debug logs were enabled by default")
+		check(session:configure("CameraDebugMode",true))
+		check(session:configure("CameraDebugInterval",0.5))
+		for _=1,120 do mock:advance(1/60) end
+		local count=0
+		for _,entry in ipairs(mock.logs) do
+			if entry.text:find("[CamCamera]",1,true) then count+=1 end
+		end
+		check(count>=3 and count<=5,"camera diagnostics flooded console or failed to log: "..tostring(count))
+		local diagnostic=session.controller:GetDiagnostics()
+		check(type(diagnostic)=="table" and type(diagnostic.state)=="string" and #diagnostic.state>0)
+		for _,field in ipairs({"yaw","pitch","roll","targetAngle","deltaTime","angularError"}) do
+			local value=diagnostic[field]
+			check(type(value)=="number" and value==value and math.abs(value)<math.huge,"invalid camera diagnostic "..field)
+		end
+		near(diagnostic.roll,0,1e-6)
+		near(diagnostic.deltaTime,1/60,1e-8)
+		near(size(session.ui.controls),7)
+		check(session.ui.controls.CameraDebugMode==nil and session.ui.controls.CameraDebugInterval==nil)
+		check(session:configure("CameraDebugMode",false))
+		for _=1,60 do mock:advance(1/60) end
+		local finalCount=0
+		for _,entry in ipairs(mock.logs) do if entry.text:find("[CamCamera]",1,true) then finalCount+=1 end end
+		near(finalCount,count)
 	end)
 
 	test("replacement CurrentCamera uses its live position and old camera receives no writes", function(mock, create)

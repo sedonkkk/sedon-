@@ -15,6 +15,7 @@ Config.sourceLiteral = [=[{
  PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
  MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
  MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+ CameraDebugMode=false, CameraDebugInterval=0.5,
  PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
  MaxDistance=350, AcquisitionInterval=0.25,
  CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,
@@ -30,6 +31,7 @@ Config.HitParts = {"Head", "UpperTorso", "HumanoidRootPart"}
 Config.hitParts = Config.HitParts
 Config.numericLimits = {
  CamPrediction={0,69}, PredictionX={0,0.6}, PredictionY={0,0.6}, Smoothness={0,1}, Radius={1,2000},
+ CameraDebugInterval={0.1,10},
  PingSmoothing={0.05,10}, MinPredictionX={0,0.6}, MaxPredictionX={0,0.6}, MinPredictionY={0,0.6}, MaxPredictionY={0,0.6},
  PredictionSlew={0.001,2}, PredictionSmoothing={0,2}, MaxDistance={10,2000}, AcquisitionInterval={0.05,2},
  CloseDistance={1,2000}, MediumDistance={2,2000}, CloseOffset={-0.2,0.2}, MediumOffset={-0.2,0.2}, LongOffset={-0.2,0.2},
@@ -63,6 +65,7 @@ function Config.defaults()
   PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
   MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
   MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+  CameraDebugMode=false, CameraDebugInterval=0.5,
   PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
   MaxDistance=350, AcquisitionInterval=0.25,
   CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,

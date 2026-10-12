@@ -15,7 +15,7 @@ El encabezado permite mover el panel con ratón o toque. El panel se adapta al v
 | Cam Prediction | 13.80 | Ganancia sin unidades: valor / 13.80. Escala los horizontes de predicción. |
 | Prediction X | 0.1205 | Segundos de anticipación horizontal, tanto X como Z. |
 | Prediction Y | 0.0800 | Segundos de anticipación vertical. |
-| Smoothness | 0.405 | Respuesta de la cámara, de 0 a 1; valores menores responden más rápido. 0 orienta directamente. |
+| Smoothness | 0.405 | Respuesta de la cámara, de 0 a 1; valores menores responden más rápido. 0 orienta directamente salvo la protección de transición polar. |
 | Radius | 50 | Radio de selección en píxeles desde el centro del viewport, en primera y tercera persona. |
 
 También se conserva C como acceso de teclado: con Enable ON, libera el objetivo y suspende la adquisición hasta pulsar C otra vez o apagar/encender Enable. Respeta entradas procesadas y campos de texto enfocados. La pérdida por muerte, retirada o cambio de personaje permite buscar otro candidato después de 0.25 s.
@@ -44,7 +44,7 @@ tau = 0.12 × Smoothness² segundos
 alpha = 1 − exp(−deltaTime / tau)
 ```
 
-Con 0.405, tau = 0.019683 s; la respuesta matemática a un cambio fijo de dirección alcanza aproximadamente el 95 % en 59 ms. Ese cálculo no promete una latencia total del juego. La cámara conserva su última orientación de salida entre frames y toma la posición actual de Roblox, por lo que converge aunque el controlador normal reescriba CFrame. El callback se registra en RenderStepped mediante `BindToRenderStep` con prioridad `Camera + 1`.
+Con 0.405, tau = 0.019683 s; la respuesta matemática de yaw/pitch a un cambio fijo alcanza aproximadamente el 95 % en 59 ms. Ese cálculo no promete una latencia total del juego. La cámara conserva únicamente yaw y pitch entre frames y toma la posición actual de Roblox. Construye una base nivelada respecto al eje Y global mediante `CFrame.fromMatrix`, sin transportar UpVector ni interpolar cuaterniones. El callback se registra en RenderStepped mediante `BindToRenderStep` con prioridad `Camera + 1`. [Causa del roll y corrección](SEDWARE_CAMERA_ROLL.md).
 
 Solo se escribe orientación en `CurrentCamera.CFrame`; CameraType, CameraSubject, Focus y controles del personaje conservan su propietario. Una cámara Scriptable pausa el seguimiento por defecto. Una ausencia temporal de CurrentCamera también pausa; ambos casos se informan en consola y reanudan cuando existe una cámara compatible.
 
@@ -68,6 +68,8 @@ También puedes copiar SedwareCamLock.lua a un LocalScript en StarterPlayerScrip
 
 La consola muestra `[SEDWARE][CamExecution]`, CamModules, CamConfiguration, PlayerGui, CurrentCamera, CamGraphics, CamRender y CamSession. La espera de recursos está limitada a 8 s por defecto. `CamRender BOUND` significa que se registró el callback; `CamRender READY` se emite después de completar el primer frame. Los fallos críticos muestran una notificación cuando PlayerGui está disponible y dejan una explicación en consola.
 
+`CameraDebugMode=true` en Config habilita `[SEDWARE][CamCamera]` con yaw, pitch, roll, ángulo hacia el objetivo, deltaTime, error angular y estado. Los ángulos están en grados; `CameraDebugInterval=0.5` limita los mensajes. No hay controles nuevos en la GUI.
+
 Esto es un controlador de cámara de cliente. **No integra el disparo de Da Hood**, no proporciona Silent Aim ni modifica comunicaciones de armas. El loader HTTP exige que el entorno permita obtener el archivo y compilar Luau; esas capacidades no pertenecen a un LocalScript publicado normal. No se ha probado esta variante dentro de Da Hood ni en el motor de Roblox desde el entorno Linux.
 
 ## Construcción y pruebas
@@ -79,37 +81,18 @@ python3 scripts/check_cam.py
 
 El builder comprueba dependencias y genera el archivo y el lugar XML. El check usa el compilador oficial Luau y pruebas de predicción, cámara y eventos que ejecutan el **archivo autónomo real** mediante dobles explícitos de APIs. Comprueba controles, posición predicha, escrituras CFrame, prioridades, FPS, vida del objetivo, inicialización, reinicio y desconexiones. Los dobles no verifican renderizado, movimiento ni respuesta real de Roblox; la comprobación nativa anterior sigue pendiente.
 
-Resultados: **62 pruebas, 1.544 comprobaciones, cero fallos**, además de compilación oficial de 17 archivos de la variante y correspondencia exacta de la fuente incluida en el lugar XML.
+Resultados después de corregir Camera Roll: **85 pruebas, 116.433 comprobaciones, cero fallos**, además de compilación oficial de 19 archivos de la variante y correspondencia exacta de la fuente incluida en ambos lugares XML.
 
 | Pruebas | Casos | Comprobaciones | Alcance |
 | --- | ---: | ---: | --- |
-| Predicción | 13 | 914 | Configuración, X/Y, ganancia, Memory, Auto y curva de ping. |
-| Cámara | 10 | 148 | Orientación y posición, respuesta 30/60/144 FPS, intervalos irregulares y direcciones verticales. |
-| Archivo autónomo con GUI | 36 | 474 | Eventos reales del bundle bajo dobles de APIs: controles, C, orden de render, persistencia, avisos, espera limitada, fallos, cancelación, reinicio y limpieza. |
+| Predicción | 13 | 916 | Configuración, X/Y, ganancia, Memory, Auto y curva de ping. |
+| Cámara | 10 | 383 | Orientación y posición, respuesta temporal, intervalos irregulares y direcciones verticales. |
+| Regresión de roll | 16 | 84.819 | Izquierda/derecha, salto/caída, círculos, detrás, polos, reversas, wrap, FPS, roll heredado y reset. |
+| Archivo autónomo con GUI | 43 | 30.307 | Eventos del bundle bajo dobles de APIs: controles, C, orden de render, persistencia, avisos, espera, fallos, limpieza, nivelación, diagnóstico y perspectiva. |
 | Loader | 3 | 8 | Texto del loader publicado bajo un host simulado: carga completa, fallo HTTP y error de compilación. |
 
-También pasan las **342 pruebas anteriores**, con 80.528 comprobaciones, sin modificar sus módulos ni archivos autónomos. Total del repositorio: 404 pruebas y 82.072 comprobaciones. Estos resultados no representan una ejecución nativa en Roblox ni Da Hood.
+También pasan las **342 pruebas de los proyectos anteriores**, con 80.528 comprobaciones, sin modificar sus módulos ni archivos autónomos. Total del repositorio: 427 pruebas y 196.961 comprobaciones. Estos resultados no representan una ejecución nativa en Roblox ni Da Hood. [SedwareCamRollTest](../studio/SedwareCamRollTest.rbxlx) prepara 12 escenarios con CFrame/Camera reales y un render binding nativo, pendientes de ejecución en Studio.
 
-## Entrega publicada
+## Entrega de la corrección
 
-Archivo del commit **ed6faa918328294d1ca8d865343f865a1b6fad78**, distinto de los commits anteriores de PinkDotLock:
-
-- [SedwareCamLock.lua Raw](https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/SedwareCamLock.lua): HTTP 200, 132.257 bytes; SHA-256 `b8e04b27d49a8c67d000da592ef628c80cd336faec6a4612f3d33bae30dc0d95`.
-- [Lugar de Studio Raw](https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/studio/SedwareCamLock.rbxlx): HTTP 200, 135.873 bytes; SHA-256 `f397d6c0e7411a42813e271472f0ca35a33177d999a80f8bb8f221a4b2a8a59b`.
-- [CamLoader.lua](../CamLoader.lua): cargador breve con diagnóstico HTTP/compilación/ejecución. Toda la lógica permanece en SedwareCamLock.lua.
-
-Ambas respuestas Raw se compararon byte por byte con los archivos locales probados. El comando directo es:
-
-```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/SedwareCamLock.lua"))()
-```
-
-Si necesitas descargar la sesión después, guarda el resultado:
-
-```lua
-local api = loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/ed6faa918328294d1ca8d865343f865a1b6fad78/SedwareCamLock.lua"))()
--- Cuando quieras limpiar todos sus recursos:
-api.Unload()
-```
-
-Este enlace queda fijado a esa versión. Para publicar una actualización, vuelve a construir/probar, publica su nuevo commit y ejecuta `scripts/publish_cam_loader.py --raw-url URL_RAW_REAL`; el script exige un commit existente y bytes coincidentes antes de generar el cargador. No basta actualizar main para cambiar un enlace que contiene un commit fijo.
+El enlace Raw fijado al nuevo commit se añadirá después de publicar y comparar los bytes con el archivo probado. El enlace anterior ejecuta el controlador anterior y no recibe esta corrección.
