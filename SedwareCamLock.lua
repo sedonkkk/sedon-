@@ -1,0 +1,2742 @@
+--!nonstrict
+-- SEDWARE CAM LOCK v1 | separate variant; edit Config below.
+-- Prediction X/Y are seconds. CamPrediction is a gain: value / 13.80.
+-- Enabled=false opens the GUI without controlling the camera.
+-- Public client APIs only. No remote weapon integration or bypass.
+local function bootTraceback(problem)
+ local message=tostring(problem)
+ local available,traceback=pcall(function() return debug and debug.traceback end)
+ if available and type(traceback)=="function" then local ok,trace=pcall(traceback,message,2);if ok then return trace end end
+ return message
+end
+local function bootLog(phase,status,detail)
+ local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn
+ if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end
+end
+bootLog("CamExecution","START","SEDWARE CAM LOCK v1 payload began execution")
+local Config
+local configBuilt,headerError=xpcall(function() Config = {
+ Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
+ PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+ -- Internal settings: these intentionally have no extra GUI controls.
+ LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
+ PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
+ MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
+ MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+ PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
+ MaxDistance=350, AcquisitionInterval=0.25,
+ CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,
+ ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=3, NotificationDuration=2,
+ InitializationTimeout=8, InitializationPollInterval=0.05, UpdateHz=30, PingHz=5, StaleAfter=0.6,
+ HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
+ MaxObservedSpeed=120, MaxAcceleration=180, TeleportSlack=5, ReversalDotThreshold=-0.2,
+ MaxAccelerationHorizon=0.18,
+} end,bootTraceback)
+if configBuilt then headerError=nil else bootLog("CamConfiguration","FAIL",headerError) end
+-- Embedded from src/cam plus existing shared/Pink modules. No HTTP dependencies.
+local factories, cache, loading = {}, {}, {}
+local function loadModule(name)
+ if cache[name] then return cache[name] end
+ assert(factories[name], "Unknown embedded module: " .. tostring(name))
+ assert(not loading[name], "Circular embedded dependency: " .. name)
+ loading[name] = true
+ local ok, value = pcall(factories[name], loadModule)
+ loading[name] = nil
+ if not ok then error("Module " .. name .. ": " .. tostring(value), 2) end
+ assert(type(value)=="table", "Embedded module must return a table: " .. name)
+ cache[name] = value
+ return value
+end
+-- BEGIN Settings | sha256 690e426507b50eb0549ccf3372308831f26149f82e6b3bcb4ec6ba0b9b3a6bb5
+factories["Settings"] = function(loadModule)
+--!nonstrict
+-- All temporal values are seconds; all spatial values are Roblox studs.
+local Settings = {}
+local defaults = {
+ enabled = true, autoPrediction = true, manualDelaySeconds = 0.08,
+ pingSmoothingSeconds = 0.8, latencyOffsetSeconds = 0,
+ minDelaySeconds = 0, maxDelaySeconds = 0.35,
+ distancePrediction = true, velocityPrediction = true, accelerationPrediction = true,
+ memoryTracking = true, debugVisualization = false, weapon = "RevolverLab",
+ weaponOffsets = {RevolverLab = 0, ProjectileLab = 0},
+ updateHz = 30, maxTargetDistanceStuds = 350, fovPixels = 180,
+ simulationDelaySeconds = 0, historyCapacity = 12, historyWindowSeconds = 0.3,
+ velocitySmoothingSeconds = 0.06, accelerationSmoothingSeconds = 0.15,
+ maxObservedSpeedStuds = 120, maxAccelerationStuds = 180,
+ teleportSlackStuds = 5, reversalDotThreshold = -0.2,
+ maxAccelerationHorizonSeconds = 0.18, staleAfterSeconds = 0.6,
+ latencySlewSecondsPerSecond = 0.12, maxFlightSeconds = 2,
+ -- Calibration points use ONE-WAY ping, not user-facing round-trip milliseconds.
+ -- Zero until measurements justify a nonzero replication/processing bias.
+ pingCalibration = {
+  {pingSeconds = 0.004, offsetSeconds = 0},
+  {pingSeconds = 0.03, offsetSeconds = 0},
+  {pingSeconds = 0.075, offsetSeconds = 0},
+  {pingSeconds = 0.09, offsetSeconds = 0},
+ },
+}
+function Settings.new()
+ local s = table.clone(defaults)
+ s.weaponOffsets = table.clone(defaults.weaponOffsets)
+ s.pingCalibration = {}
+ for _, point in defaults.pingCalibration do
+  table.insert(s.pingCalibration, table.clone(point))
+ end
+ return s
+end
+local limits = {
+ manualDelaySeconds={0,0.6},pingSmoothingSeconds={0.05,10},latencyOffsetSeconds={-0.2,0.2},
+ minDelaySeconds={0,0.6},maxDelaySeconds={0,0.6},updateHz={5,60},
+ maxTargetDistanceStuds={10,2000},fovPixels={20,1000},simulationDelaySeconds={0,0.25},
+ historyCapacity={2,64},historyWindowSeconds={0.05,1},velocitySmoothingSeconds={0.001,1},
+ accelerationSmoothingSeconds={0.01,2},maxObservedSpeedStuds={1,1000},
+ maxAccelerationStuds={0,2000},teleportSlackStuds={0,100},reversalDotThreshold={-1,1},
+ maxAccelerationHorizonSeconds={0,0.6},staleAfterSeconds={0.05,2},
+ latencySlewSecondsPerSecond={0.001,2},maxFlightSeconds={0.05,5},
+}
+function Settings.validate(s)
+ for name, bounds in limits do
+  local value = s[name]
+  if type(value) ~= "number" or value ~= value or value < bounds[1] or value > bounds[2] then
+   return false, name .. " fuera de rango"
+  end
+ end
+ for name, value in defaults do
+  if type(value) == "boolean" and type(s[name]) ~= "boolean" then return false, name .. " debe ser booleano" end
+ end
+ if s.minDelaySeconds > s.maxDelaySeconds then return false, "minDelaySeconds supera maxDelaySeconds" end
+ if s.historyCapacity % 1 ~= 0 then return false, "historyCapacity debe ser entero" end
+ if s.weapon ~= "RevolverLab" and s.weapon ~= "ProjectileLab" then return false, "Perfil desconocido" end
+ if type(s.weaponOffsets) ~= "table" then return false, "Faltan ajustes por arma" end
+ for _,name in {"RevolverLab", "ProjectileLab"} do
+  local value=s.weaponOffsets[name]
+  if type(value)~="number" or value~=value or math.abs(value)>0.2 then return false, "Offset de arma fuera de rango" end
+ end
+ if type(s.pingCalibration) ~= "table" or #s.pingCalibration == 0 then return false, "Falta tabla de calibración" end
+ local previous = -math.huge
+ for _, point in s.pingCalibration do
+  if type(point) ~= "table" or type(point.pingSeconds) ~= "number" or type(point.offsetSeconds) ~= "number" then
+   return false, "Punto de calibración inválido"
+  end
+  if point.pingSeconds ~= point.pingSeconds or point.offsetSeconds ~= point.offsetSeconds
+   or point.pingSeconds <= previous or point.pingSeconds > 1 or point.pingSeconds < 0
+   or math.abs(point.offsetSeconds) > 0.2 then return false, "Calibración desordenada o fuera de rango" end
+  previous = point.pingSeconds
+ end
+ return true
+end
+return Settings
+end
+-- END Settings
+-- BEGIN Latency | sha256 6a0d5690b75f2adea9ce41b46a7b4e52a209aa011c9505621014fcf5288b1e8b
+factories["Latency"] = function(loadModule)
+--!nonstrict
+-- Time-based EMA: smoothing is independent of event/frame frequency.
+local Latency = {}
+Latency.__index = Latency
+local function finite(n)
+ return type(n)=="number" and n==n and math.abs(n)<math.huge
+end
+function Latency.new(settings)
+ return setmetatable({settings=settings,raw=0,smoothed=0,lastTime=nil,lastDelayTime=nil,delay=nil},Latency)
+end
+function Latency:sample(oneWaySeconds, now)
+ if not finite(oneWaySeconds) or oneWaySeconds<0 or oneWaySeconds>1 or not finite(now) then return false end
+ if self.lastTime and now<=self.lastTime then return false end
+ self.raw=oneWaySeconds
+ if not self.lastTime then self.smoothed=oneWaySeconds
+ else
+  local alpha=1-math.exp(-(now-self.lastTime)/self.settings.pingSmoothingSeconds)
+  self.smoothed += alpha*(oneWaySeconds-self.smoothed)
+ end
+ self.lastTime=now
+ return true
+end
+function Latency:calibrationOffset(ping)
+ local points=self.settings.pingCalibration
+ if ping<=points[1].pingSeconds then return points[1].offsetSeconds end
+ for i=2,#points do
+  local a,b=points[i-1],points[i]
+  if ping<=b.pingSeconds then
+   local f=(ping-a.pingSeconds)/(b.pingSeconds-a.pingSeconds)
+   return a.offsetSeconds+(b.offsetSeconds-a.offsetSeconds)*f
+  end
+ end
+ return points[#points].offsetSeconds
+end
+function Latency:estimate(now, weaponOffset)
+ local s=self.settings
+ local desired=if s.autoPrediction then self.smoothed+self:calibrationOffset(self.smoothed) else s.manualDelaySeconds
+ desired=math.clamp(desired+s.latencyOffsetSeconds+(weaponOffset or 0),s.minDelaySeconds,s.maxDelaySeconds)
+ if self.delay==nil then self.delay=desired
+ else
+  local dt=math.max(0,now-(self.lastDelayTime or now))
+  local step=s.latencySlewSecondsPerSecond*dt
+  self.delay += math.clamp(desired-self.delay,-step,step)
+  self.delay=math.clamp(self.delay,s.minDelaySeconds,s.maxDelaySeconds)
+ end
+ self.lastDelayTime=now
+ return self.delay
+end
+return Latency
+end
+-- END Latency
+-- BEGIN Ballistics | sha256 a9b8797e468d5203faf6632ec47196fc9dad86bc97f0a9bec1d5992757261a6b
+factories["Ballistics"] = function(loadModule)
+--!nonstrict
+-- Straight-flight interception, plus optional gravity displacement correction.
+-- With gravity we refine the low-arc travel time numerically and verify that
+-- |aim-origin| = speed*time; unreachable solutions return nil rather than a lie.
+local Ballistics={}
+function Ballistics.intercept(origin,position,velocity,speed,maxTime)
+ if type(speed)~="number" or speed<=0 or speed~=speed or speed==math.huge then return nil end
+ local r=position-origin
+ local a=velocity:Dot(velocity)-speed*speed
+ local b=2*r:Dot(velocity)
+ local c=r:Dot(r)
+ if c<1e-8 then return 0 end
+ local t=nil
+ if math.abs(a)<1e-8 then
+  if math.abs(b)>1e-8 then local x=-c/b;if x>=0 then t=x end end
+ else
+  local discriminant=b*b-4*a*c
+  if discriminant>=0 then
+   -- Stable quadratic roots avoid cancellation when b is large.
+   local q=-0.5*(b+(if b>=0 then 1 else -1)*math.sqrt(discriminant))
+   local x1=q/a
+   local x2=if math.abs(q)>1e-12 then c/q else -b/(2*a)
+   if x1>=0 then t=x1 end
+   if x2>=0 and (not t or x2<t) then t=x2 end
+  end
+ end
+ if t and t<=maxTime then return t end
+ return nil
+end
+function Ballistics.solve(origin,basePosition,velocity,acceleration,profile,maxTime,leadMoving,accelHorizon)
+ local zero=basePosition*0
+ if profile.kind~="projectile" then return {flightSeconds=0,position=basePosition,aimpoint=basePosition} end
+ local v=if leadMoving then velocity else zero
+ local a=if leadMoving then acceleration else zero
+ local t=Ballistics.intercept(origin,basePosition,v,profile.speed,maxTime)
+ if not t then return nil end
+ local gravity=profile.gravity or 0
+ local up=zero -- Works both with Roblox Vector3 and a test vector adapter.
+ -- Construct upward displacement by components without depending on Vector3.new.
+ -- Supplied by Predictor as an optional unit vector for CLI portability.
+ up=profile.upVector or zero
+ local function at(time)
+  local used=math.min(time,accelHorizon or time)
+  local p=basePosition+v*time+a*(used*time-0.5*used*used)
+  return p,p+up*(0.5*gravity*time*time)
+ end
+ for _=1,16 do
+  local _,aim=at(t)
+  local nextT=(aim-origin).Magnitude/profile.speed
+  if nextT>maxTime or nextT~=nextT then return nil end
+  if math.abs(nextT-t)<0.00001 then t=nextT;break end
+  t=nextT
+ end
+ local p,aim=at(t)
+ if math.abs((aim-origin).Magnitude-profile.speed*t)>0.05 then return nil end
+ return {flightSeconds=t,position=p,aimpoint=aim}
+end
+return Ballistics
+end
+-- END Ballistics
+-- BEGIN MemoryTracker | sha256 e2d7d2c3eef688354efd53c01fdbeb2dd15ed4fe14d8d90a4e578bceee5941b8
+factories["MemoryTracker"] = function(loadModule)
+--!nonstrict
+-- Bounded per-target memory. A timestamp must refer to the observation itself,
+-- never to the time a delayed packet was received.
+local MotionHistory={}
+MotionHistory.__index=MotionHistory
+local function finite(n) return type(n)=="number" and n==n and math.abs(n)<math.huge end
+local function vectorOK(v)
+ if typeof(v)~="Vector3" and type(v)~="table" then return false end
+ return finite(v.X) and finite(v.Y) and finite(v.Z) and finite(v.Magnitude)
+end
+local function limit(v,cap)
+ local mag=v.Magnitude
+ return if mag>cap and mag>0 then v*(cap/mag) else v
+end
+function MotionHistory.new(settings)
+ return setmetatable({settings=settings,samples={},velocity=nil,acceleration=nil,resets=0,rejected=0},MotionHistory)
+end
+function MotionHistory:reset(sample,velocity)
+ self.samples={sample}
+ self.velocity=velocity
+ self.acceleration=sample.position*0
+ self.resets+=1
+end
+function MotionHistory:observe(sample)
+ local s=self.settings
+ if type(sample)~="table" or not finite(sample.t) or not vectorOK(sample.position)
+  or (sample.velocity~=nil and not vectorOK(sample.velocity)) or type(sample.state)~="string" then
+  self.rejected+=1; return false
+ end
+ local last=self.samples[#self.samples]
+ if last and sample.t<=last.t then self.rejected+=1;return false end
+ local zero=sample.position*0
+ local reported=sample.velocity
+ if reported and reported.Magnitude>s.maxObservedSpeedStuds then self.rejected+=1;return false end
+ if not last then self:reset(sample,reported or zero);return true end
+ local dt=sample.t-last.t
+ local displacement=sample.position-last.position
+ if dt>s.staleAfterSeconds or displacement.Magnitude>s.maxObservedSpeedStuds*dt+s.teleportSlackStuds then
+  -- Teleport/respawn: rebase rather than extrapolating across a discontinuity.
+  self:reset(sample,reported or zero);return true
+ end
+ local measured=displacement/dt
+ if measured.Magnitude>s.maxObservedSpeedStuds then self.rejected+=1;return false end
+ local instantaneous=reported or measured
+ local oldVelocity=self.velocity or zero
+ local reversal=oldVelocity.Magnitude>1 and instantaneous.Magnitude>1
+  and oldVelocity:Dot(instantaneous)/(oldVelocity.Magnitude*instantaneous.Magnitude)<s.reversalDotThreshold
+ -- A lateral turn while jumping can be hidden by the shared vertical velocity.
+ local oldHorizontal=math.sqrt(oldVelocity.X*oldVelocity.X+oldVelocity.Z*oldVelocity.Z)
+ local newHorizontal=math.sqrt(instantaneous.X*instantaneous.X+instantaneous.Z*instantaneous.Z)
+ if oldHorizontal>1 and newHorizontal>1
+  and (oldVelocity.X*instantaneous.X+oldVelocity.Z*instantaneous.Z)/(oldHorizontal*newHorizontal)<s.reversalDotThreshold then
+  reversal=true
+ end
+ if sample.state~=last.state or reversal or not s.memoryTracking then
+  self:reset(sample,instantaneous);return true
+ end
+ table.insert(self.samples,sample)
+ while #self.samples>s.historyCapacity or (#self.samples>2 and sample.t-self.samples[1].t>s.historyWindowSeconds) do
+  table.remove(self.samples,1)
+ end
+ -- Weighted recent displacement estimate, blended with instantaneous velocity.
+ -- Native velocity can be omitted; then the same filter runs on position deltas.
+ local oldest=self.samples[1]
+ local span=sample.t-oldest.t
+ local recent=if span>0 then (sample.position-oldest.position)/span else instantaneous
+ local input=instantaneous*0.75+recent*0.25
+ local alpha=1-math.exp(-dt/s.velocitySmoothingSeconds)
+ self.velocity=limit(oldVelocity+(input-oldVelocity)*alpha,s.maxObservedSpeedStuds)
+ local acceleration=limit((self.velocity-oldVelocity)/dt,s.maxAccelerationStuds)
+ local beta=1-math.exp(-dt/s.accelerationSmoothingSeconds)
+ self.acceleration=limit((self.acceleration or zero)+(acceleration-(self.acceleration or zero))*beta,s.maxAccelerationStuds)
+ return true
+end
+function MotionHistory:latest()
+ return self.samples[#self.samples]
+end
+return MotionHistory
+end
+-- END MemoryTracker
+-- BEGIN PinkConfig | sha256 fdccd05cf587c0ba8d690c9a4dfaa076899c7864dc3100d7e37b6d9f56fdcf0e
+factories["PinkConfig"] = function(loadModule)
+--!nonstrict
+-- PINK DOT LOCK configuration. Prediction X/Y and offsets are seconds;
+-- reference pings are RTT milliseconds, spatial values use Roblox studs.
+local Settings = loadModule("Settings")
+local Config = {}
+
+-- The standalone builder copies this native literal to the editable file header.
+Config.sourceLiteral = [=[{
+ Enabled=true, LockKey="C", LockMode="Auto",
+ FirstPersonFOV=120, ThirdPersonFOV=180,
+ PredictionX=0.1205, PredictionY=0.0800, AutoPrediction=false,
+ PingCompensation=true, PingSmoothing=0.8,
+ PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
+ MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
+ MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+ PredictionSmoothing=0.08, TargetPart="HumanoidRootPart", TargetPersistence=true, VisibilityCheck=true,
+ ShowDot=true, DotSize=6, DotColor=Color3.fromRGB(255,105,180), DotTransparency=0,
+ DotOutline=true, DotOutlineColor=Color3.fromRGB(255,255,255),
+ ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=4, NotificationDuration=2,
+ WeaponProfile="Revolver", CloseOffset=0, MediumOffset=0, LongOffset=0, DebugMode=false,
+ InitializationTimeout=8, InitializationPollInterval=0.05,
+ UpdateHz=30, PingHz=5, StaleAfter=0.6, ModeDwellSeconds=0.2, ModeEnterDistance=0.75, ModeExitDistance=1.5, MaxDistance=350,
+ CloseDistance=40, MediumDistance=120,
+ HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
+ MaxObservedSpeed=120, MaxAcceleration=180, TeleportSlack=5, ReversalDotThreshold=-0.2,
+ MaxAccelerationHorizon=0.18, MaxFlightSeconds=2,
+ Profiles={
+  Revolver={PredictionXOffset=0, PredictionYOffset=0, LatencyOffsetSeconds=0, CloseOffset=0, MediumOffset=0, LongOffset=0, Kind="Unknown", Speed=0, Gravity=0},
+  Default={PredictionXOffset=0, PredictionYOffset=0, LatencyOffsetSeconds=0, CloseOffset=0, MediumOffset=0, LongOffset=0, Kind="Unknown", Speed=0, Gravity=0},
+  Custom={PredictionXOffset=0, PredictionYOffset=0, LatencyOffsetSeconds=0, CloseOffset=0, MediumOffset=0, LongOffset=0, Kind="Unknown", Speed=0, Gravity=0},
+ },
+}]=]
+
+local function color(r,g,b)
+ if Color3 and type(Color3.fromRGB)=="function" then return Color3.fromRGB(r,g,b) end
+ return {R=r/255,G=g/255,B=b/255}
+end
+function Config.defaults()
+ return {
+ Enabled=true, LockKey="C", LockMode="Auto",
+ FirstPersonFOV=120, ThirdPersonFOV=180,
+ PredictionX=0.1205, PredictionY=0.0800, AutoPrediction=false,
+ PingCompensation=true, PingSmoothing=0.8,
+ PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
+ MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
+ MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+ PredictionSmoothing=0.08, TargetPart="HumanoidRootPart", TargetPersistence=true, VisibilityCheck=true,
+ ShowDot=true, DotSize=6, DotColor=color(255,105,180), DotTransparency=0,
+ DotOutline=true, DotOutlineColor=color(255,255,255),
+ ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=4, NotificationDuration=2,
+ WeaponProfile="Revolver", CloseOffset=0, MediumOffset=0, LongOffset=0, DebugMode=false,
+ InitializationTimeout=8, InitializationPollInterval=0.05,
+ UpdateHz=30, PingHz=5, StaleAfter=0.6, ModeDwellSeconds=0.2, ModeEnterDistance=0.75, ModeExitDistance=1.5, MaxDistance=350,
+ CloseDistance=40, MediumDistance=120,
+ HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
+ MaxObservedSpeed=120, MaxAcceleration=180, TeleportSlack=5, ReversalDotThreshold=-0.2,
+ MaxAccelerationHorizon=0.18, MaxFlightSeconds=2,
+ Profiles={
+  Revolver={PredictionXOffset=0, PredictionYOffset=0, LatencyOffsetSeconds=0, CloseOffset=0, MediumOffset=0, LongOffset=0, Kind="Unknown", Speed=0, Gravity=0},
+  Default={PredictionXOffset=0, PredictionYOffset=0, LatencyOffsetSeconds=0, CloseOffset=0, MediumOffset=0, LongOffset=0, Kind="Unknown", Speed=0, Gravity=0},
+  Custom={PredictionXOffset=0, PredictionYOffset=0, LatencyOffsetSeconds=0, CloseOffset=0, MediumOffset=0, LongOffset=0, Kind="Unknown", Speed=0, Gravity=0},
+ },
+}
+end
+
+local function finite(value)
+ return type(value)=="number" and value==value and math.abs(value)<math.huge
+end
+local function bounded(value, minimum, maximum)
+ return finite(value) and value>=minimum and value<=maximum
+end
+local function copy(value)
+ if typeof(value)=="EnumItem" or typeof(value)=="Color3" then return value end
+ if type(value)~="table" then return value end
+ local result={}
+ for key,child in value do result[key]=copy(child) end
+ return result
+end
+local function merge(into, overrides)
+ for key,value in overrides do
+  -- LockKey was validated before merge. Preserve its canonical reference even
+  -- when an external host reports a different typeof; never clone an Enum.
+  if key=="LockKey" then into[key]=value
+  elseif typeof(value)=="EnumItem" or typeof(value)=="Color3" then into[key]=value
+  elseif key=="PingReferences" then into[key]=copy(value)
+  elseif type(value)=="table" and type(into[key])=="table" then merge(into[key],value)
+  else into[key]=copy(value) end
+ end
+ return into
+end
+local limits={
+ FirstPersonFOV={1,2000},ThirdPersonFOV={1,2000},PredictionX={0,0.6},PredictionY={0,0.6},
+ PingSmoothing={0.05,10},MinPredictionX={0,0.6},MaxPredictionX={0,0.6},MinPredictionY={0,0.6},MaxPredictionY={0,0.6},
+ PredictionSlew={0.001,2},PredictionSmoothing={0,2},DotSize={1,40},DotTransparency={0,1},
+ WelcomeDuration={0.1,30},NotificationDuration={0.1,30},CloseOffset={-0.2,0.2},MediumOffset={-0.2,0.2},LongOffset={-0.2,0.2},
+ InitializationTimeout={0.1,30},InitializationPollInterval={0.01,1},
+ UpdateHz={5,60},PingHz={0.5,20},StaleAfter={0.05,2},ModeDwellSeconds={0.01,2},ModeEnterDistance={0.05,5},ModeExitDistance={0.1,10},
+ MaxDistance={10,2000},CloseDistance={1,2000},MediumDistance={2,2000},
+ HistoryCapacity={2,64},HistoryWindow={0.05,1},VelocitySmoothing={0.001,1},AccelerationSmoothing={0.01,2},
+ MaxObservedSpeed={1,1000},MaxAcceleration={0,2000},TeleportSlack={0,100},ReversalDotThreshold={-1,1},
+ MaxAccelerationHorizon={0,0.6},MaxFlightSeconds={0.05,5},
+}
+local profileLimits={PredictionXOffset={-0.2,0.2},PredictionYOffset={-0.2,0.2},LatencyOffsetSeconds={-0.2,0.2},
+ CloseOffset={-0.2,0.2},MediumOffset={-0.2,0.2},LongOffset={-0.2,0.2},Speed={0,20000},Gravity={0,1000}}
+local function known(object, defaults, path)
+ if type(object)~="table" or getmetatable(object)~=nil then return false,path.." debe ser una tabla simple" end
+ for key,value in object do
+  if type(key)~="string" or defaults[key]==nil then return false,path..": campo desconocido "..tostring(key) end
+  local expected=defaults[key]
+  if type(expected)=="boolean" and type(value)~="boolean" then return false,path.."."..key.." debe ser booleano" end
+  if type(expected)=="number" and not finite(value) then return false,path.."."..key.." debe ser un número finito" end
+  if type(expected)=="string" and key~="LockKey" and type(value)~="string" then return false,path.."."..key.." debe ser texto" end
+ end
+ return true
+end
+local function colorOK(value)
+ if typeof(value)=="Color3" then return bounded(value.R,0,1) and bounded(value.G,0,1) and bounded(value.B,0,1) end
+ if type(value)~="table" or getmetatable(value)~=nil then return false end
+ for key in value do if key~="R" and key~="G" and key~="B" then return false end end
+ return bounded(value.R,0,1) and bounded(value.G,0,1) and bounded(value.B,0,1)
+end
+local function describe(problem)
+ local ok,message=pcall(tostring,problem)
+ return if ok then message else "error de API sin representación textual"
+end
+local function sameEnum(a,b)
+ if rawequal(a,b) then return true end
+ -- Native userdata may use value equality across engine wrappers. Plain Lua
+ -- tables must be the actual canonical reference, so __eq cannot forge keys.
+ if type(a)=="userdata" and type(b)=="userdata" then
+  local ok,equal=pcall(function() return a==b end)
+  return ok and equal
+ end
+ return false
+end
+-- Without Roblox, numerical CLI tests may retain known key names as text.
+-- A client still requires native Enum/services in Runtime; never use arbitrary
+-- strings or enum-shaped tables as a substitute for a usable native key.
+local offlineKeys={}
+for code=string.byte("A"),string.byte("Z") do offlineKeys[string.char(code)]=true end
+for i=1,15 do offlineKeys["F"..i]=true end
+for name in string.gmatch("Zero One Two Three Four Five Six Seven Eight Nine Space Tab Return Escape Backspace Delete Insert Home End PageUp PageDown Up Down Left Right LeftShift RightShift LeftControl RightControl LeftAlt RightAlt CapsLock NumLock ScrollLock", "%S+") do
+ offlineKeys[name]=true
+end
+function Config.normalizeLockKey(value)
+ local name=if type(value)=="string" then value else nil
+ if name and (#name==0 or #name>32 or not string.match(name,"^[A-Za-z][A-Za-z0-9]*$")) then
+  return nil,"LockKey inválido: utiliza un nombre de Enum.KeyCode, por ejemplo C"
+ end
+ if Enum==nil then
+  if name and offlineKeys[name] then return name end
+  return nil,"LockKey inválido o inexistente; sin Enum nativo solo se admiten nombres conocidos para pruebas numéricas"
+ end
+ local enumOK,keyCode=pcall(function() return Enum.KeyCode end)
+ if not enumOK or not keyCode then
+  return nil,"LockKey: Enum.KeyCode no está disponible: "..describe(keyCode)
+ end
+ local candidate=value
+ if name then
+  local found,resolved=pcall(function() return keyCode[name] end)
+  if not found or resolved==nil then
+   return nil,"LockKey inexistente en Enum.KeyCode: "..name..(if found then "" else "; "..describe(resolved))
+  end
+  candidate=resolved
+ elseif type(value)~="userdata" and type(value)~="table" then
+  return nil,"LockKey inválido: se requiere un nombre o elemento de Enum.KeyCode"
+ end
+ local listed,items=pcall(function() return keyCode:GetEnumItems() end)
+ if not listed or type(items)~="table" or #items==0 then
+  return nil,"LockKey: no se pudieron validar los miembros de Enum.KeyCode: "..describe(items)
+ end
+ for _,canonical in ipairs(items) do
+  if sameEnum(candidate,canonical) then
+   local inspected,keyName,parent,indexed=pcall(function()
+    local canonicalName=canonical.Name
+    return canonicalName,canonical.EnumType,keyCode[canonicalName]
+   end)
+   if not inspected then return nil,"LockKey: error al verificar Enum.KeyCode: "..describe(keyName) end
+   if type(keyName)~="string" or not sameEnum(parent,keyCode) or not sameEnum(indexed,canonical) then
+    return nil,"LockKey inválido: no corresponde a un miembro canónico de Enum.KeyCode"
+   end
+   if keyName=="Unknown" or keyName=="None" then return nil,"LockKey inválido: "..keyName.." no identifica una tecla de bloqueo" end
+   return canonical
+  end
+ end
+ return nil,"LockKey inválido: el valor no pertenece a Enum.KeyCode"
+end
+function Config.keyName(value)
+ if type(value)=="string" then return value end
+ local ok,name=pcall(function() return value.Name end)
+ return if ok and type(name)=="string" then name else "?"
+end
+local function validate(config)
+ local defaults=Config.defaults()
+ local ok,message=known(config,defaults,"Config")
+ if not ok then return false,message end
+ for key in defaults do
+  if config[key]==nil then return false,"Falta Config."..key end
+ end
+ for key,bounds in limits do
+  if not bounded(config[key],bounds[1],bounds[2]) then return false,key.." fuera de rango" end
+ end
+ if config.HistoryCapacity%1~=0 then return false,"HistoryCapacity debe ser entero" end
+ if config.LockMode~="Auto" and config.LockMode~="FirstPerson" and config.LockMode~="ThirdPerson" then return false,"LockMode desconocido" end
+ local resolvedKey,keyMessage=Config.normalizeLockKey(config.LockKey)
+ if not resolvedKey then return false,keyMessage end
+ if not colorOK(config.DotColor) or not colorOK(config.DotOutlineColor) then return false,"Color del DOT inválido" end
+ if type(config.TargetPart)~="string" or #config.TargetPart==0 or #config.TargetPart>80 then return false,"TargetPart inválido" end
+ if config.MinPredictionX>config.MaxPredictionX or config.MinPredictionY>config.MaxPredictionY then return false,"Límites de predicción invertidos" end
+ if not bounded(config.PredictionX,config.MinPredictionX,config.MaxPredictionX)
+  or not bounded(config.PredictionY,config.MinPredictionY,config.MaxPredictionY) then return false,"Predicción manual fuera de límites" end
+ if config.ModeEnterDistance>=config.ModeExitDistance then return false,"ModeEnterDistance debe ser menor que ModeExitDistance" end
+ if config.CloseDistance>=config.MediumDistance then return false,"Rangos de distancia invertidos" end
+ if type(config.Profiles)~="table" or getmetatable(config.Profiles)~=nil then return false,"Profiles inválidos" end
+ for name in config.Profiles do if defaults.Profiles[name]==nil then return false,"Perfil desconocido" end end
+ if defaults.Profiles[config.WeaponProfile]==nil then return false,"WeaponProfile desconocido" end
+ for name in defaults.Profiles do if config.Profiles[name]==nil then return false,"Falta Profiles."..name end end
+ for name,profile in config.Profiles do
+  ok,message=known(profile,defaults.Profiles[name],"Profiles."..name)
+  if not ok then return false,message end
+  for key,bounds in profileLimits do if not bounded(profile[key],bounds[1],bounds[2]) then return false,"Profiles."..name.."."..key.." fuera de rango" end end
+  if profile.Kind~="Unknown" and profile.Kind~="Hitscan" and profile.Kind~="Projectile" then return false,"Kind desconocido" end
+  if profile.Kind=="Projectile" and profile.Speed<=0 then return false,"Projectile requiere Speed positivo" end
+ end
+ local points=config.PingReferences
+ if type(points)~="table" or getmetatable(points)~=nil then return false,"PingReferences inválido" end
+ local count=0
+ for key in points do
+  if type(key)~="number" or key%1~=0 or key<1 or key>32 then return false,"Índice de PingReferences inválido" end
+  count+=1
+ end
+ if count<1 then return false,"PingReferences requiere puntos" end
+ local previous=-math.huge
+ for i=1,count do
+  local point=points[i]
+  ok,message=known(point,{PingMs=0,X=0,Y=0},"PingReferences")
+  if not ok then return false,message end
+  if not bounded(point.PingMs,0,2000) or point.PingMs<=previous
+   or not bounded(point.X,0,0.6)
+   or not bounded(point.Y,0,0.6) then return false,"PingReferences desordenado o fuera de límites" end
+  previous=point.PingMs
+ end
+ return true
+end
+local function validateOverrides(overrides, defaults, path)
+ local ok,message=known(overrides,defaults,path)
+ if not ok then return false,message end
+ for key,value in overrides do
+  if key=="Profiles" then
+   if type(value)~="table" or getmetatable(value)~=nil then return false,"Profiles debe ser una tabla simple" end
+   for name,profile in value do
+    if defaults.Profiles[name]==nil then return false,"Perfil desconocido" end
+    ok,message=known(profile,defaults.Profiles[name],"Profiles."..name)
+    if not ok then return false,message end
+   end
+  elseif type(value)=="table" and key~="DotColor" and key~="DotOutlineColor" and key~="LockKey" and key~="PingReferences" then
+   return false,path.."."..key..": tipo incorrecto"
+  end
+ end
+ return true
+end
+function Config.new(overrides)
+ if overrides==nil then overrides={} end
+ local defaults=Config.defaults()
+ local ok,message=validateOverrides(overrides,defaults,"Config")
+ if not ok then return nil,message end
+ -- Known-shape checks precede recursion, so functions, cyclic objects, Instances
+ -- and unknown nested keys cannot become retained setup/configuration values.
+ for _,key in {"DotColor","DotOutlineColor"} do
+  if overrides[key]~=nil and not colorOK(overrides[key]) then return nil,"Color del DOT inválido" end
+ end
+ local resolvedKey,keyMessage=Config.normalizeLockKey(if overrides.LockKey~=nil then overrides.LockKey else defaults.LockKey)
+ if not resolvedKey then return nil,keyMessage end
+ if overrides.PingReferences~=nil then
+  -- A shallow shape check prevents recursive-copying of cyclic point objects.
+  local points=overrides.PingReferences
+  if type(points)~="table" or getmetatable(points)~=nil then return nil,"PingReferences inválido" end
+  for index,point in points do
+   if type(index)~="number" or index%1~=0 or index<1 or index>32 then return nil,"Índice de PingReferences inválido" end
+   ok,message=known(point,{PingMs=0,X=0,Y=0},"PingReferences")
+   if not ok then return nil,message end
+  end
+ end
+ local normalized=merge(defaults,overrides)
+ normalized.LockKey=resolvedKey
+ ok,message=validate(normalized)
+ if not ok then return nil,message end
+ return normalized
+end
+function Config.validate(config) return validate(config) end
+function Config.toSettings(config, into)
+ local settings=into or Settings.new()
+ settings.enabled=config.Enabled; settings.autoPrediction=config.AutoPrediction
+ settings.pingSmoothingSeconds=config.PingSmoothing; settings.distancePrediction=config.DistancePrediction
+ settings.velocityPrediction=config.VelocityPrediction; settings.accelerationPrediction=config.AccelerationPrediction
+ settings.memoryTracking=config.MemoryTracking; settings.updateHz=config.UpdateHz
+ settings.maxTargetDistanceStuds=config.MaxDistance; settings.historyCapacity=config.HistoryCapacity
+ settings.historyWindowSeconds=config.HistoryWindow; settings.velocitySmoothingSeconds=config.VelocitySmoothing
+ settings.accelerationSmoothingSeconds=config.AccelerationSmoothing; settings.maxObservedSpeedStuds=config.MaxObservedSpeed
+ settings.maxAccelerationStuds=config.MaxAcceleration; settings.teleportSlackStuds=config.TeleportSlack
+ settings.reversalDotThreshold=config.ReversalDotThreshold; settings.maxAccelerationHorizonSeconds=config.MaxAccelerationHorizon
+ settings.staleAfterSeconds=config.StaleAfter; settings.latencySlewSecondsPerSecond=config.PredictionSlew
+ settings.maxFlightSeconds=config.MaxFlightSeconds
+ return settings
+end
+return Config
+end
+-- END PinkConfig
+-- BEGIN PinkPrediction | sha256 9b6d1e27b908823f161d61d421925e779ba7cf39a9896563ce219835dd2ccb78
+factories["PinkPrediction"] = function(loadModule)
+--!nonstrict
+-- X/Z use PredictionX seconds; Y uses PredictionY seconds. These configurable
+-- references are empirical horizons, not universal properties of a weapon.
+-- Auto references already contain the requested delay: RTT is NEVER added
+-- again. Only the independently known observation age is integrated once.
+local Config = loadModule("PinkConfig")
+local MotionHistory = loadModule("MemoryTracker")
+local Latency = loadModule("Latency")
+local Ballistics = loadModule("Ballistics")
+local Prediction = {}
+Prediction.__index = Prediction
+
+local function finite(n) return type(n)=="number" and n==n and math.abs(n)<math.huge end
+local function vectorOK(v)
+ local ok,result=pcall(function()
+  return v~=nil and finite(v.X) and finite(v.Y) and finite(v.Z) and finite(v.Magnitude)
+ end)
+ return ok and result
+end
+local function makeVector(reference,x,y,z)
+ if Vector3 and type(Vector3.new)=="function" then return Vector3.new(x,y,z) end
+ -- The repository's CLI Vector adapter exposes its constructor on instances.
+ if type(reference)=="table" and type(reference.new)=="function" then return reference.new(x,y,z) end
+ return nil
+end
+local function policyState()
+ return {baseX=nil,baseY=nil,lastBaseTime=nil,position=nil,targetPosition=nil,lastPositionTime=nil}
+end
+function Prediction.new(config)
+ local normalized,message=Config.new(config)
+ assert(normalized,message or "Configuración de predicción inválida")
+ local settings=Config.toSettings(normalized)
+ return setmetatable({config=normalized,settings=settings,history=MotionHistory.new(settings),
+  latency=Latency.new(settings),pingAvailable=false,policies={active=policyState(),manual=policyState(),auto=policyState()}},Prediction)
+end
+function Prediction:_sync()
+ Config.toSettings(self.config,self.settings)
+end
+function Prediction:reset()
+ self:_sync()
+ self.history=MotionHistory.new(self.settings);self.latency=Latency.new(self.settings)
+ self.pingAvailable=false
+ self.policies={active=policyState(),manual=policyState(),auto=policyState()}
+end
+function Prediction:observe(t,position,state)
+ self:_sync()
+ local previous=self.history:latest()
+ local accepted=self.history:observe({t=t,position=position,state=if state==nil then "Running" else state})
+ if accepted and previous then
+  local dt=t-previous.t
+  if dt>self.config.StaleAfter or (position-previous.position).Magnitude>self.config.MaxObservedSpeed*dt+self.config.TeleportSlack then
+   -- A teleport/gap rebases the output filter as well as the motion estimator.
+   -- Ordinary velocity-mode updates still retain time-based output smoothing.
+   for _,policy in self.policies do policy.position=nil;policy.targetPosition=nil;policy.lastPositionTime=nil end
+  end
+ end
+ return accepted
+end
+function Prediction:samplePing(rttSeconds,now)
+ if not finite(now) then return false end
+ self:_sync()
+ if rttSeconds==nil then
+  self.latency=Latency.new(self.settings);self.pingAvailable=false
+  for _,state in self.policies do state.baseX=nil;state.baseY=nil;state.lastBaseTime=nil end
+  return true
+ end
+ if not finite(rttSeconds) or rttSeconds<0 or rttSeconds>2 then return false end
+ local accepted=self.latency:sample(rttSeconds/2,now)
+ if accepted then self.pingAvailable=true end
+ return accepted
+end
+local function interpolate(points,pingMs)
+ if pingMs<=points[1].PingMs then return points[1].X,points[1].Y end
+ for i=2,#points do
+  local a,b=points[i-1],points[i]
+  if pingMs<=b.PingMs then
+   local f=(pingMs-a.PingMs)/(b.PingMs-a.PingMs)
+   return a.X+(b.X-a.X)*f,a.Y+(b.Y-a.Y)*f
+  end
+ end
+ local last=points[#points]
+ return last.X,last.Y
+end
+function Prediction:_bases(policy,now,state)
+ local c=self.config
+ if policy=="Manual" then return c.PredictionX,c.PredictionY,"Manual" end
+ if not c.PingCompensation or not self.pingAvailable then
+  return c.PredictionX,c.PredictionY,"AutoFallback"
+ end
+ local x,y=interpolate(c.PingReferences,self.latency.smoothed*2000)
+ x=math.clamp(x,c.MinPredictionX,c.MaxPredictionX)
+ y=math.clamp(y,c.MinPredictionY,c.MaxPredictionY)
+ if state.baseX~=nil then
+  local step=c.PredictionSlew*math.max(0,now-(state.lastBaseTime or now))
+  x=state.baseX+math.clamp(x-state.baseX,-step,step)
+  y=state.baseY+math.clamp(y-state.baseY,-step,step)
+ end
+ state.baseX=x;state.baseY=y;state.lastBaseTime=now
+ return x,y,"Auto"
+end
+function Prediction:_predict(origin,now,policy,key)
+ local c=self.config
+ if not c.Enabled or not finite(now) or not vectorOK(origin) then return nil end
+ self:_sync()
+ local sample=self.history:latest()
+ if not sample then return nil end
+ local age=now-sample.t
+ if age< -0.05 or age>c.StaleAfter then return nil end
+ age=math.max(0,age)
+ local distance=(sample.position-origin).Magnitude
+ if distance>c.MaxDistance then return nil end
+ local range=if distance<c.CloseDistance then "Close" elseif distance<c.MediumDistance then "Medium" else "Long"
+ local state=self.policies[key]
+ -- Equivalent fractional frame timestamps can differ by floating point noise.
+ if (state.lastBaseTime and now<state.lastBaseTime-1e-7)
+  or (state.lastPositionTime and now<state.lastPositionTime-1e-7) then return nil end
+ now=math.max(now,state.lastBaseTime or now,state.lastPositionTime or now)
+ local baseX,baseY,status=self:_bases(policy,now,state)
+ local profile=c.Profiles[c.WeaponProfile]
+ local distanceOffset=if c.DistancePrediction then c[range.."Offset"]+profile[range.."Offset"] else 0
+ local x=math.clamp(baseX+profile.PredictionXOffset+profile.LatencyOffsetSeconds+distanceOffset,c.MinPredictionX,c.MaxPredictionX)
+ local y=math.clamp(baseY+profile.PredictionYOffset+profile.LatencyOffsetSeconds+distanceOffset,c.MinPredictionY,c.MaxPredictionY)
+ local zero=sample.position*0
+ local velocity=if c.VelocityPrediction then self.history.velocity or zero else zero
+ local acceleration=if c.VelocityPrediction and c.MemoryTracking and c.AccelerationPrediction then self.history.acceleration or zero else zero
+ local hx,hy=x+age,y+age
+ local ux,uy=math.min(hx,c.MaxAccelerationHorizon),math.min(hy,c.MaxAccelerationHorizon)
+ local lead=makeVector(sample.position,
+  velocity.X*hx+acceleration.X*(ux*hx-0.5*ux*ux),
+  velocity.Y*hy+acceleration.Y*(uy*hy-0.5*uy*uy),
+  velocity.Z*hx+acceleration.Z*(ux*hx-0.5*ux*ux))
+ if not lead then return nil end
+ local rawTarget=sample.position+lead
+ local rawAim=rawTarget
+ local flight=0
+ local physicsStatus="Unknown"
+ if profile.Kind=="Hitscan" then physicsStatus="ConfiguredHitscan" end
+ if profile.Kind=="Projectile" and c.DistancePrediction then
+  local currentVelocity=makeVector(sample.position,velocity.X+acceleration.X*ux,
+   velocity.Y+acceleration.Y*uy,velocity.Z+acceleration.Z*ux)
+  local up=makeVector(sample.position,0,1,0)
+  local result=Ballistics.solve(origin,rawTarget,currentVelocity,zero,
+   {kind="projectile",speed=profile.Speed,gravity=profile.Gravity,upVector=up},
+   c.MaxFlightSeconds,c.VelocityPrediction,c.MaxAccelerationHorizon)
+  if not result then return nil end
+  rawTarget=result.position;rawAim=result.aimpoint;flight=result.flightSeconds
+  physicsStatus="ConfiguredProjectile"
+ elseif profile.Kind=="Projectile" then physicsStatus="DistanceDisabled" end
+
+ -- The output and corresponding target reference share an EMA, independent
+ -- for active/manual/auto policies. The visual DOT never uses this filter.
+ local dt=if state.lastPositionTime then math.max(0,now-state.lastPositionTime) else 0
+ local alpha=if c.PredictionSmoothing>0 then 1-math.exp(-dt/c.PredictionSmoothing) else 1
+ if state.position==nil then
+  state.position=rawAim;state.targetPosition=rawTarget
+ else
+  state.position=state.position+(rawAim-state.position)*alpha
+  state.targetPosition=state.targetPosition+(rawTarget-state.targetPosition)*alpha
+ end
+ state.lastPositionTime=now
+ return {position=state.position,rawPosition=rawAim,targetPosition=state.targetPosition,rawTargetPosition=rawTarget,
+  currentPosition=sample.position,velocity=velocity,acceleration=acceleration,distanceStuds=distance,
+  ageSeconds=age,predictionX=x,predictionY=y,baseX=baseX,baseY=baseY,
+  rawPingMs=if self.pingAvailable then self.latency.raw*2000 else nil,
+  smoothedPingMs=if self.pingAvailable then self.latency.smoothed*2000 else nil,
+  status=status,flightSeconds=flight,physicsVerified=false,physicsStatus=physicsStatus,
+  sampleTime=sample.t,createdAt=now,range=range,weaponProfile=self.weaponProfileLabel or c.WeaponProfile,policy=policy,
+  state=sample.state}
+end
+function Prediction:predict(origin,now,policyOverride)
+ if policyOverride~=nil and policyOverride~="Manual" and policyOverride~="Auto" then return nil end
+ local policy=policyOverride or (if self.config.AutoPrediction then "Auto" else "Manual")
+ local key=if policyOverride=="Manual" then "manual" elseif policyOverride=="Auto" then "auto" else "active"
+ return self:_predict(origin,now,policy,key)
+end
+function Prediction:predictComparisons(origin,now)
+ return {active=self:predict(origin,now),manual=self:predict(origin,now,"Manual"),auto=self:predict(origin,now,"Auto")}
+end
+return Prediction
+end
+-- END PinkPrediction
+-- BEGIN Selection | sha256 19df1c78d47a07bdbee85e995ff539a76d6d2caefe235f35180684a30c956816
+factories["Selection"] = function(loadModule)
+--!nonstrict
+-- Pure screen-space acquisition. Persistence and character lifetime belong
+-- to Session; being offscreen later must never invalidate an existing lock.
+local Selection = {}
+
+local function finite(value)
+	return type(value) == "number" and value == value and math.abs(value) < math.huge
+end
+
+local function components(value)
+	local kind = typeof(value)
+	if type(value) ~= "table" and kind ~= "Vector2" and kind ~= "Vector3" then
+		return nil
+	end
+	if not finite(value.X) or not finite(value.Y) then
+		return nil
+	end
+	return value.X, value.Y
+end
+
+function Selection.reference(mode, viewportSize, mousePosition, inset)
+	local width, height = components(viewportSize)
+	if width == nil or width <= 0 or height <= 0 then
+		return nil
+	end
+	if mode == "FirstPerson" then
+		-- WorldToViewportPoint coordinates omit the GUI inset. Do not add it to
+		-- the first-person reference; the viewport center is already correct.
+		return { X = width / 2, Y = height / 2 }
+	end
+	if mode ~= "ThirdPerson" then
+		return nil
+	end
+	local mouseX, mouseY = components(mousePosition)
+	if mouseX == nil then
+		return nil
+	end
+	local insetX, insetY = 0, 0
+	if inset ~= nil then
+		insetX, insetY = components(inset)
+		if insetX == nil then
+			return nil
+		end
+	end
+	-- GetMouseLocation and WorldToViewportPoint share the screen/viewport origin
+	-- used by IgnoreGuiInset=true. No topbar subtraction is appropriate here.
+	local x, y = mouseX, mouseY
+	if not finite(x) or not finite(y) then
+		return nil
+	end
+	return { X = x, Y = y }
+end
+
+function Selection.isSelectable(candidate)
+	if type(candidate) ~= "table" or candidate.valid ~= true
+		or candidate.visible ~= true or candidate.onScreen ~= true
+		or not finite(candidate.distanceStuds) or candidate.distanceStuds < 0 then
+		return false
+	end
+	local point = candidate.screenPosition
+	local x = components(point)
+	if x == nil then
+		return false
+	end
+	-- Vector2 has no Z member. Vector3 projection or a plain table may include
+	-- depth; when supplied, positive finite depth is mandatory.
+	local kind = typeof(point)
+	if kind == "Vector3" or type(point) == "table" then
+		local depth = point.Z
+		if depth ~= nil and (not finite(depth) or depth <= 0) then
+			return false
+		end
+	end
+	return true
+end
+
+local function squaredDistance(candidate, reference)
+	local referenceX, referenceY = components(reference)
+	if referenceX == nil or not Selection.isSelectable(candidate) then
+		return nil
+	end
+	local x, y = components(candidate.screenPosition)
+	local dx, dy = x - referenceX, y - referenceY
+	local value = dx * dx + dy * dy
+	return finite(value) and value or nil
+end
+
+function Selection.within(candidate, reference, fov)
+	if not finite(fov) or fov < 0 then
+		return false
+	end
+	local squared = squaredDistance(candidate, reference)
+	return squared ~= nil and squared <= fov * fov
+end
+
+function Selection.nearest(candidates, reference, fov)
+	if type(candidates) ~= "table" or not finite(fov) or fov < 0
+		or components(reference) == nil then
+		return nil
+	end
+	local winner = nil
+	local closestSquared = fov * fov
+	for _, candidate in ipairs(candidates) do
+		local squared = squaredDistance(candidate, reference)
+		if squared ~= nil and squared <= closestSquared then
+			-- Keep input ordering for exact ties instead of oscillating based on
+			-- unrelated world distance or unstable player enumeration.
+			if winner == nil or squared < closestSquared then
+				winner = candidate
+				closestSquared = squared
+			end
+		end
+	end
+	return winner
+end
+
+return Selection
+end
+-- END Selection
+-- BEGIN Runtime | sha256 7f89e3c53bea65650c255a3e091eaa869ac8c167c97aa6a62e89181886bd7f50
+factories["Runtime"] = function(loadModule)
+--!nonstrict
+-- Read-only audit and bounded readiness wait: no Instances, event connections,
+-- camera writes or remote calls. A ready report only verifies the public client
+-- APIs used here; it does not verify a third-party experience or its weapons.
+local Runtime = {}
+
+local function text(value)
+	local ok, result = pcall(tostring, value)
+	return if ok then result else "<error could not be converted to text>"
+end
+local function finite(value)
+	return type(value) == "number" and value == value and math.abs(value) < math.huge
+end
+local function member(object, key)
+	if object == nil then return nil, nil end
+	local ok, result = pcall(function() return object[key] end)
+	if ok then return result, nil end
+	return nil, text(result)
+end
+local function callable(object, key)
+	return type(member(object, key)) == "function"
+end
+local function call(object, key, ...)
+	local method, problem = member(object, key)
+	if type(method) ~= "function" then return false, problem or (key .. " is unavailable") end
+	return pcall(method, object, ...)
+end
+local function missing(report, description, problem)
+	table.insert(report.missing, description .. (if problem then ": " .. text(problem) else ""))
+end
+local function requireMethod(report, object, key, description)
+	local method, problem = member(object, key)
+	if type(method) == "function" then return true end
+	missing(report, description or key, problem)
+	return false
+end
+local function requireSignal(report, object, key, description)
+	local signal, problem = member(object, key)
+	if problem then missing(report, description or key, problem); return false end
+	local connectMethod, connectProblem = member(signal, "Connect")
+	if type(connectMethod) == "function" then return true end
+	missing(report, description or key, connectProblem)
+	return false
+end
+local function pending(report, description)
+	table.insert(report.pending, description)
+end
+
+function Runtime.traceback(problem)
+	local message = text(problem)
+	local traceback = member(debug, "traceback")
+	if type(traceback) == "function" then
+		local ok, stack = pcall(traceback, message, 2)
+		if ok and type(stack) == "string" then return stack end
+	end
+	return message
+end
+
+-- Logging must never make a recoverable initialization error into a new error.
+-- It is always enabled; DebugMode controls detailed targeting logs only.
+function Runtime.trace(report, phase, status, detail)
+	local phaseText, statusText, detailText = text(phase), text(status), text(detail or "")
+	pcall(function()
+		if type(report) == "table" then
+			report.phase = phaseText
+			if type(report.events) ~= "table" then report.events = {} end
+			if #report.events >= 64 then table.remove(report.events, 1) end
+			table.insert(report.events, {phase = phaseText, status = statusText, detail = detailText})
+		end
+	end)
+	local logger = if statusText == "FAIL" and type(warn) == "function" then warn
+		elseif type(print) == "function" then print elseif type(warn) == "function" then warn else nil
+	local message = "[SEDWARE][" .. phaseText .. "][" .. statusText .. "] " .. detailText
+	if logger then
+		local logged = pcall(logger, message)
+		if not logged and logger ~= print and type(print) == "function" then pcall(print, message) end
+	end
+	return statusText
+end
+
+function Runtime.check(config)
+	config = config or {}
+	local report = {ready = false, missing = {}, pending = {}, warnings = {}, services = {}, events = {},
+		phase = "Services", resources = {},
+		capabilities = {networkPing = false, camera = false, visibility = false}}
+	for _, requirement in {
+		{"Instance.new", Instance, "new"}, {"Vector3.new", Vector3, "new"},
+		{"Vector2.new", Vector2, "new"}, {"UDim.new", UDim, "new"},
+		{"UDim2.new", UDim2, "new"}, {"UDim2.fromOffset", UDim2, "fromOffset"},
+		{"UDim2.fromScale", UDim2, "fromScale"}, {"Color3.fromRGB", Color3, "fromRGB"},
+		{"table.clone", table, "clone"}, {"table.clear", table, "clear"},
+		{"math.clamp", math, "clamp"},
+	} do requireMethod(report, requirement[2], requirement[3], requirement[1]) end
+	if Enum == nil or type(Enum) == "boolean" or type(Enum) == "number" or type(Enum) == "string"
+		or type(Enum) == "function" then
+		missing(report, "Enum de Roblox")
+	end
+	if type(typeof) ~= "function" then missing(report, "typeof de Luau") end
+	if config.VisibilityCheck ~= false then
+		requireMethod(report, RaycastParams, "new", "RaycastParams.new para VisibilityCheck")
+	end
+
+	if requireMethod(report, game, "GetService", "game:GetService del cliente Roblox") then
+		for _, name in {"Players", "RunService", "UserInputService", "GuiService", "Workspace"} do
+			local ok, service = call(game, "GetService", name)
+			if ok and service then report.services[name] = service
+			else missing(report, "Servicio " .. name, if ok then "GetService devolvió nil" else service) end
+		end
+	end
+	local services = report.services
+	if services.RunService then
+		local ok, client = call(services.RunService, "IsClient")
+		if not ok then missing(report, "RunService:IsClient()", client)
+		elseif client ~= true then missing(report, "RunService:IsClient() debe ser true") end
+		requireSignal(report, services.RunService, "RenderStepped", "RunService.RenderStepped.Connect")
+	end
+	if services.Players then
+		requireMethod(report, services.Players, "GetPlayers", "Players:GetPlayers")
+		requireSignal(report, services.Players, "PlayerRemoving", "Players.PlayerRemoving.Connect")
+		local player, problem = member(services.Players, "LocalPlayer")
+		report.player = player
+		if problem then
+			missing(report, "Players.LocalPlayer", problem)
+			report.resources.LocalPlayer = "FAIL"
+		elseif not player then
+			pending(report, "Players.LocalPlayer")
+			report.resources.LocalPlayer = "WAIT"
+			report.resources.PlayerGui = "WAIT"
+		else
+			report.resources.LocalPlayer = "READY"
+			if requireMethod(report, player, "FindFirstChild", "LocalPlayer:FindFirstChild") then
+				local ok, gui = call(player, "FindFirstChild", "PlayerGui")
+				if not ok then
+					missing(report, "LocalPlayer:FindFirstChild(\"PlayerGui\")", gui)
+					report.resources.PlayerGui = "FAIL"
+				elseif not gui then
+					pending(report, "LocalPlayer.PlayerGui")
+					report.resources.PlayerGui = "WAIT"
+				else
+					report.playerGui = gui
+					report.resources.PlayerGui = if requireMethod(report, gui, "FindFirstChild", "PlayerGui:FindFirstChild") then "READY" else "FAIL"
+				end
+			else report.resources.PlayerGui = "FAIL" end
+		end
+	else
+		report.resources.LocalPlayer, report.resources.PlayerGui = "FAIL", "FAIL"
+	end
+	if services.UserInputService then
+		local input = services.UserInputService
+		requireSignal(report, input, "InputBegan", "UserInputService.InputBegan.Connect")
+		requireMethod(report, input, "GetMouseLocation", "UserInputService:GetMouseLocation")
+		requireMethod(report, input, "GetFocusedTextBox", "UserInputService:GetFocusedTextBox")
+	end
+	if services.GuiService then requireMethod(report, services.GuiService, "GetGuiInset", "GuiService:GetGuiInset") end
+	report.world = services.Workspace or workspace
+	if not report.world then
+		missing(report, "Workspace de Roblox")
+		report.resources.CurrentCamera = "FAIL"
+	else
+		requireMethod(report, report.world, "GetServerTimeNow", "Workspace:GetServerTimeNow")
+		report.capabilities.visibility = callable(report.world, "Raycast")
+		if config.VisibilityCheck ~= false then requireMethod(report, report.world, "Raycast", "Workspace:Raycast para VisibilityCheck") end
+		local camera, problem = member(report.world, "CurrentCamera")
+		report.camera = camera
+		if problem then
+			missing(report, "Workspace.CurrentCamera", problem)
+			report.resources.CurrentCamera = "FAIL"
+		elseif not camera then
+			pending(report, "Workspace.CurrentCamera")
+			report.resources.CurrentCamera = "WAIT"
+		elseif not requireMethod(report, camera, "WorldToViewportPoint", "Camera:WorldToViewportPoint") then
+			report.resources.CurrentCamera = "FAIL"
+		else
+			local size, sizeProblem = member(camera, "ViewportSize")
+			local x, xProblem = member(size, "X")
+			local y, yProblem = member(size, "Y")
+			if sizeProblem or xProblem or yProblem then
+				missing(report, "CurrentCamera.ViewportSize", sizeProblem or xProblem or yProblem)
+				report.resources.CurrentCamera = "FAIL"
+			elseif not finite(x) or not finite(y) or x <= 0 or y <= 0 then
+				pending(report, "CurrentCamera.ViewportSize (" .. text(x) .. " x " .. text(y) .. ")")
+				report.resources.CurrentCamera = "WAIT"
+			else
+				report.capabilities.camera = true
+				report.resources.CurrentCamera = "READY"
+			end
+		end
+	end
+	report.capabilities.networkPing = callable(report.player, "GetNetworkPing")
+	if report.player and not report.capabilities.networkPing then
+		table.insert(report.warnings, "GetNetworkPing no está disponible; AutoPrediction usa los valores manuales de PredictionX/Y.")
+	end
+	report.ready = #report.missing == 0 and #report.pending == 0
+	return report
+end
+
+local function traceResources(report, previous)
+	for _, phase in {"LocalPlayer", "PlayerGui", "CurrentCamera"} do
+		local status = report.resources[phase] or "FAIL"
+		if previous[phase] ~= status then
+			previous[phase] = status
+			local detail = if status == "READY" then phase .. " preparado."
+				elseif status == "WAIT" then phase .. " todavía no está preparado."
+				else phase .. " no se pudo validar; consulta el error de Services."
+			Runtime.trace(report, phase, status, detail)
+		end
+	end
+end
+
+function Runtime.awaitReady(config, initialReport, cancelled)
+	config = config or {}
+	local report = initialReport or Runtime.check(config)
+	local events, previous = report.events or {}, {}
+	report.events = events
+	local function stopIfCancelled()
+		if type(cancelled) ~= "function" then return false end
+		local ok, result = xpcall(cancelled, Runtime.traceback)
+		if not ok then
+			missing(report, "Comprobación de cancelación de inicialización", result)
+			report.ready = false
+			return true
+		end
+		if result then
+			report.ready, report.cancelled = false, true
+			Runtime.trace(report, "Startup", "CANCELLED", "Una inicialización más reciente reemplazó esta espera.")
+			return true
+		end
+		return false
+	end
+	if stopIfCancelled() then return report end
+	local timeout, interval = config.InitializationTimeout or 8, config.InitializationPollInterval or 0.05
+	if not finite(timeout) or timeout < 0.1 or timeout > 30
+		or not finite(interval) or interval < 0.01 or interval > 1 then
+		missing(report, "InitializationTimeout/InitializationPollInterval fuera de los límites seguros")
+		report.ready = false
+		return report
+	end
+	traceResources(report, previous)
+	report.phase = "Services"
+	if stopIfCancelled() then return report end
+	if #report.missing > 0 then return report end
+	if report.ready then
+		Runtime.trace(report, "Services", "READY", "Servicios y recursos del cliente preparados.")
+		return report
+	end
+	if not callable(task, "wait") then
+		missing(report, "task.wait para esperar recursos temporales de Roblox")
+		report.ready = false
+		return report
+	end
+	if not callable(os, "clock") then
+		missing(report, "os.clock para limitar la espera de inicialización")
+		report.ready = false
+		return report
+	end
+	local ok, started = pcall(os.clock)
+	if not ok or not finite(started) then
+		missing(report, "os.clock durante la inicialización", if ok then "devolvió un valor no finito" else started)
+		report.ready = false
+		return report
+	end
+	Runtime.trace(report, "Services", "WAIT", "Esperando hasta " .. text(timeout) .. "s: " .. table.concat(report.pending, "; "))
+	local elapsed, iterations, previousClock = 0, 0, started
+	local deadlineTolerance = math.min(interval * 1e-6, 1e-6)
+	-- A second bound also protects against a broken external task.wait/clock
+	-- implementation that returns immediately without advancing monotonic time.
+	local maxIterations = math.ceil(timeout / interval) + 1
+	while elapsed < timeout - deadlineTolerance and iterations < maxIterations do
+		if stopIfCancelled() then return report end
+		iterations += 1
+		local waited, problem = xpcall(function() task.wait(math.min(interval, timeout - elapsed)) end, Runtime.traceback)
+		if stopIfCancelled() then return report end
+		if not waited then
+			missing(report, "task.wait durante la inicialización", problem)
+			report.ready = false
+			return report
+		end
+		local nowOK, now = pcall(os.clock)
+		if not nowOK or not finite(now) or now < previousClock then
+			missing(report, "os.clock durante la inicialización", if not nowOK then now else "reloj no finito o retrocedió")
+			report.ready = false
+			return report
+		end
+		previousClock = now
+		elapsed = now - started
+		if stopIfCancelled() then return report end
+		local nextReport = Runtime.check(config)
+		nextReport.events = events
+		nextReport.waitedSeconds, nextReport.waitIterations = elapsed, iterations
+		report = nextReport
+		traceResources(report, previous)
+		report.phase = "Services"
+		if stopIfCancelled() then return report end
+		if #report.missing > 0 then return report end
+		if report.ready then
+			Runtime.trace(report, "Services", "READY", "Recursos preparados después de " .. text(elapsed) .. "s.")
+			return report
+		end
+	end
+	report.ready, report.timedOut = false, true
+	report.waitedSeconds, report.waitIterations = elapsed, iterations
+	report.phase = "Services"
+	report.timeoutSeconds = timeout
+	report.waitFailure = if elapsed >= timeout - deadlineTolerance then "Se agotó el tiempo máximo de inicialización (" .. text(timeout) .. "s)."
+		else "Se alcanzó el límite seguro de " .. text(maxIterations) .. " consultas; task.wait/os.clock no avanzaron normalmente."
+	return report
+end
+
+function Runtime.errorMessage(report)
+	if type(report) ~= "table" then return "No se pudo comprobar el cliente nativo de Roblox." end
+	local reasons = {}
+	if type(report.waitFailure) == "string" then table.insert(reasons, report.waitFailure) end
+	for _, item in report.missing or {} do table.insert(reasons, text(item)) end
+	if #(report.pending or {}) > 0 then table.insert(reasons, "Recursos pendientes: " .. table.concat(report.pending, "; ")) end
+	if #reasons == 0 then
+		return if report.ready then "Cliente nativo de Roblox disponible." else "El cliente de Roblox no está listo."
+	end
+	return "SEDWARE no se puede iniciar [" .. text(report.phase or "Services") .. "]. " .. table.concat(reasons, "; ")
+end
+function Runtime.reportFailure(message)
+	local logger = if type(warn) == "function" then warn elseif type(print) == "function" then print else nil
+	if logger then
+		local description = if type(message) == "string" then message else Runtime.errorMessage(message)
+		local output = "[SEDWARE][Load Failed] " .. description
+		local logged = pcall(logger, output)
+		if not logged and logger ~= print and type(print) == "function" then pcall(print, output) end
+	end
+end
+
+return Runtime
+end
+-- END Runtime
+-- BEGIN Overlay | sha256 d5ca7d428339552f7b5f005c12bd13f0c19418055626cc7390744d918472f762
+factories["Overlay"] = function(loadModule)
+--!nonstrict
+-- Display-only overlay: the dot receives an observed position, never a prediction.
+-- All controls remain with Roblox; there are no buttons or input connections.
+local Overlay = {}
+Overlay.__index = Overlay
+local FADE_SECONDS = 0.18
+
+local function create(self, className, properties, parent)
+	local object = Instance.new(className)
+	-- Track before property assignment so construction failures leave no orphans.
+	table.insert(self.owned, object)
+	for key, value in pairs(properties) do object[key] = value end
+	object.Parent = parent
+	return object
+end
+local function finite(number)
+	return type(number) == "number" and number == number and math.abs(number) < math.huge
+end
+local function xy(point)
+	if point == nil then return nil end
+	local ok, x, y = pcall(function() return point.X, point.Y end)
+	if ok and finite(x) and finite(y) then return x, y end
+	return nil
+end
+
+function Overlay.new(playerGui, config)
+	local self = setmetatable({ config = config or {}, owned = {}, destroyed = false }, Overlay)
+	local ok, problem = xpcall(function()
+		local settings = self.config
+		local hotPink, white = Color3.fromRGB(255, 105, 180), Color3.fromRGB(255, 255, 255)
+		self.gui = create(self, "ScreenGui", {
+			Name = "PinkDotLock", ResetOnSpawn = false, IgnoreGuiInset = true,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 40,
+		}, playerGui)
+		self.dot = create(self, "Frame", {
+			Name = "PinkDot", Active = false, BackgroundColor3 = settings.DotColor or hotPink,
+			BackgroundTransparency = settings.DotTransparency or 0, BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.fromOffset(settings.DotSize or 6, settings.DotSize or 6),
+			Visible = false, ZIndex = 3,
+		}, self.gui)
+		create(self, "UICorner", { CornerRadius = UDim.new(1, 0) }, self.dot)
+		if settings.DotOutline ~= false then
+			create(self, "UIStroke", { Color = settings.DotOutlineColor or white,
+				Thickness = 1, Transparency = 0, ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			}, self.dot)
+		end
+		self.toast = create(self, "CanvasGroup", {
+			Name = "Notification", Active = false, BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.25, BorderSizePixel = 0,
+			AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -28),
+			Size = UDim2.new(0.85, 0, 0, 72), GroupTransparency = 1, Visible = false,
+			ZIndex = 5,
+		}, self.gui)
+		create(self, "UISizeConstraint", { MaxSize = Vector2.new(360, 72) }, self.toast)
+		create(self, "UICorner", { CornerRadius = UDim.new(0, 9) }, self.toast)
+		local accent = create(self, "Frame", {
+			Name = "PinkAccent", Active = false, BackgroundColor3 = hotPink,
+			BorderSizePixel = 0, Position = UDim2.fromOffset(0, 0), Size = UDim2.new(0, 4, 1, 0),
+			ZIndex = 6,
+		}, self.toast)
+		create(self, "UICorner", { CornerRadius = UDim.new(0, 2) }, accent)
+		self.title = create(self, "TextLabel", {
+			Name = "Title", Active = false, BackgroundTransparency = 1, Text = "",
+			TextColor3 = white, Font = Enum.Font.GothamBold, TextSize = 15,
+			TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Position = UDim2.fromOffset(17, 9), Size = UDim2.new(1, -32, 0, 28), ZIndex = 6,
+		}, self.toast)
+		self.body = create(self, "TextLabel", {
+			Name = "Body", Active = false, BackgroundTransparency = 1, Text = "",
+			TextColor3 = white, Font = Enum.Font.Gotham, TextSize = 11,
+			TextTransparency = 0.12, TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Center, TextWrapped = true,
+			Position = UDim2.fromOffset(17, 37), Size = UDim2.new(1, -32, 0, 25), ZIndex = 6,
+		}, self.toast)
+	end,function(problem)
+		return if debug and type(debug.traceback)=="function" then debug.traceback(tostring(problem),2) else tostring(problem)
+	end)
+	if not ok then
+		self:destroy()
+		error("PINK DOT LOCK overlay: " .. tostring(problem), 2)
+	end
+	return self
+end
+
+function Overlay:setDot(viewportPoint, onScreen, inset)
+	if self.destroyed then return false end
+	local x, y = xy(viewportPoint)
+	if not onScreen or self.config.ShowDot == false or not x then self:hideDot(); return false end
+	-- IgnoreGuiInset=true uses viewport coordinates directly; adding the topbar
+	-- inset here displaced the dot away from its observed target.
+	self.dot.Position = UDim2.fromOffset(x, y)
+	self.dot.Visible = true
+	return true
+end
+
+function Overlay:hideDot()
+	if not self.destroyed then self.dot.Visible = false end
+end
+
+function Overlay:notify(message, now, duration, subtitle)
+	if self.destroyed then return false end
+	if self.config.ShowNotifications == false then
+		self.toast.Visible = false
+		self.noticeStart = nil
+		return false
+	end
+	if not finite(now) then return false end
+	duration = duration or self.config.NotificationDuration or 2
+	if not finite(duration) or duration <= 0 then return false end
+	self.title.Text = tostring(message or "")
+	self.body.Text = subtitle and tostring(subtitle) or ""
+	self.body.Visible = subtitle ~= nil and subtitle ~= ""
+	self.title.Position = UDim2.fromOffset(17, self.body.Visible and 9 or 0)
+	self.title.Size = UDim2.new(1, -32, 0, self.body.Visible and 28 or 72)
+	self.noticeStart, self.noticeDuration = now, duration
+	self.toast.GroupTransparency = 1
+	self.toast.Position = UDim2.new(0.5, 0, 1, -20)
+	self.toast.Visible = true
+	return true
+end
+
+function Overlay:step(now)
+	if self.destroyed or not self.noticeStart or not finite(now) then return end
+	if self.config.ShowNotifications == false then
+		self.toast.Visible = false
+		self.noticeStart = nil
+		return
+	end
+	local elapsed = math.max(0, now - self.noticeStart)
+	if elapsed >= self.noticeDuration then
+		self.toast.Visible = false
+		self.toast.GroupTransparency = 1
+		self.noticeStart = nil
+		return
+	end
+	local fade = math.min(FADE_SECONDS, self.noticeDuration / 2)
+	local visibility = math.clamp(math.min(elapsed / fade, (self.noticeDuration - elapsed) / fade), 0, 1)
+	-- Smoothstep is time-based and creates no tweens or scheduled callbacks.
+	visibility = visibility * visibility * (3 - 2 * visibility)
+	self.toast.GroupTransparency = 1 - visibility
+	self.toast.Position = UDim2.new(0.5, 0, 1, -20 - 8 * visibility)
+end
+
+function Overlay:destroy()
+	if self.destroyed then return end
+	self.destroyed = true
+	self.noticeStart = nil
+	for index = #self.owned, 1, -1 do
+		pcall(function() self.owned[index]:Destroy() end)
+	end
+	table.clear(self.owned)
+end
+
+-- Minimal failure display has no dependency on Config, CanvasGroup or a clock.
+function Overlay.showFailure(playerGui,message)
+	if not playerGui then return false end
+	assert(task and type(task.delay)=="function","No task.delay available to clean up the error notification")
+	local display=setmetatable({owned={},destroyed=false},Overlay)
+	local ok,problem=xpcall(function()
+		local old=playerGui:FindFirstChild("PinkDotLock_LoadFailure")
+		if old then old:Destroy() end
+		display.gui=create(display,"ScreenGui",{Name="PinkDotLock_LoadFailure",IgnoreGuiInset=true,ResetOnSpawn=false,DisplayOrder=50},playerGui)
+		local frame=create(display,"Frame",{Name="Notification",Active=false,BackgroundColor3=Color3.fromRGB(0,0,0),
+			BackgroundTransparency=0.25,BorderSizePixel=0,AnchorPoint=Vector2.new(0.5,1),
+			Position=UDim2.new(0.5,0,1,-28),Size=UDim2.new(0.85,0,0,90)},display.gui)
+		create(display,"UISizeConstraint",{MaxSize=Vector2.new(420,90)},frame)
+		create(display,"TextLabel",{Name="Title",Active=false,BackgroundTransparency=1,Text="SEDWARE | Load Failed",
+			TextColor3=Color3.fromRGB(255,105,180),TextSize=15,Size=UDim2.new(1,-20,0,26),Position=UDim2.fromOffset(10,5)},frame)
+		create(display,"TextLabel",{Name="Body",Active=false,BackgroundTransparency=1,Text=string.sub(tostring(message),1,280),TextWrapped=true,
+			TextColor3=Color3.fromRGB(255,255,255),TextSize=11,Size=UDim2.new(1,-20,0,50),Position=UDim2.fromOffset(10,33)},frame)
+		task.delay(2,function() display:destroy() end)
+	end,function(err) return if debug and type(debug.traceback)=="function" then debug.traceback(tostring(err),2) else tostring(err) end)
+	if not ok then display:destroy();error(problem,2) end
+	return true
+end
+return Overlay
+end
+-- END Overlay
+-- BEGIN Config | sha256 5a27425f6a6366acdec525c531fa3b199b10822e6f3cc2004cc2164235896f6a
+factories["Config"] = function(loadModule)
+--!nonstrict
+-- SEDWARE CAM LOCK. CamPrediction is a dimensionless gain, NOT seconds.
+-- gain = CamPrediction / 13.80; X/Z use PredictionX * gain seconds, and Y
+-- uses PredictionY * gain seconds. Auto's total RTT-calibrated horizons use
+-- the same gain. Horizons are bounded; RTT is never added a second time.
+local PinkConfig = loadModule("PinkConfig")
+local Config = {}
+
+-- The standalone builder copies this literal to the editable file header.
+Config.sourceLiteral = [=[{
+ Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
+ PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+ -- Internal settings: these intentionally have no extra GUI controls.
+ LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
+ PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
+ MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
+ MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+ PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
+ MaxDistance=350, AcquisitionInterval=0.25,
+ CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,
+ ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=3, NotificationDuration=2,
+ InitializationTimeout=8, InitializationPollInterval=0.05, UpdateHz=30, PingHz=5, StaleAfter=0.6,
+ HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
+ MaxObservedSpeed=120, MaxAcceleration=180, TeleportSlack=5, ReversalDotThreshold=-0.2,
+ MaxAccelerationHorizon=0.18,
+}]=]
+
+Config.referenceCamPrediction = 13.80
+Config.HitParts = {"Head", "UpperTorso", "HumanoidRootPart"}
+Config.hitParts = Config.HitParts
+Config.numericLimits = {
+ CamPrediction={0,69}, PredictionX={0,0.6}, PredictionY={0,0.6}, Smoothness={0,1}, Radius={1,2000},
+ PingSmoothing={0.05,10}, MinPredictionX={0,0.6}, MaxPredictionX={0,0.6}, MinPredictionY={0,0.6}, MaxPredictionY={0,0.6},
+ PredictionSlew={0.001,2}, PredictionSmoothing={0,2}, MaxDistance={10,2000}, AcquisitionInterval={0.05,2},
+ CloseDistance={1,2000}, MediumDistance={2,2000}, CloseOffset={-0.2,0.2}, MediumOffset={-0.2,0.2}, LongOffset={-0.2,0.2},
+ WelcomeDuration={0.1,30}, NotificationDuration={0.1,30}, InitializationTimeout={0.1,30}, InitializationPollInterval={0.01,1},
+ UpdateHz={5,60}, PingHz={0.5,20}, StaleAfter={0.05,2}, HistoryCapacity={2,64}, HistoryWindow={0.05,1},
+ VelocitySmoothing={0.001,1}, AccelerationSmoothing={0.01,2}, MaxObservedSpeed={1,1000}, MaxAcceleration={0,2000},
+ TeleportSlack={0,100}, ReversalDotThreshold={-1,1}, MaxAccelerationHorizon={0,0.6},
+}
+Config.limits = Config.numericLimits
+Config.controls = {
+ {key="Enabled",label="Enable",kind="toggle"},
+ {key="HitPart",label="Hit Part",kind="choice",options=Config.HitParts},
+ {key="CamPrediction",label="Cam Prediction",kind="number",unit="gain",decimals=2},
+ {key="PredictionX",label="Prediction X",kind="number",unit="seconds",decimals=4},
+ {key="PredictionY",label="Prediction Y",kind="number",unit="seconds",decimals=4},
+ {key="Smoothness",label="Smoothness",kind="number",unit="response",decimals=3},
+ {key="Radius",label="Radius",kind="number",unit="pixels",decimals=0},
+}
+Config.fields = {}
+for _,field in Config.controls do
+ local bounds=Config.numericLimits[field.key]
+ if bounds then field.min=bounds[1];field.max=bounds[2] end
+ Config.fields[field.key]=field
+end
+
+function Config.defaults()
+ return {
+  Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
+  PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+  LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
+  PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
+  MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
+  MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+  PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
+  MaxDistance=350, AcquisitionInterval=0.25,
+  CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,
+  ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=3, NotificationDuration=2,
+  InitializationTimeout=8, InitializationPollInterval=0.05, UpdateHz=30, PingHz=5, StaleAfter=0.6,
+  HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
+  MaxObservedSpeed=120, MaxAcceleration=180, TeleportSlack=5, ReversalDotThreshold=-0.2,
+  MaxAccelerationHorizon=0.18,
+ }
+end
+
+local function finite(value)
+ return type(value)=="number" and value==value and math.abs(value)<math.huge
+end
+local function plain(value) return type(value)=="table" and getmetatable(value)==nil end
+local function shape(overrides)
+ if not plain(overrides) then return false,"Config debe ser una tabla simple" end
+ local defaults=Config.defaults()
+ for key,value in overrides do
+  local expected=defaults[key]
+  if type(key)~="string" or expected==nil then return false,"Config: campo desconocido "..tostring(key) end
+  if key=="LockKey" then
+   local resolved,message=PinkConfig.normalizeLockKey(value)
+   if not resolved then return false,message end
+  elseif key=="PingReferences" then
+   if not plain(value) then return false,"PingReferences debe ser una tabla simple" end
+   local count=0
+   for index,point in value do
+    if type(index)~="number" or index%1~=0 or index<1 or index>32 or not plain(point) then
+     return false,"PingReferences: índice o punto inválido"
+    end
+    count+=1
+    for name,number in point do
+     if (name~="PingMs" and name~="X" and name~="Y") or not finite(number) then
+      return false,"PingReferences: campo inválido"
+     end
+    end
+    if not finite(point.PingMs) or not finite(point.X) or not finite(point.Y) then
+     return false,"PingReferences: falta PingMs, X o Y"
+    end
+   end
+   if count==0 then return false,"PingReferences debe ser una lista continua" end
+   for index=1,count do if value[index]==nil then return false,"PingReferences debe ser una lista continua" end end
+  elseif type(value)~=type(expected) or (type(expected)=="number" and not finite(value)) then
+   return false,"Config."..key..": tipo inválido o número no finito"
+  end
+ end
+ return true
+end
+
+local sharedFields={
+ "Enabled","LockKey","AutoPrediction","PingCompensation","PingSmoothing","MinPredictionX","MaxPredictionX",
+ "MinPredictionY","MaxPredictionY","PredictionSlew","MemoryTracking","VelocityPrediction","DistancePrediction",
+ "AccelerationPrediction","PredictionSmoothing","VisibilityCheck","MaxDistance","CloseDistance","MediumDistance",
+ "ShowNotifications","WelcomeNotification","WelcomeDuration","NotificationDuration","InitializationTimeout",
+ "InitializationPollInterval","UpdateHz","PingHz","StaleAfter","HistoryCapacity","HistoryWindow","VelocitySmoothing",
+ "AccelerationSmoothing","MaxObservedSpeed","MaxAcceleration","TeleportSlack","ReversalDotThreshold","MaxAccelerationHorizon",
+}
+
+-- A validated native PINK prediction configuration, with no invented weapon
+-- speed/gravity. Only existing motion, range and RTT calibration are reused.
+function Config.toPredictionConfig(config)
+ local legacy=PinkConfig.defaults()
+ for _,key in sharedFields do legacy[key]=config[key] end
+ legacy.TargetPart=config.HitPart
+ legacy.WeaponProfile="Default"
+ local gain=config.CamPrediction/Config.referenceCamPrediction
+ -- A zero gain disables future lead, while observation age is still known
+ -- elapsed time and remains integrated once by the original estimator.
+ if gain==0 then legacy.MinPredictionX=0;legacy.MinPredictionY=0 end
+ legacy.PredictionX=math.clamp(config.PredictionX*gain,legacy.MinPredictionX,legacy.MaxPredictionX)
+ legacy.PredictionY=math.clamp(config.PredictionY*gain,legacy.MinPredictionY,legacy.MaxPredictionY)
+ legacy.PingReferences={}
+ for _,point in config.PingReferences do
+  table.insert(legacy.PingReferences,{PingMs=point.PingMs,
+   X=math.clamp(point.X*gain,0,0.6),Y=math.clamp(point.Y*gain,0,0.6)})
+ end
+ for _,range in {"Close","Medium","Long"} do
+  -- Distance offsets are optional empirical seconds, not physical flight.
+  legacy[range.."Offset"]=math.clamp(config[range.."Offset"]*gain,-0.2,0.2)
+ end
+ return PinkConfig.new(legacy)
+end
+
+function Config.new(overrides)
+ if overrides==nil then overrides={} end
+ local ok,message=shape(overrides)
+ if not ok then return nil,message end
+ local config=Config.defaults()
+ for key,value in overrides do
+  if key=="PingReferences" then
+   config[key]={}
+   for _,point in value do table.insert(config[key],table.clone(point)) end
+  else config[key]=value end
+ end
+ for key,bounds in Config.numericLimits do
+  if config[key]<bounds[1] or config[key]>bounds[2] then return nil,key.." fuera de rango" end
+ end
+ if config.HistoryCapacity%1~=0 then return nil,"HistoryCapacity debe ser entero" end
+ if not table.find(Config.HitParts,config.HitPart) then return nil,"HitPart desconocido" end
+ if config.MinPredictionX>config.MaxPredictionX or config.MinPredictionY>config.MaxPredictionY then
+  return nil,"Límites de predicción invertidos"
+ end
+ if config.CloseDistance>=config.MediumDistance then return nil,"Rangos de distancia invertidos" end
+ -- Validate the raw curve before gain/clamping could hide malformed points.
+ local previous=-math.huge
+ for _,point in config.PingReferences do
+  if point.PingMs<0 or point.PingMs>2000 or point.PingMs<=previous
+   or point.X<0 or point.X>0.6 or point.Y<0 or point.Y>0.6 then
+   return nil,"PingReferences desordenado o fuera de límites"
+  end
+  previous=point.PingMs
+ end
+ config.LockKey,message=PinkConfig.normalizeLockKey(config.LockKey)
+ if not config.LockKey then return nil,message end
+ local legacy
+ legacy,message=Config.toPredictionConfig(config)
+ if not legacy then return nil,message end
+ return config
+end
+
+function Config.validate(config)
+ local normalized,message=Config.new(config)
+ if not normalized then return false,message end
+ local defaults=Config.defaults()
+ for key in defaults do if config[key]==nil then return false,"Falta Config."..key end end
+ return true
+end
+function Config.update(config,key,value)
+ if type(key)~="string" or Config.defaults()[key]==nil then return nil,"Campo desconocido: "..tostring(key) end
+ local nextConfig,message=Config.new(config)
+ if not nextConfig then return nil,message end
+ nextConfig[key]=value
+ return Config.new(nextConfig)
+end
+function Config.updateField(config,key,value)
+ local normalized,message=Config.update(config,key,value)
+ if not normalized then return false,message end
+ for name,child in normalized do config[name]=child end
+ return true
+end
+Config.normalizeLockKey=PinkConfig.normalizeLockKey
+Config.keyName=PinkConfig.keyName
+return Config
+end
+-- END Config
+-- BEGIN Branding | sha256 2cf8a5798fbd8bc84f40cb675025539d6a8a0994f969d6e301731821e5739b0a
+factories["Branding"] = function(loadModule)
+--!nonstrict
+-- Native geometry keeps the Sedware mark visible without an uploaded asset.
+local Branding = {
+	Title = "SEDWARE", Subtitle = "CAM LOCK", Version = "v1",
+	Colors = if Color3 then {
+		Background = Color3.fromRGB(10, 10, 10), Surface = Color3.fromRGB(20, 20, 20),
+		Input = Color3.fromRGB(27, 27, 27), Border = Color3.fromRGB(49, 39, 45),
+		Pink = Color3.fromRGB(255, 105, 180), Neon = Color3.fromRGB(255, 20, 147),
+		White = Color3.fromRGB(255, 255, 255), Muted = Color3.fromRGB(158, 151, 155),
+	} else nil,
+}
+
+-- create(className, properties, parent) is supplied by the owning UI so every
+-- piece is included in its construction-failure and unload cleanup.
+function Branding.addLogo(parent, create, position, size, zIndex)
+	local logo = create("Frame", {
+		Name = "SedwareLogo", Active = false, BackgroundTransparency = 1,
+		Position = position or UDim2.fromOffset(14, 12), Size = size or UDim2.fromOffset(26, 29),
+		ZIndex = zIndex or 4,
+	}, parent)
+	local bars = {
+		{"STop", 0.17, 0.07, 0.77, 0.17},
+		{"SUpper", 0.10, 0.15, 0.23, 0.39},
+		{"SMiddle", 0.13, 0.41, 0.75, 0.17},
+		{"SLower", 0.68, 0.49, 0.23, 0.39},
+		{"SBottom", 0.08, 0.78, 0.75, 0.17},
+	}
+	for _, bar in ipairs(bars) do
+		create("Frame", {
+			Name = bar[1], Active = false, BackgroundColor3 = Branding.Colors.Neon,
+			BorderSizePixel = 0, Position = UDim2.fromScale(bar[2], bar[3]),
+			Size = UDim2.fromScale(bar[4], bar[5]), Rotation = -12, ZIndex = zIndex or 4,
+		}, logo)
+	end
+	return logo
+end
+
+return Branding
+end
+-- END Branding
+-- BEGIN NotificationSystem | sha256 aed7057f7cd61315ac3ad73ecfd9ebafc2782597644e46a97049cc43b8c52d49
+factories["NotificationSystem"] = function(loadModule)
+--!nonstrict
+-- Reuse the existing elapsed-time fade without adding tweens or input handlers.
+local Overlay = loadModule("Overlay")
+local Branding = loadModule("Branding")
+local NotificationSystem = {}
+NotificationSystem.__index = NotificationSystem
+local FADE_SECONDS, MIN_VISIBLE_SECONDS, MAX_PENDING = 0.18, 0.6, 4
+local MIN_EVENT_DURATION = MIN_VISIBLE_SECONDS + 2 * FADE_SECONDS
+
+local function finite(value)
+	return type(value) == "number" and value == value and math.abs(value) < math.huge
+end
+
+function NotificationSystem.new(playerGui, config)
+	local self = setmetatable({destroyed = false, queue = {}}, NotificationSystem)
+	local ok, problem = pcall(function()
+		self.overlay = Overlay.new(playerGui, {ShowDot = false, DotOutline = false,
+			ShowNotifications = not config or config.ShowNotifications ~= false, NotificationDuration = 2})
+		local overlay, colors = self.overlay, Branding.Colors
+		self.gui, self.toast, self.title, self.body = overlay.gui, overlay.toast, overlay.title, overlay.body
+		self.gui.Name = "SedwareCamLock_Notifications"
+		-- The previous display-only overlay owns a dot; remove its inert instance
+		-- for this camera variant while leaving the original module unchanged.
+		overlay.dot:Destroy()
+		self.toast.Name = "CamLockNotification"
+		self.toast.BackgroundColor3 = colors.Background
+		self.toast.BackgroundTransparency = 0.05
+		self.toast.Size = UDim2.new(0.85, 0, 0, 58)
+		local limit = self.toast:FindFirstChildOfClass("UISizeConstraint")
+		if limit then limit.MaxSize = Vector2.new(284, 58) end
+		local corner = self.toast:FindFirstChildOfClass("UICorner")
+		if corner then corner.CornerRadius = UDim.new(0, 4) end
+		local accent = self.toast:FindFirstChild("PinkAccent")
+		if accent then accent.BackgroundColor3 = colors.Neon end
+		self.logo = Branding.addLogo(self.toast, function(className, properties, parent)
+			local instance = Instance.new(className)
+			table.insert(overlay.owned, instance)
+			for key, value in pairs(properties) do instance[key] = value end
+			instance.Parent = parent
+			return instance
+		end, UDim2.fromOffset(15, 15), UDim2.fromOffset(23, 26), 7)
+		self.title.TextColor3 = colors.White
+		self.title.TextSize = 13
+		self.body.TextColor3 = colors.Pink
+		self.body.TextSize = 11
+		self.body.TextWrapped = false
+		self.body.TextTruncate = Enum.TextTruncate.AtEnd
+	end)
+	if not ok then self:destroy(); error("SEDWARE Cam Lock notifications: " .. tostring(problem), 2) end
+	return self
+end
+
+function NotificationSystem:_show(notice, now)
+	local duration = notice.duration
+	if not notice.welcome and #self.queue > 0 then duration = math.min(duration, MIN_EVENT_DURATION) end
+	local accepted = self.overlay:notify(Branding.Title, now, duration, notice.subtitle)
+	if not accepted then return false end
+	notice.startedAt, notice.duration = now, duration
+	self.current = notice
+	self.title.Position, self.title.Size = UDim2.fromOffset(49, 7), UDim2.new(1, -62, 0, 23)
+	self.body.Position, self.body.Size = UDim2.fromOffset(49, 30), UDim2.new(1, -62, 0, 20)
+	return true
+end
+
+function NotificationSystem:notify(subtitle, now, duration)
+	if self.destroyed or not finite(now) then return false end
+	subtitle = tostring(subtitle or "")
+	local welcome = subtitle == "Cam Lock Loaded"
+	duration = duration or (welcome and 3 or 2)
+	if not finite(duration) or duration <= 0 then return false end
+	if self.overlay.config.ShowNotifications == false then
+		self.current = nil
+		table.clear(self.queue)
+		return self.overlay:notify(Branding.Title, now, duration, subtitle)
+	end
+	local notice = {subtitle = subtitle, duration = welcome and duration or math.max(duration, MIN_EVENT_DURATION), welcome = welcome}
+	-- OFF is an immediate state correction. Pending lock notices must never
+	-- reappear after the camera has already been released.
+	if subtitle == "Lock Disabled" then
+		table.clear(self.queue)
+		self.current = nil
+		return self:_show(notice, now)
+	end
+	-- Remove stale acquisition events before step can promote a pending toast.
+	if subtitle == "Target Lost" then
+		for index = #self.queue, 1, -1 do
+			if self.queue[index].subtitle == "Target Locked" then table.remove(self.queue, index) end
+		end
+	end
+	self:step(now)
+	if not self.current then return self:_show(notice, now) end
+	if #self.queue == MAX_PENDING then table.remove(self.queue, 1) end
+	table.insert(self.queue, notice)
+	local current = self.current
+	-- Welcome retains its full configured duration. Other messages yield soon
+	-- while still allowing 0.6 seconds at full opacity plus both existing fades.
+	if not current.welcome then
+		current.duration = math.min(current.duration,
+			math.max(MIN_EVENT_DURATION, now - current.startedAt + FADE_SECONDS))
+		self.overlay.noticeDuration = current.duration
+	end
+	return true
+end
+function NotificationSystem:step(now)
+	if self.destroyed or not finite(now) then return end
+	self.overlay:step(now)
+	if self.overlay.config.ShowNotifications == false then
+		self.current = nil
+		table.clear(self.queue)
+		return
+	end
+	if self.current and now - self.current.startedAt < self.current.duration then return end
+	self.current = nil
+	if #self.queue > 0 then
+		-- Start at the observed frame time; a long frame cannot consume unseen
+		-- events or skip through the queue before the user gets to see them.
+		self:_show(table.remove(self.queue, 1), now)
+		self.overlay:step(now)
+	end
+end
+function NotificationSystem:destroy()
+	if self.destroyed then return end
+	self.destroyed = true
+	self.current = nil
+	table.clear(self.queue)
+	if self.overlay then self.overlay:destroy() end
+end
+
+return NotificationSystem
+end
+-- END NotificationSystem
+-- BEGIN UI | sha256 a2b3a7f60aabb32b9abff409a9e58fc383b2adde2b8691f7ace7ad02bf117f6c
+factories["UI"] = function(loadModule)
+--!nonstrict
+local Branding = loadModule("Branding")
+local UserInputService = if game then game:GetService("UserInputService") else nil
+local World = if game then game:GetService("Workspace") else nil
+local UI = {}
+UI.__index = UI
+local WIDTH, HEIGHT = 310, 324
+local PARTS = {"Head", "UpperTorso", "HumanoidRootPart"}
+local NUMBERS = {
+	{"CamPrediction", "Cam Prediction", "%.2f"},
+	{"PredictionX", "Prediction X", "%.4f"},
+	{"PredictionY", "Prediction Y", "%.4f"},
+	{"Smoothness", "Smoothness", "%.3f"},
+	{"Radius", "Radius", "%g"},
+}
+
+local function finite(value)
+	return type(value) == "number" and value == value and math.abs(value) < math.huge
+end
+local function point(input)
+	local position = input and input.Position
+	if position and finite(position.X) and finite(position.Y) then return position.X, position.Y end
+	return nil
+end
+local function contains(object, x, y)
+	if not object or not x then return false end
+	local position, size = object.AbsolutePosition, object.AbsoluteSize
+	return x >= position.X and x <= position.X + size.X and y >= position.Y and y <= position.Y + size.Y
+end
+
+function UI:_create(className, properties, parent)
+	local instance = Instance.new(className)
+	table.insert(self.owned, instance)
+	for key, value in pairs(properties) do instance[key] = value end
+	instance.Parent = parent
+	return instance
+end
+function UI:_connect(signal, callback)
+	local connection = signal:Connect(callback)
+	table.insert(self.connections, connection)
+	return connection
+end
+function UI:_label(parent, name, text, position, size, textSize, color)
+	return self:_create("TextLabel", {
+		Name = name, Active = false, BackgroundTransparency = 1, Text = text,
+		TextColor3 = color or Branding.Colors.White, Font = Enum.Font.Gotham,
+		TextSize = textSize or 12, TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center, Position = position, Size = size, ZIndex = 3,
+	}, parent)
+end
+function UI:_control(className, field, parent)
+	local control = self:_create(className, {
+		Name = field, Active = true, BackgroundColor3 = Branding.Colors.Input,
+		BorderSizePixel = 0, Position = UDim2.fromOffset(143, 3), Size = UDim2.fromOffset(133, 25),
+		Text = "", TextColor3 = Branding.Colors.White, Font = Enum.Font.Gotham,
+		TextSize = 11, ZIndex = 4,
+	}, parent)
+	self:_create("UIStroke", {Color = Branding.Colors.Border, Thickness = 1,
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border}, control)
+	self:_create("UICorner", {CornerRadius = UDim.new(0, 3)}, control)
+	self.controls[field] = control
+	return control
+end
+function UI:_row(index, field, title)
+	local row = self:_create("Frame", {
+		Name = field .. "Row", Active = false, BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(16, 82 + (index - 1) * 32), Size = UDim2.fromOffset(278, 31), ZIndex = 3,
+	}, self.panel)
+	self:_label(row, "Label", title, UDim2.fromOffset(0, 0), UDim2.fromOffset(140, 31))
+	return row
+end
+function UI:_notice(reason)
+	if type(self.onNotice) == "function" then pcall(self.onNotice, tostring(reason or "Invalid value")) end
+end
+function UI:_change(field, value)
+	if self.destroyed then return false end
+	local ok, accepted, reason = pcall(self.onChange, field, value)
+	if not ok then reason, accepted = accepted, false end
+	if accepted == true then
+		self:setValue(field, value)
+		return true
+	end
+	self:setValue(field, self.values[field])
+	self:_notice(reason)
+	return false
+end
+function UI:setValue(field, value)
+	if self.destroyed or not self.controls[field] then return false end
+	self.values[field] = value
+	local control = self.controls[field]
+	if field == "Enabled" then
+		control.Text = value == true and "ON" or "OFF"
+		control.BackgroundColor3 = value == true and Branding.Colors.Neon or Branding.Colors.Input
+		control.TextColor3 = value == true and Branding.Colors.White or Branding.Colors.Muted
+	elseif field == "HitPart" then
+		control.Text = tostring(value) .. "  ▾"
+	else
+		control.Text = finite(value) and string.format(self.formats[field], value) or ""
+	end
+	return true
+end
+function UI:closeDropdown()
+	if not self.destroyed and self.dropdown then self.dropdown.Visible = false end
+end
+
+function UI:_fit()
+	if self.destroyed then return end
+	local camera = World and World.CurrentCamera
+	local viewport = camera and camera.ViewportSize or self.gui.AbsoluteSize
+	if not viewport or not finite(viewport.X) or not finite(viewport.Y) or viewport.X <= 0 or viewport.Y <= 0 then return end
+	local scale = math.max(0.01, math.min(1, (viewport.X - 16) / WIDTH, (viewport.Y - 16) / HEIGHT))
+	self.scale.Scale = scale
+	local position = self.panel.Position
+	local marginX, marginY = math.min(8, math.max(0, viewport.X - WIDTH * scale)), math.min(8, math.max(0, viewport.Y - HEIGHT * scale))
+	self.panel.Position = UDim2.fromOffset(
+		math.clamp(position.X.Offset, marginX, math.max(marginX, viewport.X - WIDTH * scale - marginX)),
+		math.clamp(position.Y.Offset, marginY, math.max(marginY, viewport.Y - HEIGHT * scale - marginY))
+	)
+end
+function UI:step(_now)
+	self:_fit()
+end
+function UI:_bindInput()
+	self:_connect(self.header.InputBegan, function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		local x, y = point(input)
+		if not x then return end
+		self:closeDropdown()
+		self.drag = {input = input, touch = input.UserInputType == Enum.UserInputType.Touch,
+			x = x, y = y, position = self.panel.Position}
+	end)
+	self:_connect(UserInputService.InputChanged, function(input)
+		local drag = self.drag
+		if not drag then return end
+		if drag.touch then
+			if input ~= drag.input then return end
+		elseif input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+		local x, y = point(input)
+		if not x then return end
+		self.panel.Position = UDim2.fromOffset(drag.position.X.Offset + x - drag.x, drag.position.Y.Offset + y - drag.y)
+		self:_fit()
+	end)
+	self:_connect(UserInputService.InputEnded, function(input)
+		if self.drag and (input == self.drag.input or (not self.drag.touch and input.UserInputType == Enum.UserInputType.MouseButton1)) then self.drag = nil end
+	end)
+	self:_connect(UserInputService.WindowFocusReleased, function() self.drag = nil; self:closeDropdown() end)
+	self:_connect(UserInputService.InputBegan, function(input)
+		if not self.dropdown.Visible then return end
+		if input.KeyCode == Enum.KeyCode.Escape then self:closeDropdown(); return end
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		local x, y = point(input)
+		if x and not contains(self.dropdown, x, y) and not contains(self.controls.HitPart, x, y) then self:closeDropdown() end
+	end)
+end
+
+function UI.new(playerGui, config, onChange, onNotice)
+	assert(playerGui, "SEDWARE Cam Lock requires PlayerGui")
+	assert(type(config) == "table" and type(onChange) == "function", "SEDWARE Cam Lock UI requires validated config and onChange")
+	local self = setmetatable({config = config, onChange = onChange, onNotice = onNotice,
+		values = {}, controls = {}, formats = {}, hitPartOptions = {}, owned = {}, connections = {}, destroyed = false}, UI)
+	local ok, problem = xpcall(function()
+		local colors = Branding.Colors
+		self.gui = self:_create("ScreenGui", {
+			Name = "SedwareCamLock_UI", ResetOnSpawn = false, IgnoreGuiInset = true,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 41,
+		}, playerGui)
+		self.panel = self:_create("Frame", {
+			Name = "CamLockPanel", Active = true, BackgroundColor3 = colors.Background, BorderSizePixel = 0,
+			Position = UDim2.fromOffset(24, 110), Size = UDim2.fromOffset(WIDTH, HEIGHT), ZIndex = 2,
+		}, self.gui)
+		self.scale = self:_create("UIScale", {Scale = 1}, self.panel)
+		self:_create("UIStroke", {Color = colors.Border, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}, self.panel)
+		self:_create("UICorner", {CornerRadius = UDim.new(0, 4)}, self.panel)
+		self.header = self:_create("Frame", {
+			Name = "Header", Active = true, BackgroundColor3 = colors.Surface, BorderSizePixel = 0,
+			Position = UDim2.fromOffset(1, 1), Size = UDim2.fromOffset(WIDTH - 2, 49), ZIndex = 3,
+		}, self.panel)
+		self.logo = Branding.addLogo(self.header, function(...) return self:_create(...) end)
+		self.title = self:_label(self.header, "Title", Branding.Title, UDim2.fromOffset(51, 6), UDim2.fromOffset(194, 22), 17)
+		self.title.Font = Enum.Font.GothamBold
+		self.subtitle = self:_label(self.header, "Subtitle", Branding.Subtitle, UDim2.fromOffset(52, 29), UDim2.fromOffset(170, 14), 9, colors.Pink)
+		self.version = self:_label(self.header, "Version", Branding.Version, UDim2.fromOffset(270, 15), UDim2.fromOffset(26, 17), 10, colors.Muted)
+		self:_create("Frame", {Name = "PinkAccent", Active = false, BackgroundColor3 = colors.Neon, BorderSizePixel = 0,
+			Position = UDim2.fromOffset(0, 50), Size = UDim2.fromOffset(WIDTH, 2), ZIndex = 3}, self.panel)
+		self.mainLabel = self:_label(self.panel, "MainLabel", "MAIN", UDim2.fromOffset(16, 57), UDim2.fromOffset(278, 18), 10, colors.Pink)
+		self.mainLabel.Font = Enum.Font.GothamBold
+		local enable = self:_control("TextButton", "Enabled", self:_row(1, "Enabled", "Enable"))
+		enable.AutoButtonColor = false
+		self:_connect(enable.Activated, function() self:_change("Enabled", self.values.Enabled ~= true) end)
+		local partRow = self:_row(2, "HitPart", "Hit Part")
+		local part = self:_control("TextButton", "HitPart", partRow)
+		part.AutoButtonColor = false
+		self.dropdown = self:_create("Frame", {
+			Name = "HitPartOptions", Active = true, BackgroundColor3 = colors.Surface, BorderSizePixel = 0,
+			Position = UDim2.fromOffset(143, 31), Size = UDim2.fromOffset(133, 87), Visible = false, ZIndex = 20,
+		}, partRow)
+		self:_create("UIStroke", {Color = colors.Pink, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}, self.dropdown)
+		for index, value in ipairs(PARTS) do
+			local choice = self:_create("TextButton", {
+				Name = value, Active = true, AutoButtonColor = true, BackgroundColor3 = colors.Surface,
+				BorderSizePixel = 0, Text = value, TextColor3 = colors.White, Font = Enum.Font.Gotham,
+				TextSize = 10, Position = UDim2.fromOffset(2, 2 + (index - 1) * 28), Size = UDim2.fromOffset(129, 27), ZIndex = 21,
+			}, self.dropdown)
+			self.hitPartOptions[value] = choice
+			self:_connect(choice.Activated, function() self:closeDropdown(); self:_change("HitPart", value) end)
+		end
+		self:_connect(part.Activated, function() self.dropdown.Visible = not self.dropdown.Visible end)
+		for index, entry in ipairs(NUMBERS) do
+			local field, title, format = entry[1], entry[2], entry[3]
+			self.formats[field] = format
+			local input = self:_control("TextBox", field, self:_row(index + 2, field, title))
+			input.ClearTextOnFocus = false
+			self:_connect(input.FocusLost, function()
+				local value = tonumber(input.Text)
+				if not finite(value) then
+					self:setValue(field, self.values[field]); self:_notice("Enter a finite number")
+				else self:_change(field, value) end
+			end)
+		end
+		for field in pairs(self.controls) do self:setValue(field, config[field]) end
+		self:_bindInput()
+		self:_fit()
+	end, function(err)
+		return if debug and type(debug.traceback) == "function" then debug.traceback(tostring(err), 2) else tostring(err)
+	end)
+	if not ok then self:destroy(); error("SEDWARE Cam Lock UI: " .. tostring(problem), 2) end
+	return self
+end
+
+function UI:destroy()
+	if self.destroyed then return end
+	self.destroyed, self.drag = true, nil
+	for _, connection in ipairs(self.connections) do pcall(function() connection:Disconnect() end) end
+	table.clear(self.connections)
+	for index = #self.owned, 1, -1 do pcall(function() self.owned[index]:Destroy() end) end
+	table.clear(self.owned)
+end
+
+return UI
+end
+-- END UI
+-- BEGIN TargetSelector | sha256 057aa0604e36c90c848c3c8a957b9a71b45aed0039d1b5e4136a1a0f1600a289
+factories["TargetSelector"] = function(loadModule)
+--!nonstrict
+-- Reuse the existing deterministic screen-distance selector. Character and
+-- visibility checks happen on acquisition; a valid locked player is retained.
+local Selection=loadModule("Selection")
+local TargetSelector={}
+TargetSelector.__index=TargetSelector
+local function finite(n) return type(n)=="number" and n==n and math.abs(n)<math.huge end
+local function vector(v)
+ local ok,result=pcall(function() return v~=nil and finite(v.X) and finite(v.Y) and finite(v.Z) end)
+ return ok and result
+end
+function TargetSelector.new(config,report)
+ local self=setmetatable({config=config,world=report.world,player=report.player,services=report.services},TargetSelector)
+ if config.VisibilityCheck then
+  self.rayParams=RaycastParams.new();self.rayParams.FilterType=Enum.RaycastFilterType.Exclude;self.rayParams.IgnoreWater=true
+ end
+ return self
+end
+function TargetSelector:origin()
+ local camera=self.world.CurrentCamera
+ if camera and vector(camera.CFrame.Position) then return camera.CFrame.Position end
+ local character=self.player.Character
+ local head=character and (character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart"))
+ return if head and vector(head.Position) then head.Position else nil
+end
+function TargetSelector:resolve(player)
+ if not player or player==self.player or player.Parent~=self.services.Players then return nil,"player unavailable" end
+ local character=player.Character
+ if not character or not character:IsDescendantOf(self.world) then return nil,"character unavailable" end
+ local humanoid=character:FindFirstChildOfClass("Humanoid")
+ if not humanoid or not finite(humanoid.Health) or humanoid.Health<=0 then return nil,"target is dead" end
+ local part=character:FindFirstChild(self.config.HitPart)
+ if not part and self.config.HitPart=="UpperTorso" and self.config.FallbackR6 then part=character:FindFirstChild("Torso") end
+ if not part or not part:IsA("BasePart") or not part:IsDescendantOf(character) or not vector(part.Position) then
+  return nil,"selected Hit Part is unavailable"
+ end
+ local origin=self:origin()
+ if not vector(origin) then return nil,"camera origin unavailable" end
+ local distance=(part.Position-origin).Magnitude
+ if not finite(distance) or distance>self.config.MaxDistance then return nil,"target exceeds MaxDistance" end
+ return {player=player,character=character,humanoid=humanoid,part=part,actualHitPart=part.Name,
+  distanceStuds=distance,valid=true}
+end
+function TargetSelector:visible(data)
+ if not self.config.VisibilityCheck then return true end
+ if not self.rayParams then
+  self.rayParams=RaycastParams.new();self.rayParams.FilterType=Enum.RaycastFilterType.Exclude;self.rayParams.IgnoreWater=true
+ end
+ local origin=self:origin()
+ if not vector(origin) then return false end
+ self.rayParams.FilterDescendantsInstances=if self.player.Character then {self.player.Character} else {}
+ local direction=data.part.Position-origin
+ if direction.Magnitude<0.001 then return true end
+ local hit=self.world:Raycast(origin,direction,self.rayParams)
+ return hit==nil or (hit.Instance and hit.Instance:IsDescendantOf(data.character))
+end
+function TargetSelector:acquire(player)
+ local camera=self.world.CurrentCamera
+ local size=camera and camera.ViewportSize
+ if not size or not finite(size.X) or not finite(size.Y) or size.X<=0 or size.Y<=0 then return nil,"camera viewport unavailable" end
+ -- Center reference is consistent in both first and third person.
+ local reference=Selection.reference("FirstPerson",size,nil,nil)
+ local candidates,diagnostics={}, {reference=reference,evaluated=0,valid=0,reasons={}}
+ for _,candidate in if player then {player} else self.services.Players:GetPlayers() do
+  if candidate~=self.player then
+   diagnostics.evaluated+=1
+   local data,reason=self:resolve(candidate)
+   if data then
+    local point,onScreen=camera:WorldToViewportPoint(data.part.Position)
+    data.screenPosition=point;data.onScreen=onScreen==true and vector(point) and point.Z>0
+    data.visible=self:visible(data)
+    if not data.onScreen then reason="offscreen or behind camera"
+    elseif not data.visible then reason="occluded"
+    elseif not Selection.within(data,reference,self.config.Radius) then reason="outside Radius"
+    else table.insert(candidates,data);diagnostics.valid+=1 end
+   end
+   if reason and #diagnostics.reasons<32 then table.insert(diagnostics.reasons,tostring(candidate.Name)..": "..reason) end
+  end
+ end
+ local selected=Selection.nearest(candidates,reference,self.config.Radius)
+ diagnostics.selected=selected and selected.player.Name
+ self.lastSelection=diagnostics
+ return selected,if selected then nil else "No valid target inside Radius"
+end
+return TargetSelector
+end
+-- END TargetSelector
+-- BEGIN CameraController | sha256 67c2e6c5689785acd92b934964025fab7f544ad2763b3f36326441f625f20bcd
+factories["CameraController"] = function(loadModule)
+--!nonstrict
+-- Orientation-only camera tracking. The session runs this AFTER Roblox's camera
+-- step and supplies the current Camera and the already predicted world position.
+-- Prediction never passes through an additional position filter here.
+local CameraController = {}
+CameraController.__index = CameraController
+
+local EPSILON = 1e-6
+local function finite(value)
+ return type(value)=="number" and value==value and math.abs(value)<math.huge
+end
+local function vectorOK(value)
+ local ok,valid=pcall(function()
+  return value~=nil and finite(value.X) and finite(value.Y) and finite(value.Z)
+   and finite(value.Magnitude)
+ end)
+ return ok and valid
+end
+local function frameOK(value)
+ local ok,valid=pcall(function()
+  return value~=nil and vectorOK(value.Position) and vectorOK(value.LookVector)
+   and vectorOK(value.UpVector) and vectorOK(value.RightVector)
+   and value.LookVector.Magnitude>EPSILON and value.UpVector.Magnitude>EPSILON
+   and value.RightVector.Magnitude>EPSILON
+ end)
+ return ok and valid
+end
+local function dot(a,b)
+ return a.X*b.X+a.Y*b.Y+a.Z*b.Z
+end
+local function unit(value)
+ if not vectorOK(value) or value.Magnitude<=EPSILON then return nil end
+ return value/value.Magnitude
+end
+
+-- Smoothness is a dimensionless 0..1 strength control, not a per-frame Lerp
+-- fraction. Default .405 => tau=.019683 s and ~59 ms to close 95% of an angular
+-- step. Doubling FPS preserves the response over the same elapsed time.
+function CameraController.timeConstant(smoothness)
+ if not finite(smoothness) or smoothness<0 or smoothness>1 then
+  return nil,"Smoothness must be finite and between 0 and 1"
+ end
+ return 0.12*smoothness*smoothness
+end
+function CameraController.alpha(smoothness,dt)
+ local tau,message=CameraController.timeConstant(smoothness)
+ if not tau then return nil,message end
+ if not finite(dt) or dt<0 then return nil,"deltaTime must be finite and nonnegative" end
+ if dt==0 then return 0 end
+ if tau==0 then return 1 end
+ return math.clamp(1-math.exp(-dt/tau),0,1)
+end
+
+local function nativeVector(x,y,z) return Vector3.new(x,y,z) end
+local function nativeLookAt(position,target,up) return CFrame.lookAt(position,target,up) end
+local function nativeRebase(frame,position) return CFrame.new(position)*frame.Rotation end
+local function nativeLerp(frame,goal,alpha) return frame:Lerp(goal,alpha) end
+
+-- Adapters are deliberately optional: production always uses native Roblox
+-- Vector3/CFrame APIs. Numerical CLI checks can inject these four operations.
+function CameraController.new(config,callbacks)
+ assert(type(config)=="table","CameraController requires a Config table")
+ callbacks=callbacks or {}
+ return setmetatable({config=config,camera=nil,lastFrame=nil,
+  newVector=callbacks.newVector or nativeVector,lookAt=callbacks.lookAt or nativeLookAt,
+  rebase=callbacks.rebase or nativeRebase,lerp=callbacks.lerp or nativeLerp},CameraController)
+end
+function CameraController:setConfig(config)
+ if type(config)~="table" then return false,"Config must be a table" end
+ self.config=config
+ return true
+end
+function CameraController:reset()
+ -- Forget only our orientation state. No stale camera CFrame is restored, and
+-- CameraType, CameraSubject, Focus, mouse and character properties are untouched.
+ self.camera=nil
+ self.lastFrame=nil
+end
+function CameraController:destroy() self:reset() end
+
+function CameraController:_stableUp(direction,frame)
+ -- Project the previous up vector onto the new view plane. This parallel
+-- transports the orientation through vertical aim without world-up singularities.
+ local up=unit(frame.UpVector-direction*dot(frame.UpVector,direction))
+ if up then return up end
+ -- A sudden 90-degree turn can point exactly along the previous UpVector.
+ -- The previous LookVector then supplies a perpendicular reference.
+ up=unit(frame.LookVector-direction*dot(frame.LookVector,direction))
+ if up then return up end
+ -- Defensive fallback for malformed adapters; choose the least parallel axis.
+ local reference=if math.abs(direction.Y)<0.9 then self.newVector(0,1,0) else self.newVector(1,0,0)
+ return unit(reference-direction*dot(reference,direction))
+end
+
+function CameraController:_update(camera,predicted,dt)
+ local alpha,message=CameraController.alpha(self.config.Smoothness,dt)
+ if not alpha then return false,message end
+ if dt<=0 then return false,"deltaTime must be positive" end
+ if camera==nil then return false,"CurrentCamera is unavailable" end
+ if not vectorOK(predicted) then return false,"Predicted position must be a finite Vector3" end
+ local current=camera.CFrame
+ if not frameOK(current) then return false,"Camera CFrame is invalid" end
+ local direction=unit(predicted-current.Position)
+ if not direction then return false,"Predicted position coincides with camera position" end
+
+ -- Roblox may replace its CFrame before every camera callback. Retain our last
+-- OUTPUT rotation so smoothing actually converges, but repivot at the live
+-- position every frame. A replacement Camera starts from its own orientation.
+ local previous=if self.camera==camera and self.lastFrame then self.lastFrame else current
+ local base=self.rebase(previous,current.Position)
+ local up=self:_stableUp(direction,base)
+ if not up then return false,"Cannot construct a stable camera up vector" end
+ local goal=self.lookAt(current.Position,predicted,up)
+ if not frameOK(goal) then return false,"Camera orientation is invalid" end
+ local result=if alpha==1 then goal else self.lerp(base,goal,alpha)
+ -- Rebase after interpolation as well, guaranteeing the live position is the
+-- sole translation source, including when injected adapters round positions.
+ result=self.rebase(result,current.Position)
+ if not frameOK(result) then return false,"Interpolated camera CFrame is invalid" end
+ camera.CFrame=result
+ self.camera=camera
+ self.lastFrame=result
+ return true
+end
+function CameraController:update(camera,predicted,dt)
+ -- Missing/destroyed cameras and engine errors are skipped without throwing out
+-- of RenderStepped. All validation precedes the single CFrame assignment.
+ local ok,updated,message=pcall(self._update,self,camera,predicted,dt)
+ if not ok then return false,"Camera update failed: "..tostring(updated) end
+ return updated,message
+end
+
+return CameraController
+end
+-- END CameraController
+-- BEGIN PredictionEngine | sha256 3fbf246a7753c185c28d39f8aaf21713bf1b6b8b88d170a4b4488c12b006c33d
+factories["PredictionEngine"] = function(loadModule)
+--!nonstrict
+-- Preserve the existing bounded Memory Tracking, reversal/teleport recovery,
+-- elapsed-time ping EMA and axis prediction. Camera interpolation is separate.
+local Config = loadModule("Config")
+local Prediction = loadModule("PinkPrediction")
+local PredictionEngine = {}
+PredictionEngine.__index = PredictionEngine
+
+local function aliases(self)
+ self.history=self.prediction.history
+ self.latency=self.prediction.latency
+ self.settings=self.prediction.settings
+end
+function PredictionEngine.new(config)
+ local normalized,message=Config.new(config)
+ assert(normalized,message or "Configuración Cam Lock inválida")
+ local legacy
+ legacy,message=Config.toPredictionConfig(normalized)
+ assert(legacy,message)
+ local self=setmetatable({config=normalized,prediction=Prediction.new(legacy)},PredictionEngine)
+ aliases(self)
+ return self
+end
+function PredictionEngine:observe(t,position,state)
+ local accepted=self.prediction:observe(t,position,state)
+ aliases(self)
+ return accepted
+end
+function PredictionEngine:samplePing(rttSeconds,now)
+ local accepted=self.prediction:samplePing(rttSeconds,now)
+ aliases(self)
+ return accepted
+end
+function PredictionEngine:predict(origin,now)
+ local output=self.prediction:predict(origin,now)
+ if output then
+  output.camPrediction=self.config.CamPrediction
+  output.camGain=self.config.CamPrediction/Config.referenceCamPrediction
+  output.hitPart=self.config.HitPart
+  output.predictionUnits="seconds"
+  output.camPredictionUnits="dimensionless"
+ end
+ return output
+end
+function PredictionEngine:reset()
+ self.prediction:reset()
+ aliases(self)
+end
+function PredictionEngine:updateConfig(config)
+ local normalized,message=Config.new(config)
+ if not normalized then return false,message end
+ local legacy
+ legacy,message=Config.toPredictionConfig(normalized)
+ if not legacy then return false,message end
+ local hitPartChanged=normalized.HitPart~=self.config.HitPart
+ self.config=normalized
+ self.prediction.config=legacy
+ self.prediction:_sync()
+ -- GUI edits must retain motion samples and accepted ping. Rebase auto slew
+ -- so explicit prediction edits take effect on the next camera frame.
+ for _,policy in self.prediction.policies do
+  policy.baseX=nil;policy.baseY=nil;policy.lastBaseTime=nil
+ end
+ if hitPartChanged then
+  -- A different body part is a new position stream. Retain latency but reset
+  -- the motion and output filters; never infer velocity across body parts.
+  local retainedLatency=self.prediction.latency
+  local retainedPing=self.prediction.pingAvailable
+  self.prediction:reset()
+  self.prediction.latency=retainedLatency
+  self.prediction.pingAvailable=retainedPing
+ end
+ aliases(self)
+ return true
+end
+return PredictionEngine
+end
+-- END PredictionEngine
+-- BEGIN Cleanup | sha256 81e5306ede1d7bef0bee311f7c74df5a53e7426dea39c826d3f9fd9297400c3c
+factories["Cleanup"] = function(loadModule)
+--!nonstrict
+-- Idempotent ownership of signal connections, render bindings and resources.
+local Cleanup={}
+Cleanup.__index=Cleanup
+function Cleanup.new() return setmetatable({tasks={},destroyed=false},Cleanup) end
+function Cleanup:add(callback)
+ assert(type(callback)=="function","Cleanup callback required")
+ if self.destroyed then pcall(callback) else table.insert(self.tasks,callback) end
+ return callback
+end
+function Cleanup:connect(signal,callback,label)
+ local connection=signal:Connect(callback)
+ self:add(function() connection:Disconnect() end)
+ assert(connection and connection.Connected==true and type(connection.Disconnect)=="function",(label or "Signal").." failed to connect")
+ return connection
+end
+function Cleanup:destroy()
+ if self.destroyed then return end
+ self.destroyed=true
+ for index=#self.tasks,1,-1 do pcall(self.tasks[index]) end
+ table.clear(self.tasks)
+end
+return Cleanup
+end
+-- END Cleanup
+-- BEGIN Session | sha256 226097975f7702aa3ac5209c86d94e3ffac7001c64ab265fa063bf4e22e2cc48
+factories["Session"] = function(loadModule)
+--!nonstrict
+local Config=loadModule("Config")
+local UI=loadModule("UI")
+local NotificationSystem=loadModule("NotificationSystem")
+local TargetSelector=loadModule("TargetSelector")
+local PredictionEngine=loadModule("PredictionEngine")
+local CameraController=loadModule("CameraController")
+local Cleanup=loadModule("Cleanup")
+local Runtime=loadModule("Runtime")
+local Overlay=loadModule("Overlay")
+local Session={}
+Session.__index=Session
+local OWNER="SedwareCamLock_Owner_v1"
+local function finite(n) return type(n)=="number" and n==n and math.abs(n)<math.huge end
+function Session:_clock()
+ local value=self.world:GetServerTimeNow();assert(finite(value),"Invalid Cam Lock clock");return value
+end
+function Session:_notify(message,duration)
+ if self.notifications and not self.destroyed then self.notifications:notify(message,self:_clock(),duration or self.config.NotificationDuration) end
+end
+function Session:_bindTarget(data)
+ self.targetCleanup:destroy();self.targetCleanup=Cleanup.new();self.locked=data
+ local function lost()
+  if self.locked==data then self:UnlockTarget("Target Lost") end
+ end
+ self.targetCleanup:connect(data.humanoid.Died,lost,"Target.Died")
+ self.targetCleanup:connect(data.character.AncestryChanged,function()
+  if not data.character:IsDescendantOf(self.world) then lost() end
+ end)
+ self.targetCleanup:connect(data.part.AncestryChanged,function()
+  if not data.part:IsDescendantOf(data.character) then lost() end
+ end)
+ if data.player.CharacterRemoving then
+  self.targetCleanup:connect(data.player.CharacterRemoving,function(character) if character==data.character then lost() end end)
+ end
+end
+function Session:LockTarget(player)
+ if self.destroyed or not self.config.Enabled then return false,"Cam Lock is disabled" end
+ if self.locked then return false,"Target is already locked" end
+ self.manualReleased=false
+ local now=self:_clock()
+ self.nextAcquisition=now+self.config.AcquisitionInterval
+ local data,reason=self.selector:acquire(player)
+ self.lastSelection=self.selector.lastSelection
+ if not data then
+  if not self.nextNoTargetNotice or now>=self.nextNoTargetNotice then
+   self.nextNoTargetNotice=now+2;self:_notify(reason)
+  end
+  return false,reason
+ end
+ self.prediction:reset();self.controller:reset();self.predictionOutput=nil
+ self.nextObservation=nil;self.nextPing=nil
+ self:_bindTarget(data)
+ self:_ping(now)
+ self.prediction:observe(now,data.part.Position,tostring(data.humanoid:GetState()))
+ self.nextObservation=now+1/self.config.UpdateHz
+ self.predictionOutput=self.prediction:predict(self.selector:origin(),now)
+ self:_notify("Target Locked")
+ Runtime.trace(self.report,"CamTarget","LOCKED",tostring(data.player.Name).." | "..data.actualHitPart)
+ return true
+end
+function Session:UnlockTarget(reason)
+ if not self.locked then return false end
+ self.locked=nil;self.predictionOutput=nil
+ self.targetCleanup:destroy();self.targetCleanup=Cleanup.new()
+ self.prediction:reset();self.controller:reset();self.nextObservation=nil;self.nextPing=nil
+ self.nextAcquisition=self:_clock()+self.config.AcquisitionInterval
+ if reason then self:_notify(reason) end
+ return true
+end
+function Session:GetLockedTarget() return if self.locked and not self.destroyed then self.locked.player else nil end
+function Session:GetPrediction() return if not self.destroyed then self.predictionOutput else nil end
+function Session:GetPredictedPosition() local prediction=self:GetPrediction();return prediction and prediction.position end
+function Session:configure(field,value)
+ if self.destroyed then return false,"Session is unloaded" end
+ local updated,message=Config.update(self.config,field,value)
+ if not updated then return false,message end
+ local priorEnabled=self.config.Enabled
+ local priorPart=self.config.HitPart
+ local accepted,problem=self.prediction:updateConfig(updated)
+ if not accepted then return false,problem end
+ for name,child in updated do self.config[name]=child end
+ self.controller:setConfig(self.config)
+ if self.ui then self.ui:setValue(field,self.config[field]) end
+ self.predictionOutput=nil
+ if priorPart~=self.config.HitPart then
+  self.controller:reset();self.nextObservation=nil
+  if self.locked then
+   local data,reason=self.selector:resolve(self.locked.player)
+   if data and data.character==self.locked.character then self:_bindTarget(data)
+   else self:UnlockTarget("Target Lost");Runtime.trace(self.report,"HitPart","REJECT",reason) end
+  end
+ end
+ if priorEnabled~=self.config.Enabled then
+  if self.config.Enabled then self.manualReleased=false;self:_notify("Lock Enabled");self.nextAcquisition=0;self:LockTarget()
+  else self:UnlockTarget();self.controller:reset();self:_notify("Lock Disabled") end
+ end
+ return true
+end
+function Session:SetEnabled(value) return self:configure("Enabled",value) end
+function Session:SetHitPart(value) return self:configure("HitPart",value) end
+function Session:_ping(now)
+ if self.nextPing and now<self.nextPing then return end
+ self.nextPing=now+1/self.config.PingHz
+ local measured,rtt=pcall(function() return self.player:GetNetworkPing() end)
+ self.prediction:samplePing(if measured and finite(rtt) and rtt>=0 and rtt<=2 then rtt else nil,now)
+end
+function Session:_pause(reason,now)
+ self.controller:reset()
+ if reason~=self.pauseReason then Runtime.trace(self.report,"CamTracking","PAUSED",reason) end
+ self.pauseReason=reason
+end
+function Session:_step(dt)
+ if self.destroyed then return end
+ local now=self:_clock()
+ self.ui:step();self.notifications:step(now)
+ if not self.config.Enabled then return end
+ local camera=self.world.CurrentCamera
+ local size=camera and camera.ViewportSize
+ if not camera or not size or not finite(size.X) or not finite(size.Y) or size.X<=0 or size.Y<=0 then
+  self:_pause("CurrentCamera or viewport temporarily unavailable",now);return
+ end
+ self:_ping(now)
+ if not self.locked and not self.manualReleased and now>=(self.nextAcquisition or 0) then self:LockTarget() end
+ if not self.locked then return end
+ local data,reason=self.selector:resolve(self.locked.player)
+ if not data or data.character~=self.locked.character or data.part~=self.locked.part then
+  self:UnlockTarget("Target Lost");Runtime.trace(self.report,"CamTarget","LOST",reason or "character/part changed");return
+ end
+ if not self.nextObservation or now+1e-7>=self.nextObservation then
+  self.nextObservation=now+1/self.config.UpdateHz
+  self.prediction:observe(now,data.part.Position,tostring(data.humanoid:GetState()))
+ end
+ self.predictionOutput=self.prediction:predict(camera.CFrame.Position,now)
+ if not self.predictionOutput then self:_pause("Prediction unavailable or observation stale",now);return end
+ if self.config.RespectScriptableCamera and camera.CameraType==Enum.CameraType.Scriptable then
+  self:_pause("Scriptable camera active; preserving its controller",now);return
+ end
+ if not finite(dt) or dt<=0 then return end
+ local moved,message=self.controller:update(camera,self.predictionOutput.position,dt)
+ if not moved then self:_pause(message,now);return end
+ if self.pauseReason then Runtime.trace(self.report,"CamTracking","RESUMED","Predicted Hit Part tracking resumed") end
+ self.pauseReason=nil
+end
+function Session:destroy()
+ if self.destroyed then return end
+ self.destroyed=true;self.config.Enabled=false;self.locked=nil;self.predictionOutput=nil
+ self.targetCleanup:destroy();self.cleanup:destroy()
+ if self.controller then self.controller:destroy() end
+ if self.ui then self.ui:destroy() end
+ if self.notifications then self.notifications:destroy() end
+ if self.owner then pcall(function() self.owner:Destroy() end) end
+ self.active=false
+ self.report.ready=false;self.report.sessionActive=false
+ Runtime.trace(self.report,"CamSession","STOPPED","Camera binding, UI and all owned signals removed")
+end
+Session.Unload=Session.destroy
+function Session.notifyFailure(report,message)
+ Runtime.reportFailure(message)
+ local shown,problem=pcall(Overlay.showFailure,report and report.playerGui,message)
+ if not shown then Runtime.trace(report,"CamFailureNotification","FAIL",problem) end
+end
+function Session.init(options,report)
+ local config,message=Config.new(options);assert(config,message)
+ report=report or Runtime.awaitReady(config)
+ assert(report.ready,Runtime.errorMessage(report))
+ local run=report.services.RunService
+ assert(type(run.BindToRenderStep)=="function" and type(run.UnbindFromRenderStep)=="function","Cam Lock requires BindToRenderStep and UnbindFromRenderStep")
+ assert(CFrame and type(CFrame.lookAt)=="function" and type(CFrame.new)=="function","Cam Lock requires native CFrame.lookAt/new")
+ local priority=Enum.RenderPriority.Camera.Value
+ assert(finite(priority),"Roblox camera render priority unavailable")
+ local old=report.playerGui:FindFirstChild(OWNER,true)
+ assert(not old or old:IsA("BindableEvent"),"Cam Lock owner namespace occupied")
+ local previous=if old then old:GetAttribute("Generation") else 0
+ previous=if finite(previous) and previous>=0 and previous%1==0 then previous else 0
+ local self=setmetatable({config=config,report=report,player=report.player,world=report.world,services=report.services,
+  cleanup=Cleanup.new(),targetCleanup=Cleanup.new(),destroyed=false,active=false,
+  bindName="SEDWARE_CAM_LOCK_"..tostring(previous+1)},Session)
+ local stage="Prediction"
+ local initialized,problem=xpcall(function()
+  self.prediction=PredictionEngine.new(config);self.controller=CameraController.new(config);self.selector=TargetSelector.new(config,report)
+  stage="Graphics"
+  self.notifications=NotificationSystem.new(report.playerGui,config)
+  self.ui=UI.new(report.playerGui,config,function(field,value) return self:configure(field,value) end,
+   function(reason) self:_notify("Invalid value | "..tostring(reason)) end)
+  self.gui=self.ui.gui
+  assert(self.gui.Parent==report.playerGui and self.notifications.gui.Parent==report.playerGui,"Cam Lock interface failed to attach")
+  self.cleanup:connect(self.gui.Destroying,function() self:destroy() end)
+  self.cleanup:connect(self.notifications.gui.Destroying,function() self:destroy() end)
+  if typeof(script)=="Instance" and script.Destroying then self.cleanup:connect(script.Destroying,function() self:destroy() end) end
+  self.owner=Instance.new("BindableEvent");self.owner.Name=OWNER;self.owner:SetAttribute("Generation",previous+1)
+  self.cleanup:connect(self.owner.Event,function() self:destroy() end)
+  Runtime.trace(report,"CamGraphics","READY","Compact seven-control interface and Sedware S fallback created")
+  stage="Input"
+  self.cleanup:connect(self.services.UserInputService.InputBegan,function(input,processed)
+   if self.destroyed or processed or not self.config.Enabled or self.services.UserInputService:GetFocusedTextBox() then return end
+   if input.KeyCode==self.config.LockKey then
+    local handled,errorMessage=xpcall(function()
+     if self.locked then self.manualReleased=true;self:UnlockTarget("Target Lost") else self:LockTarget() end
+    end,Runtime.traceback)
+    if not handled then self:destroy();Session.notifyFailure(report,errorMessage) end
+   end
+  end,"CamLock.InputBegan")
+  self.cleanup:connect(self.services.Players.PlayerRemoving,function(player) if self.locked and self.locked.player==player then self:UnlockTarget("Target Lost") end end)
+  stage="Render"
+  self.cleanup:add(function() run:UnbindFromRenderStep(self.bindName) end)
+  run:BindToRenderStep(self.bindName,priority+1,function(dt)
+   local advanced,renderError=xpcall(function() self:_step(dt) end,Runtime.traceback)
+   if not advanced then self:destroy();Session.notifyFailure(report,"Cam render: "..tostring(renderError))
+   elseif not self.firstRendered then self.firstRendered=true;Runtime.trace(report,"CamRender","READY","First ordered RenderStepped update completed") end
+  end)
+  Runtime.trace(report,"CamRender","BOUND","Camera+1 RenderStepped binding registered; awaiting first frame")
+  if config.WelcomeNotification then self:_notify("Cam Lock Loaded",config.WelcomeDuration) end
+ end,Runtime.traceback)
+ if not initialized then report.failurePhase=stage;self:destroy();error(problem,2) end
+ local committed,commitError=xpcall(function()
+  self.owner.Parent=self.gui
+  if self.config.Enabled then self:LockTarget() end
+  if old then old:Fire() end
+  assert(not self.destroyed and self.gui.Parent,"Cam Lock session inactive during owner handoff")
+  self.active=true
+  self.report.sessionActive=true
+ end,Runtime.traceback)
+ if not committed then report.failurePhase="CamCommit";self:destroy();error(commitError,2) end
+ Runtime.trace(report,"CamSession","ACTIVE","UI ready; camera control Enabled="..tostring(config.Enabled))
+ return self
+end
+return Session
+end
+-- END Session
+-- BEGIN Bootstrap | sha256 0bf1be64f7a31c51ba0f8b595a8530a2a36fcdadd0a64211e046a914e68cb4f7
+factories["Bootstrap"] = function(loadModule)
+--!nonstrict
+local Runtime=loadModule("Runtime")
+local Bootstrap={}
+function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
+ local API={Config=initialConfig,getModule=getModule,Modules=setmetatable({}, {__index=function(_,name) return getModule(name) end})}
+ local generation=0
+ function API.checkCompatibility(options) return Runtime.check(options or initialConfig) end
+ function API.tryInit(options)
+  generation+=1;local request=generation
+  local report={ready=false,missing={},pending={},events={}}
+  local phase="Modules"
+  local config
+  local initialized,result=xpcall(function()
+   for _,name in moduleNames do getModule(name) end
+   Runtime.trace(report,"CamModules","READY",tostring(#moduleNames).." embedded modules loaded")
+   phase="Configuration"
+   if options==nil and headerError then error(headerError) end
+   local problem;config,problem=getModule("Config").new(if options==nil then initialConfig else options);assert(config,problem)
+   Runtime.trace(report,"CamConfiguration","READY","Enabled="..tostring(config.Enabled).." HitPart="..config.HitPart)
+   phase="Services"
+   local audit=Runtime.check(config);audit.events=report.events
+   report=Runtime.awaitReady(config,audit,function() return request~=generation end)
+   if request~=generation or report.cancelled then return nil end
+   assert(report.ready,Runtime.errorMessage(report))
+   phase="CamSession"
+   local session=getModule("Session").init(config,report)
+   API.session=session
+   return session
+  end,Runtime.traceback)
+  if request~=generation or report.cancelled then return nil,report end
+  API.compatibility=report
+  if initialized then return result,report end
+  if not report.playerGui then
+   local audited,audit=pcall(Runtime.check,config)
+   if audited then report.playerGui=audit.playerGui end
+  end
+  report.ready=false;report.error=tostring(result);report.failurePhase=report.failurePhase or phase
+  table.insert(report.missing,report.failurePhase..": "..tostring(result))
+  Runtime.trace(report,report.failurePhase,"FAIL",result)
+  pcall(function() getModule("Session").notifyFailure(report,result) end)
+  return nil,report
+ end
+ function API.init(options)
+  local session,report=API.tryInit(options)
+  if not session then error(Runtime.errorMessage(report),2) end
+  return session
+ end
+ function API.Unload()
+  generation+=1
+  local current=API.session;API.session=nil
+  if current then current:destroy();return true end
+  return false
+ end
+ for _,name in {"GetLockedTarget","GetPrediction","GetPredictedPosition","LockTarget","UnlockTarget","configure","SetEnabled","SetHitPart"} do
+  API[name]=function(...)
+   if not API.session then return nil,"Not initialized" end
+   return API.session[name](API.session,...)
+  end
+ end
+ return API
+end
+return Bootstrap
+end
+-- END Bootstrap
+local built,API=xpcall(function()
+ return loadModule("Bootstrap").new(Config,loadModule,{"Settings", "Latency", "Ballistics", "MemoryTracker", "PinkConfig", "PinkPrediction", "Selection", "Runtime", "Overlay", "Config", "Branding", "NotificationSystem", "UI", "TargetSelector", "CameraController", "PredictionEngine", "Cleanup", "Session", "Bootstrap"},headerError)
+end,bootTraceback)
+if not built then
+ bootLog("CamModules","FAIL",API)
+ local problem=tostring(API)
+ local shown,issue=pcall(function()
+  local players=game:GetService("Players")
+  local player=players.LocalPlayer
+  return loadModule("Overlay").showFailure(player and player:FindFirstChild("PlayerGui"),"Cam modules: "..problem)
+ end)
+ if not shown then bootLog("FailureNotification","FAIL",issue) end
+ return {compatibility={ready=false,missing={problem}},error=problem}
+end
+if not SEDWARE_CAM_NO_AUTOSTART then
+ local started,problem=xpcall(function() return API.tryInit() end,bootTraceback)
+ if not started then
+  bootLog("CamAutoInit","FAIL",problem)
+  local notified,issue=pcall(function() loadModule("Session").notifyFailure(API.compatibility,problem) end)
+  if not notified then bootLog("FailureNotification","FAIL",issue) end
+ end
+else bootLog("CamAutoInit","SKIPPED","SEDWARE_CAM_NO_AUTOSTART=true; call API.init() to start") end
+return API

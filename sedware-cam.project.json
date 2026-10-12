@@ -1,0 +1,15 @@
+{
+  "name": "SEDWARECamLock",
+  "tree": {
+    "$className": "DataModel",
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "SedwareCamLock": {
+          "$path": "SedwareCamLock.lua"
+        }
+      }
+    }
+  }
+}

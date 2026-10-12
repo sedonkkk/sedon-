@@ -2,6 +2,7 @@
 /.tools/
 /tests/.generated_gui.luau
 /tests/.generated_pink.luau
+/tests/.generated_cam.luau
 *.rbxl
 *.rbxlx.lock
 __pycache__/

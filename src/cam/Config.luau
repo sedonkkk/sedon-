@@ -1,0 +1,209 @@
+--!nonstrict
+-- SEDWARE CAM LOCK. CamPrediction is a dimensionless gain, NOT seconds.
+-- gain = CamPrediction / 13.80; X/Z use PredictionX * gain seconds, and Y
+-- uses PredictionY * gain seconds. Auto's total RTT-calibrated horizons use
+-- the same gain. Horizons are bounded; RTT is never added a second time.
+local PinkConfig = if script then require(script.Parent.Parent.pink.Config) else require("../pink/Config")
+local Config = {}
+
+-- The standalone builder copies this literal to the editable file header.
+Config.sourceLiteral = [=[{
+ Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
+ PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+ -- Internal settings: these intentionally have no extra GUI controls.
+ LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
+ PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
+ MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
+ MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+ PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
+ MaxDistance=350, AcquisitionInterval=0.25,
+ CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,
+ ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=3, NotificationDuration=2,
+ InitializationTimeout=8, InitializationPollInterval=0.05, UpdateHz=30, PingHz=5, StaleAfter=0.6,
+ HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
+ MaxObservedSpeed=120, MaxAcceleration=180, TeleportSlack=5, ReversalDotThreshold=-0.2,
+ MaxAccelerationHorizon=0.18,
+}]=]
+
+Config.referenceCamPrediction = 13.80
+Config.HitParts = {"Head", "UpperTorso", "HumanoidRootPart"}
+Config.hitParts = Config.HitParts
+Config.numericLimits = {
+ CamPrediction={0,69}, PredictionX={0,0.6}, PredictionY={0,0.6}, Smoothness={0,1}, Radius={1,2000},
+ PingSmoothing={0.05,10}, MinPredictionX={0,0.6}, MaxPredictionX={0,0.6}, MinPredictionY={0,0.6}, MaxPredictionY={0,0.6},
+ PredictionSlew={0.001,2}, PredictionSmoothing={0,2}, MaxDistance={10,2000}, AcquisitionInterval={0.05,2},
+ CloseDistance={1,2000}, MediumDistance={2,2000}, CloseOffset={-0.2,0.2}, MediumOffset={-0.2,0.2}, LongOffset={-0.2,0.2},
+ WelcomeDuration={0.1,30}, NotificationDuration={0.1,30}, InitializationTimeout={0.1,30}, InitializationPollInterval={0.01,1},
+ UpdateHz={5,60}, PingHz={0.5,20}, StaleAfter={0.05,2}, HistoryCapacity={2,64}, HistoryWindow={0.05,1},
+ VelocitySmoothing={0.001,1}, AccelerationSmoothing={0.01,2}, MaxObservedSpeed={1,1000}, MaxAcceleration={0,2000},
+ TeleportSlack={0,100}, ReversalDotThreshold={-1,1}, MaxAccelerationHorizon={0,0.6},
+}
+Config.limits = Config.numericLimits
+Config.controls = {
+ {key="Enabled",label="Enable",kind="toggle"},
+ {key="HitPart",label="Hit Part",kind="choice",options=Config.HitParts},
+ {key="CamPrediction",label="Cam Prediction",kind="number",unit="gain",decimals=2},
+ {key="PredictionX",label="Prediction X",kind="number",unit="seconds",decimals=4},
+ {key="PredictionY",label="Prediction Y",kind="number",unit="seconds",decimals=4},
+ {key="Smoothness",label="Smoothness",kind="number",unit="response",decimals=3},
+ {key="Radius",label="Radius",kind="number",unit="pixels",decimals=0},
+}
+Config.fields = {}
+for _,field in Config.controls do
+ local bounds=Config.numericLimits[field.key]
+ if bounds then field.min=bounds[1];field.max=bounds[2] end
+ Config.fields[field.key]=field
+end
+
+function Config.defaults()
+ return {
+  Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
+  PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+  LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
+  PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
+  MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
+  MemoryTracking=true, VelocityPrediction=true, DistancePrediction=true, AccelerationPrediction=false,
+  PredictionSmoothing=0, VisibilityCheck=true, FallbackR6=true, RespectScriptableCamera=true,
+  MaxDistance=350, AcquisitionInterval=0.25,
+  CloseDistance=40, MediumDistance=120, CloseOffset=0, MediumOffset=0, LongOffset=0,
+  ShowNotifications=true, WelcomeNotification=true, WelcomeDuration=3, NotificationDuration=2,
+  InitializationTimeout=8, InitializationPollInterval=0.05, UpdateHz=30, PingHz=5, StaleAfter=0.6,
+  HistoryCapacity=12, HistoryWindow=0.3, VelocitySmoothing=0.06, AccelerationSmoothing=0.15,
+  MaxObservedSpeed=120, MaxAcceleration=180, TeleportSlack=5, ReversalDotThreshold=-0.2,
+  MaxAccelerationHorizon=0.18,
+ }
+end
+
+local function finite(value)
+ return type(value)=="number" and value==value and math.abs(value)<math.huge
+end
+local function plain(value) return type(value)=="table" and getmetatable(value)==nil end
+local function shape(overrides)
+ if not plain(overrides) then return false,"Config debe ser una tabla simple" end
+ local defaults=Config.defaults()
+ for key,value in overrides do
+  local expected=defaults[key]
+  if type(key)~="string" or expected==nil then return false,"Config: campo desconocido "..tostring(key) end
+  if key=="LockKey" then
+   local resolved,message=PinkConfig.normalizeLockKey(value)
+   if not resolved then return false,message end
+  elseif key=="PingReferences" then
+   if not plain(value) then return false,"PingReferences debe ser una tabla simple" end
+   local count=0
+   for index,point in value do
+    if type(index)~="number" or index%1~=0 or index<1 or index>32 or not plain(point) then
+     return false,"PingReferences: índice o punto inválido"
+    end
+    count+=1
+    for name,number in point do
+     if (name~="PingMs" and name~="X" and name~="Y") or not finite(number) then
+      return false,"PingReferences: campo inválido"
+     end
+    end
+    if not finite(point.PingMs) or not finite(point.X) or not finite(point.Y) then
+     return false,"PingReferences: falta PingMs, X o Y"
+    end
+   end
+   if count==0 then return false,"PingReferences debe ser una lista continua" end
+   for index=1,count do if value[index]==nil then return false,"PingReferences debe ser una lista continua" end end
+  elseif type(value)~=type(expected) or (type(expected)=="number" and not finite(value)) then
+   return false,"Config."..key..": tipo inválido o número no finito"
+  end
+ end
+ return true
+end
+
+local sharedFields={
+ "Enabled","LockKey","AutoPrediction","PingCompensation","PingSmoothing","MinPredictionX","MaxPredictionX",
+ "MinPredictionY","MaxPredictionY","PredictionSlew","MemoryTracking","VelocityPrediction","DistancePrediction",
+ "AccelerationPrediction","PredictionSmoothing","VisibilityCheck","MaxDistance","CloseDistance","MediumDistance",
+ "ShowNotifications","WelcomeNotification","WelcomeDuration","NotificationDuration","InitializationTimeout",
+ "InitializationPollInterval","UpdateHz","PingHz","StaleAfter","HistoryCapacity","HistoryWindow","VelocitySmoothing",
+ "AccelerationSmoothing","MaxObservedSpeed","MaxAcceleration","TeleportSlack","ReversalDotThreshold","MaxAccelerationHorizon",
+}
+
+-- A validated native PINK prediction configuration, with no invented weapon
+-- speed/gravity. Only existing motion, range and RTT calibration are reused.
+function Config.toPredictionConfig(config)
+ local legacy=PinkConfig.defaults()
+ for _,key in sharedFields do legacy[key]=config[key] end
+ legacy.TargetPart=config.HitPart
+ legacy.WeaponProfile="Default"
+ local gain=config.CamPrediction/Config.referenceCamPrediction
+ -- A zero gain disables future lead, while observation age is still known
+ -- elapsed time and remains integrated once by the original estimator.
+ if gain==0 then legacy.MinPredictionX=0;legacy.MinPredictionY=0 end
+ legacy.PredictionX=math.clamp(config.PredictionX*gain,legacy.MinPredictionX,legacy.MaxPredictionX)
+ legacy.PredictionY=math.clamp(config.PredictionY*gain,legacy.MinPredictionY,legacy.MaxPredictionY)
+ legacy.PingReferences={}
+ for _,point in config.PingReferences do
+  table.insert(legacy.PingReferences,{PingMs=point.PingMs,
+   X=math.clamp(point.X*gain,0,0.6),Y=math.clamp(point.Y*gain,0,0.6)})
+ end
+ for _,range in {"Close","Medium","Long"} do
+  -- Distance offsets are optional empirical seconds, not physical flight.
+  legacy[range.."Offset"]=math.clamp(config[range.."Offset"]*gain,-0.2,0.2)
+ end
+ return PinkConfig.new(legacy)
+end
+
+function Config.new(overrides)
+ if overrides==nil then overrides={} end
+ local ok,message=shape(overrides)
+ if not ok then return nil,message end
+ local config=Config.defaults()
+ for key,value in overrides do
+  if key=="PingReferences" then
+   config[key]={}
+   for _,point in value do table.insert(config[key],table.clone(point)) end
+  else config[key]=value end
+ end
+ for key,bounds in Config.numericLimits do
+  if config[key]<bounds[1] or config[key]>bounds[2] then return nil,key.." fuera de rango" end
+ end
+ if config.HistoryCapacity%1~=0 then return nil,"HistoryCapacity debe ser entero" end
+ if not table.find(Config.HitParts,config.HitPart) then return nil,"HitPart desconocido" end
+ if config.MinPredictionX>config.MaxPredictionX or config.MinPredictionY>config.MaxPredictionY then
+  return nil,"Límites de predicción invertidos"
+ end
+ if config.CloseDistance>=config.MediumDistance then return nil,"Rangos de distancia invertidos" end
+ -- Validate the raw curve before gain/clamping could hide malformed points.
+ local previous=-math.huge
+ for _,point in config.PingReferences do
+  if point.PingMs<0 or point.PingMs>2000 or point.PingMs<=previous
+   or point.X<0 or point.X>0.6 or point.Y<0 or point.Y>0.6 then
+   return nil,"PingReferences desordenado o fuera de límites"
+  end
+  previous=point.PingMs
+ end
+ config.LockKey,message=PinkConfig.normalizeLockKey(config.LockKey)
+ if not config.LockKey then return nil,message end
+ local legacy
+ legacy,message=Config.toPredictionConfig(config)
+ if not legacy then return nil,message end
+ return config
+end
+
+function Config.validate(config)
+ local normalized,message=Config.new(config)
+ if not normalized then return false,message end
+ local defaults=Config.defaults()
+ for key in defaults do if config[key]==nil then return false,"Falta Config."..key end end
+ return true
+end
+function Config.update(config,key,value)
+ if type(key)~="string" or Config.defaults()[key]==nil then return nil,"Campo desconocido: "..tostring(key) end
+ local nextConfig,message=Config.new(config)
+ if not nextConfig then return nil,message end
+ nextConfig[key]=value
+ return Config.new(nextConfig)
+end
+function Config.updateField(config,key,value)
+ local normalized,message=Config.update(config,key,value)
+ if not normalized then return false,message end
+ for name,child in normalized do config[name]=child end
+ return true
+end
+Config.normalizeLockKey=PinkConfig.normalizeLockKey
+Config.keyName=PinkConfig.keyName
+return Config

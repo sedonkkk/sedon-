@@ -24,7 +24,13 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/e18ba899586cd12214bee587802f927fa258d4c9/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 246 pruebas de Pink/SEDWARE y 96 anteriores pasan; el loader carga las funciones de cliente. Los controladores multiarmas y el servidor se distribuyen en el lugar de Studio.
 
-## Ejecutar
+## SEDWARE CAM LOCK — nueva variante
+
+[`SedwareCamLock.lua`](SedwareCamLock.lua) abre una mini GUI negra/rosada con siete controles y una S rosada nativa. Enable arranca OFF; al activarlo selecciona un jugador visible dentro de Radius y orienta la cámara hacia el Hit Part predicho. Reutiliza Memory, X/Y y latencia, con interpolación temporal después de la cámara de Roblox. Los proyectos anteriores se conservan.
+
+[Controles, fórmulas, diagnóstico y pruebas](docs/SEDWARE_CAM_LOCK.md) · [Lugar para probar con dos clientes](studio/SedwareCamLock.rbxlx). `python3 scripts/check_cam.py` comprueba el archivo real con dobles; falta ejecución nativa en Roblox y no integra armas de Da Hood.
+
+## Ejecutar el laboratorio original
 
 Abre [`build/AimLab.rbxlx`](build/AimLab.rbxlx) con Roblox Studio y pulsa **Play**. Selecciona un bot con el cursor, mantén **RMB** para orientar la cámara y dispara con **F** o el botón. Puedes minimizar y mover el panel. Sus seis secciones incluyen los controles de predicción, blancos, armas y diagnósticos.
 
