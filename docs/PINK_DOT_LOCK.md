@@ -154,12 +154,12 @@ No se ejecutaron Roblox Studio ni Da Hood en esta máquina Linux. Las pruebas ma
 
 ## GitHub y loader
 
-La corrección SEDWARE se publicó en [sedonkkk/sedon-](https://github.com/sedonkkk/sedon-/blob/main/PinkDotLock.lua). El [Raw nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua) está fijado al commit `02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7`. Respondió HTTP 200 y sus **107.988 bytes** coinciden con el archivo compilado y probado; SHA-256 `1237403a663b604ac77ea070850d0c087a013a151062e9be80596c09a7e861ec`.
+La corrección SEDWARE se publicó en [sedonkkk/sedon-](https://github.com/sedonkkk/sedon-/blob/main/PinkDotLock.lua). El [Raw nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/PinkDotLock.lua) está fijado al commit `ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e`. Respondió HTTP 200 y sus **108.378 bytes** coinciden con el archivo compilado y probado; SHA-256 `235e4c13d224641240b0f5354e4983326e1761a70746ff6f80a232015bc18eb6`.
 
 Puedes copiar esta línea, sin descargar archivos, en un host autorizado compatible:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/PinkDotLock.lua"))()
 ```
 
 [`PinkLoader.lua`](../PinkLoader.lua) contiene el cargador pequeño con informe de errores. Toda la lógica queda en PinkDotLock.lua. Para publicar otra versión: sube ese archivo a tu repositorio, abre el archivo → **Raw**, obtén la URL real del commit y ejecuta `python3 scripts/publish_pink_loader.py --raw-url URL_REAL` para comprobar los bytes antes de generar el loader. Apuntar a main recibiría cambios posteriores.

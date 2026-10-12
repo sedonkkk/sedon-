@@ -40,10 +40,10 @@ Para comprobar qué versión ejecutas, busca `[SEDWARE][Execution][START] SEDWAR
 
 ## Publicación verificada
 
-La corrección está publicada en el commit `02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7`. [Raw nuevo](https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua): HTTP 200, 107.988 bytes coincidentes con el archivo compilado y probado; SHA-256 `1237403a663b604ac77ea070850d0c087a013a151062e9be80596c09a7e861ec`.
+La corrección está publicada en el commit `ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e`. [Raw nuevo](https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/PinkDotLock.lua): HTTP 200, 108.378 bytes coincidentes con el archivo compilado y probado; SHA-256 `235e4c13d224641240b0f5354e4983326e1761a70746ff6f80a232015bc18eb6`.
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/PinkDotLock.lua"))()
 ```
 
 PinkLoader.lua se actualizó a este nuevo commit. La entrada SEDWARE.lua de main mantiene su dirección y carga el payload vigente; usa la línea fijada anterior si necesitas ejecutar exactamente esta versión v3. Ambas vías requieren un host autorizado compatible con Luau y las APIs del cliente.

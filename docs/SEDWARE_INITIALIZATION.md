@@ -99,8 +99,8 @@ La lógica de arranque y los callbacks se ejecutaron sobre el archivo autónomo 
 
 El loader anterior estaba fijado a otro commit y continuará cargando esa versión. Hay que sustituir su línea por el Raw nuevo publicado; actualizar solamente main no modifica el código que descarga aquel enlace.
 
-La versión corregida está publicada en el commit `02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7`. [Raw nuevo, verificado HTTP 200 y byte por byte](https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua): 107.988 bytes; SHA-256 `1237403a663b604ac77ea070850d0c087a013a151062e9be80596c09a7e861ec`.
+La versión corregida está publicada en el commit `ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e`. [Raw nuevo, verificado HTTP 200 y byte por byte](https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/PinkDotLock.lua): 108.378 bytes; SHA-256 `235e4c13d224641240b0f5354e4983326e1761a70746ff6f80a232015bc18eb6`.
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/PinkDotLock.lua"))()
 ```
