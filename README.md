@@ -14,6 +14,8 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Configuración, API, demo de disparo propio y pruebas](docs/PINK_DOT_LOCK.md). `python3 scripts/build_pink.py` genera el archivo y los lugares de Studio; `python3 scripts/check_pink.py` ejecuta sus comprobaciones.
 
+[Raw de Pink verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/837ef39140063c4576a7aa9166cda4cf2e4ceec3/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 89 pruebas nuevas y 96 anteriores pasan; motor de Studio y Da Hood sin comprobar.
+
 ## Ejecutar
 
 Abre [`build/AimLab.rbxlx`](build/AimLab.rbxlx) con Roblox Studio y pulsa **Play**. Selecciona un bot con el cursor, mantén **RMB** para orientar la cámara y dispara con **F** o el botón. Puedes minimizar y mover el panel. Sus seis secciones incluyen los controles de predicción, blancos, armas y diagnósticos.

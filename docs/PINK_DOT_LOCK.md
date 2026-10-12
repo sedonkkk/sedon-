@@ -148,6 +148,14 @@ No se ejecutaron Roblox Studio ni Da Hood en esta máquina Linux. Las pruebas ma
 
 ## GitHub y loader
 
-Sube PinkDotLock.lua a tu repositorio y abre el archivo → **Raw** para obtener la URL efectiva. El loader debe apuntar únicamente a ese archivo; toda la lógica queda en él. El comando se publica en PinkLoader.lua solo después de verificar por HTTPS que el Raw devuelve los mismos bytes del archivo revisado. Para probar tu copia se puede usar una URL fijada a un commit; apuntar a main recibiría cambios posteriores.
+Ya se publicó en [sedonkkk/sedon-](https://github.com/sedonkkk/sedon-/blob/main/PinkDotLock.lua). El [Raw verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/837ef39140063c4576a7aa9166cda4cf2e4ceec3/PinkDotLock.lua) está fijado al commit `837ef39140063c4576a7aa9166cda4cf2e4ceec3`. Respondió HTTP 200 y sus **86.636 bytes** coinciden con el archivo compilado y probado; SHA-256 `d4d41e58a0bdaaa4871440364d195d85e3855cb067cdc897c22672c1870c179e`.
+
+Puedes copiar esta línea, sin descargar archivos, en un host autorizado compatible:
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/837ef39140063c4576a7aa9166cda4cf2e4ceec3/PinkDotLock.lua"))()
+```
+
+[`PinkLoader.lua`](../PinkLoader.lua) contiene el cargador pequeño con informe de errores. Toda la lógica queda en PinkDotLock.lua. Para publicar otra versión: sube ese archivo a tu repositorio, abre el archivo → **Raw**, obtén la URL real del commit y ejecuta `python3 scripts/publish_pink_loader.py --raw-url URL_REAL` para comprobar los bytes antes de generar el loader. Apuntar a main recibiría cambios posteriores.
 
 `loadstring` y `game:HttpGet` no son una vía de ejecución disponible en un LocalScript normal de Roblox publicado. El loader requiere un host autorizado que exponga esas APIs y permita ejecutar código remoto; no certificamos ejecutores externos. En Studio usa el LocalScript/ModuleScript, sin loader. Un loader ejecuta con los permisos de su host el código de la URL: revisa el archivo y utiliza el enlace del commit verificado. El payload no hace solicitudes de red; el único acceso HTTP del loader es obtener ese archivo.
