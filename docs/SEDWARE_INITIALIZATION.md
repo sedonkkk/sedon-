@@ -1,5 +1,11 @@
 # SEDWARE: corrección de inicialización
 
+Entrada estable publicada en [SEDWARE.lua](../SEDWARE.lua): carga la versión actual de PinkDotLock.lua en main, por lo que conserva la misma dirección cuando se publiquen nuevas correcciones. Su Raw se verificó contra el payload corregido. A diferencia del enlace de un commit, esta entrada recibe las actualizaciones del repositorio.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/main/PinkDotLock.lua"))()
+```
+
 Esta actualización repara el proyecto existente, mantiene PinkDotLock.lua como archivo autónomo y conserva PredictionX=0.1205, PredictionY=0.0800, Memory, Auto Prediction, perfiles, selección persistente, DOT y cámara libre. No incorpora integración de disparo con Da Hood ni cambia sus remotes o seguridad.
 
 ## Evidencia y alcance de la causa
