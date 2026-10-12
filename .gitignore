@@ -1,0 +1,7 @@
+/build/
+/.tools/
+/tests/.generated_gui.luau
+*.rbxl
+*.rbxlx.lock
+__pycache__/
+*.pyc

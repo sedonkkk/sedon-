@@ -1,0 +1,21 @@
+{
+  "name": "AimLab",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "AimLab": {"$path": "src/shared"}
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "AimLabServer": {"$path": "src/server"}
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "AimLabClient": {"$path": "src/client"}
+      }
+    }
+  }
+}
