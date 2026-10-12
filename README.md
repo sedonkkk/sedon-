@@ -8,6 +8,12 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Instalación y controles](docs/STANDALONE.md) · [GitHub y loader](docs/DISTRIBUTION.md) · [Compatibilidad y límites para Da Hood](docs/DA_HOOD_COMPATIBILITY.md) · [Pruebas](docs/VALIDATION.md)
 
+## PINK DOT LOCK — proyecto independiente
+
+[`PinkDotLock.lua`](PinkDotLock.lua): C selecciona un personaje con mira central en primera persona o cursor en tercera persona y C lo libera. DOT Hot Pink de 6 píxeles, cámara libre, avisos compactos y configuración al principio del archivo; sin menú. Reutiliza Memory, latencia y balística, añade predicción X/Z e Y por separado y conserva DH PREDICTION LAB. No integra el sistema de disparo de Da Hood.
+
+[Configuración, API, demo de disparo propio y pruebas](docs/PINK_DOT_LOCK.md). `python3 scripts/build_pink.py` genera el archivo y los lugares de Studio; `python3 scripts/check_pink.py` ejecuta sus comprobaciones.
+
 ## Ejecutar
 
 Abre [`build/AimLab.rbxlx`](build/AimLab.rbxlx) con Roblox Studio y pulsa **Play**. Selecciona un bot con el cursor, mantén **RMB** para orientar la cámara y dispara con **F** o el botón. Puedes minimizar y mover el panel. Sus seis secciones incluyen los controles de predicción, blancos, armas y diagnósticos.

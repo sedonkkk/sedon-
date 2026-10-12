@@ -1,6 +1,7 @@
 /build/
 /.tools/
 /tests/.generated_gui.luau
+/tests/.generated_pink.luau
 *.rbxl
 *.rbxlx.lock
 __pycache__/
