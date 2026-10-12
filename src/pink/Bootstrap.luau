@@ -78,7 +78,7 @@ function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
   if not session then error(Runtime.errorMessage(report),2) end
   return session
  end
- for _,name in {"GetLockedTarget","GetPredictedPosition","GetPrediction","LockTarget","UnlockTarget","IsValidTarget","CreateShotAdapter","SetEnabled","Unload"} do
+ for _,name in {"GetLockedTarget","GetPredictedPosition","GetPrediction","LockTarget","UnlockTarget","IsValidTarget","CreateShotAdapter","SetWeaponProfile","SetPredictionOrigin","SetEnabled","Unload"} do
   API[name]=function(...)
    if not API.session then return nil,"Not initialized" end
    return API.session[name](API.session,...)

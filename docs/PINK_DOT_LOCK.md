@@ -12,7 +12,7 @@ Proyecto independiente de DH PREDICTION LAB: C selecciona un personaje, muestra 
 - `src/pink/`: configuración, detección de cámara, selección, predicción X/Y, overlay, auditoría de APIs, adaptador de disparo y ciclo de vida.
 - `src/shared/`: se reutilizan **sin cambios** Settings, MotionHistory, Latency y Ballistics de DH PREDICTION LAB.
 - `src/pink_demo/`: cliente y servidor opcionales del disparo propio de prueba. Estos scripts funcionan exclusivamente en Studio.
-- `src/pink_weapon/`: controladores del Tool propio, validación del servidor y configuración del arma de laboratorio.
+- `src/pink_weapon/`: WeaponManager, perfiles de seis armas propias, dispersión, proyectiles físicos, controladores y comprobación nativa F6.
 
 En una experiencia propia, copia `PinkDotLock.lua` a un **LocalScript de StarterPlayerScripts** y usa Play. También puedes generar los lugares completos:
 
@@ -20,7 +20,7 @@ En una experiencia propia, copia `PinkDotLock.lua` a un **LocalScript de Starter
 python3 scripts/build_pink.py
 ```
 
-`build/PinkDotLock.rbxlx` incluye el único LocalScript y el escenario básico. `build/PinkDotLockTest.rbxlx` incluye además el Tool **SEDWARE Revolver** y sus controladores cliente/servidor. Su XML preserva las fuentes exactamente; abrirlos y probar el motor en Studio está pendiente.
+`build/PinkDotLock.rbxlx` incluye el único LocalScript y el escenario básico. `build/PinkDotLockTest.rbxlx` incluye seis Tools propios con WeaponManager y controladores de hitscan, dispersión y proyectiles físicos. Su XML preserva las fuentes exactamente; abrirlos y probar el motor en Studio está pendiente. [Guía v4 y comprobación F6](SEDWARE_MULTIWEAPON.md).
 
 También se incluyen las mismas copias listas para abrir en [`studio/PinkDotLock.rbxlx`](../studio/PinkDotLock.rbxlx) y [`studio/PinkDotLockTest.rbxlx`](../studio/PinkDotLockTest.rbxlx), para descargarlas desde GitHub sin instalar el compilador ni Python.
 
@@ -93,11 +93,13 @@ El archivo devuelve una tabla API que inicia automáticamente en un cliente Robl
 
 ```lua
 API.GetLockedTarget()          -- Player o nil
-API.GetPredictedPosition()     -- Vector3 o nil; no mueve la cámara ni dispara
+API.GetPredictedPosition(origin) -- Vector3 o nil; origin opcional para un arma propia
 API.GetPrediction()            -- Registro de cálculo o nil
 API.LockTarget()               -- Adquirir el más próximo; no reemplaza un bloqueo activo
 API.UnlockTarget()
 API.IsValidTarget(player)
+API.SetWeaponProfile("Custom", profile, "OwnedWeaponId") -- Validado; conserva selección y Memory
+API.SetPredictionOrigin(getOwnedMuzzle) -- Callback propio o nil; cámara libre
 API.SetEnabled(false)          -- Limpieza completa; para reiniciar usa API.init(config)
 API.Unload()
 ```
@@ -122,7 +124,7 @@ local measured, rejection = adapter:record(ticket.id, {
 local metrics = adapter:summary()
 ```
 
-OwnedFire y las variables de medición del ejemplo pertenecen a tu integración; el ejemplo no está conectado a Da Hood. La [auditoría y demostración completa del arma propia](SEDWARE_WEAPON_INTEGRATION.md) documenta el puente real de `src/pink_demo/` y `src/pink_weapon/`. Abre **PinkDotLockTest** en Studio con **Start Server y 2 Players**, coloca los personajes a la vista, equipa **SEDWARE Revolver**, usa C y dispara con clic. Sin bloqueo dispara hacia la mira; con bloqueo consume GetPredictedPosition() conservando la cámara libre. El servidor crea exclusivamente sus propios eventos SEDWAREWeaponRemotes/Fire y Result, valida el Tool equipado, ejecuta un raycast hitscan de laboratorio y mide el daño aplicado. No reproduce la física ni modifica el Revolver de Da Hood.
+OwnedFire y las variables de medición del ejemplo pertenecen a tu integración; el ejemplo no está conectado a Da Hood. La [arquitectura multiarmas v4](SEDWARE_MULTIWEAPON.md) documenta el puente de `src/pink_demo/` y `src/pink_weapon/`. Abre **PinkDotLockTest** en Studio con **Start Server y 2 Players**, coloca los personajes a la vista, usa C y cambia entre las seis armas propias. Sin bloqueo dispara hacia la mira; con bloqueo consume GetPredictedPosition() conservando la cámara libre y Memory. El servidor crea exclusivamente SEDWAREWeaponRemotes, valida el Tool y perfil equipados, ejecuta un raycast por pellet o sigue una Part física, y mide el daño aplicado. F6 prepara un informe de comprobación nativa. No reproduce ni modifica las armas de Da Hood.
 
 La referencia usa el reloj y la posición medidos en el servidor después del raycast, independientemente de hX/hY; no elige una fecha que favorezca la predicción. El cliente mantiene PENDING hasta una respuesta del servidor y distingue accepted, contacto físico, impacto en el personaje bloqueado y daño efectivo. Asocia la respuesta con el ticket y registra errores activo/manual/auto, RMSE horizontal/vertical/total y sesgo por perfil/rango. La comparación de posición usa targetPosition; excluye el desplazamiento de apuntado por gravedad. El impacto y el error de predicción son métricas diferentes. Los relojes deben compartir la base temporal de GetServerTimeNow; la caducidad y el rechazo de identidades impiden mezclar tiros obsoletos, duplicados o respawns. Si el objetivo muere o cambia antes de recibir la respuesta, se conserva el resultado físico confirmado y puede rechazarse la medición del adaptador por identidad.
 
@@ -135,7 +137,7 @@ python3 scripts/check.py
 
 Herramienta oficial Luau 0.695, commit `1f6ff5d6f0072f2fab2adf35d1ffbaae7d848ad0`. La primera orden verifica que el archivo coincide con sus fuentes, compila y ejecuta pruebas matemáticas, del adaptador y del **archivo completo** mediante dobles de eventos/APIs. La segunda conserva las pruebas anteriores. Los mensajes Load Failed de las pruebas corresponden a fallos provocados deliberadamente.
 
-Resultados verificados: **210 pruebas de Pink/SEDWARE, 3.156 comprobaciones, 0 fallos**, incluidas **36 de arranque, 30 de LockKey, 52 del puente de armas y 3 del loader**; **96 pruebas anteriores, 75.895 comprobaciones, 0 fallos**. Total **306 pruebas, 79.051 comprobaciones**. El archivo autónomo integra 13 módulos y no contiene requires externos. Las fuentes anteriores de DH PREDICTION LAB se preservan.
+Resultados de código verificados: **246 pruebas de Pink/SEDWARE, 4.633 comprobaciones, 0 fallos**, incluidas **36 de arranque, 30 de LockKey, 88 de módulos/puentes de armas y 3 del loader**; **96 pruebas anteriores, 75.895 comprobaciones, 0 fallos**. Total **342 pruebas, 80.528 comprobaciones**. El archivo autónomo integra 13 módulos y no contiene requires externos. Las fuentes anteriores de DH PREDICTION LAB se preservan. Estos resultados no verifican los disparos nativos; [estado por integración](SEDWARE_MULTIWEAPON.md#integraciones-verificadas-y-pendientes).
 
 | Requisito de las 23 comprobaciones | Evidencia automatizada | Studio / Da Hood real |
 | --- | --- | --- |

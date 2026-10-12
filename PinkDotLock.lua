@@ -1,5 +1,5 @@
 --!nonstrict
--- SEDWARE startup v3 | robust LockKey normalization. Edit Config below; X/Y are seconds.
+-- SEDWARE v4 | validated weapon-profile and muzzle APIs. Edit Config below; X/Y are seconds.
 -- The dot shows the observed part, never the predicted aim point.
 -- Camera stays free. Public client APIs only; no weapon integration for Da Hood.
 local function bootTraceback(problem)
@@ -12,7 +12,7 @@ local function bootLog(phase,status,detail)
  local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn
  if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end
 end
-bootLog("Execution","START","SEDWARE startup v3 payload began execution; LockKey normalization enabled")
+bootLog("Execution","START","SEDWARE v4 payload began execution; LockKey normalization and owned-weapon APIs enabled")
 local Config
 local configBuilt,headerError=xpcall(function() Config = {
  Enabled=true, LockKey="C", LockMode="Auto",
@@ -861,7 +861,7 @@ end
 return Selection
 end
 -- END Selection
--- BEGIN Prediction | sha256 2e3d17af6457258489c42f77cd1dfed51c2e437292da729032a844b1816fe7dd
+-- BEGIN Prediction | sha256 9b6d1e27b908823f161d61d421925e779ba7cf39a9896563ce219835dd2ccb78
 factories["Prediction"] = function(loadModule)
 --!nonstrict
 -- X/Z use PredictionX seconds; Y uses PredictionY seconds. These configurable
@@ -1029,7 +1029,7 @@ function Prediction:_predict(origin,now,policy,key)
   rawPingMs=if self.pingAvailable then self.latency.raw*2000 else nil,
   smoothedPingMs=if self.pingAvailable then self.latency.smoothed*2000 else nil,
   status=status,flightSeconds=flight,physicsVerified=false,physicsStatus=physicsStatus,
-  sampleTime=sample.t,createdAt=now,range=range,weaponProfile=c.WeaponProfile,policy=policy,
+  sampleTime=sample.t,createdAt=now,range=range,weaponProfile=self.weaponProfileLabel or c.WeaponProfile,policy=policy,
   state=sample.state}
 end
 function Prediction:predict(origin,now,policyOverride)
@@ -1770,7 +1770,7 @@ end
 return ShotAdapter
 end
 -- END ShotAdapter
--- BEGIN Session | sha256 76e76894c0593cbe0c9fe790f39c70f40d7ef4bb553dd7a06a4e533617c18389
+-- BEGIN Session | sha256 4a60c46998e441f190066b94a523fe2818b085455bc3df1d7b83fb4eb68ddc18
 factories["Session"] = function(loadModule)
 --!nonstrict
 -- Public client APIs only. Selection and prediction never write camera,
@@ -1887,9 +1887,44 @@ end
 function Session:GetPrediction()
  return if not self.destroyed and self.comparisons then self.comparisons.active else nil
 end
-function Session:GetPredictedPosition()
+function Session:GetPredictedPosition(origin)
+ if origin~=nil then
+  if not vector(origin) then return nil,"Invalid prediction origin" end
+  local previous=self.lastPredictionOrigin
+  if self.locked and (not previous or previous.X~=origin.X or previous.Y~=origin.Y or previous.Z~=origin.Z) then
+   self:_step(self:_clock(),origin)
+  end
+ end
  local record=self:GetPrediction()
  return record and record.position
+end
+function Session:SetWeaponProfile(name,profile,label)
+ if self.destroyed then return false,"Session is unloaded" end
+ if type(name)~="string" or self.config.Profiles[name]==nil then return false,"Unknown prediction profile slot" end
+ if label~=nil and (type(label)~="string" or #label<1 or #label>64) then return false,"Invalid weapon label" end
+ local options=table.clone(self.config)
+ options.Profiles=table.clone(self.config.Profiles)
+ options.Profiles[name]=profile or options.Profiles[name]
+ options.WeaponProfile=name
+ local normalized,message=Config.new(options)
+ if not normalized then return false,message end
+ self.config.Profiles[name]=normalized.Profiles[name];self.config.WeaponProfile=name
+ self.prediction.config.Profiles[name]=normalized.Profiles[name];self.prediction.config.WeaponProfile=name
+ self.prediction.weaponProfileLabel=label
+ -- Changing a ballistic model invalidates output EMA, not target or Memory.
+ for _,state in self.prediction.policies do
+  state.position=nil;state.targetPosition=nil;state.lastPositionTime=nil
+ end
+ self.comparisons=nil;self.lastPredictionOrigin=nil
+ return true
+end
+function Session:SetPredictionOrigin(provider)
+ if self.destroyed then return false,"Session is unloaded" end
+ if provider~=nil and type(provider)~="function" then return false,"Invalid prediction origin provider" end
+ self.predictionOriginProvider=provider
+ for _,state in self.prediction.policies do state.position=nil;state.targetPosition=nil;state.lastPositionTime=nil end
+ self.comparisons=nil;self.lastPredictionOrigin=nil
+ return true
 end
 function Session:LockTarget(player)
  if self.destroyed or not self.config.Enabled then return false,"Disabled" end
@@ -1970,7 +2005,8 @@ function Session:_ping(t)
  local ok,rtt=pcall(function() return self.player:GetNetworkPing() end)
  self.prediction:samplePing(if ok and finite(rtt) and rtt>=0 and rtt<=2 then rtt else nil,t)
 end
-function Session:_step(t)
+function Session:_step(t,origin)
+ assert(origin==nil or vector(origin),"Invalid prediction origin")
  if self.destroyed then return end
  if not self.config.Enabled then self:destroy();return end
  local camera,inset,reference,fov=self:_view(t)
@@ -1992,7 +2028,13 @@ function Session:_step(t)
      -- Derive remote velocity from recent positions; no future truth is supplied.
      self.prediction:observe(t,data.part.Position,state)
     end
-    self.comparisons=self.prediction:predictComparisons(self:_origin(),t)
+    if origin==nil and self.predictionOriginProvider then
+     local obtained,value=pcall(self.predictionOriginProvider)
+     if not obtained then error("Owned weapon prediction origin failed: "..tostring(value)) end
+     if value~=nil then assert(vector(value),"Invalid owned weapon prediction origin");origin=value end
+    end
+    self.lastPredictionOrigin=origin or self:_origin()
+    self.comparisons=self.prediction:predictComparisons(self.lastPredictionOrigin,t)
    end
   end
  else self.overlay:hideDot() end
@@ -2009,8 +2051,12 @@ function Session:_step(t)
    "status="..tostring(if p then p.status else "Ready | No target"))
  end
 end
-function Session:CreateShotAdapter(fire)
+function Session:CreateShotAdapter(fire,options)
  assert(not self.destroyed,"Session is unloaded")
+ options=options or {}
+ assert(type(options)=="table","Invalid shot adapter options")
+ for key in options do assert(key=="getOrigin" or key=="maxAge","Unknown shot adapter option") end
+ assert(options.getOrigin==nil or type(options.getOrigin)=="function","Invalid shot origin provider")
  for i=#self.adapters,1,-1 do if self.adapters[i].destroyed then table.remove(self.adapters,i) end end
  assert(#self.adapters<32,"Too many active shot adapters")
  local adapter=ShotAdapter.new({
@@ -2018,7 +2064,9 @@ function Session:CreateShotAdapter(fire)
   getSnapshot=function()
    if self.destroyed or not self.locked then return nil end
    local t=self:_clock()
-   self:_step(t)
+   local origin=if options.getOrigin then options.getOrigin() else nil
+   if options.getOrigin and not vector(origin) then return nil end
+   self:_step(t,origin)
    if not self.locked or not self.comparisons or not self.comparisons.active then return nil end
    local p=self.comparisons.active
    return {targetUserId=self.locked.player.UserId,character=self.locked.character,part=self.locked.part,
@@ -2029,7 +2077,7 @@ function Session:CreateShotAdapter(fire)
     and self.locked.character==ticket.character and self.locked.part==ticket.part
     and self:IsValidTarget(self.locked.player)
   end,
-  fire=fire,capacity=120,maxAge=1,
+  fire=fire,capacity=120,maxAge=options.maxAge or 1,
   onMeasurement=function(record)
    self.lastError=record.active and record.active.errorStuds
   end,
@@ -2047,6 +2095,7 @@ function Session:destroy()
  self.destroyed=true
  self.config.Enabled=false
  self.locked=nil;self.comparisons=nil
+ self.predictionOriginProvider=nil
  disconnect(self.targetConnections)
  disconnect(self.connections)
  for _, adapter in self.adapters do pcall(function() adapter:destroy() end) end
@@ -2176,7 +2225,7 @@ end
 return Session
 end
 -- END Session
--- BEGIN Bootstrap | sha256 4a14c23d803f759ec12f9676f1419bd6bff6d18f75f643d8a9debbe976e550e7
+-- BEGIN Bootstrap | sha256 275c02a044f7c3df32da5f3d7a36989bb7ba98b1b94baebd65857c6e20fa8cb2
 factories["Bootstrap"] = function(loadModule)
 --!nonstrict
 -- Protected startup orchestration. Runtime owns readiness; Session owns resources.
@@ -2258,7 +2307,7 @@ function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
   if not session then error(Runtime.errorMessage(report),2) end
   return session
  end
- for _,name in {"GetLockedTarget","GetPredictedPosition","GetPrediction","LockTarget","UnlockTarget","IsValidTarget","CreateShotAdapter","SetEnabled","Unload"} do
+ for _,name in {"GetLockedTarget","GetPredictedPosition","GetPrediction","LockTarget","UnlockTarget","IsValidTarget","CreateShotAdapter","SetWeaponProfile","SetPredictionOrigin","SetEnabled","Unload"} do
   API[name]=function(...)
    if not API.session then return nil,"Not initialized" end
    return API.session[name](API.session,...)

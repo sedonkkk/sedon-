@@ -14,15 +14,15 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Configuración, API, demo de disparo propio y pruebas](docs/PINK_DOT_LOCK.md). `python3 scripts/build_pink.py` genera el archivo y los lugares de Studio; `python3 scripts/check_pink.py` ejecuta sus comprobaciones.
 
-[Auditoría y arma propia integrada](docs/SEDWARE_WEAPON_INTEGRATION.md): la demostración de Studio incluye un Tool **SEDWARE Revolver**. C bloquea; clic consume la posición predicha, o la mira cuando no existe bloqueo. Su servidor valida y confirma raycast/daño reales. Este Tool es propio y no modifica el Revolver original de Da Hood. Abre [PinkDotLockTest](studio/PinkDotLockTest.rbxlx) con servidor y dos jugadores; ejecución nativa pendiente.
+[SEDWARE v4 multiarmas](docs/SEDWARE_MULTIWEAPON.md): WeaponManager mantiene una sola selección y Memory al cambiar entre Revolver, Pistol, Shotgun, Rifle, Automatic y Projectile **propios**. Incluye dispersión por pellet y Parts físicas controladas por el servidor. C bloquea, clic dispara, mantener clic repite con Automatic. En [PinkDotLockTest](studio/PinkDotLockTest.rbxlx), F6 ejecuta la comprobación nativa con dos jugadores y genera un informe de impactos/daño. **No conecta las armas de Da Hood; ejecución nativa pendiente.**
 
 [Corrección de inicialización y guía de consola SEDWARE](docs/SEDWARE_INITIALIZATION.md): espera limitada de recursos, diagnósticos por fase y de C; valores X/Y conservados.
 
-[Corrección de LockKey en v3](docs/SEDWARE_LOCKKEY.md): acepta `"C"` y Enum.KeyCode.C mediante normalización nativa estricta. 306 pruebas pasan, incluida la integración del arma propia; no se verifica Da Hood mediante dobles.
+[Corrección de LockKey en v3](docs/SEDWARE_LOCKKEY.md): acepta `"C"` y Enum.KeyCode.C mediante normalización nativa estricta. 342 pruebas pasan, incluido el puente multiarmas; no se verifica Roblox ni Da Hood mediante dobles.
 
 [SEDWARE.lua](SEDWARE.lua) ofrece una entrada estable que carga PinkDotLock.lua de main; recibe futuras correcciones usando la misma URL.
 
-[Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 210 pruebas de Pink/SEDWARE y 96 anteriores pasan; motor de Studio y Da Hood sin comprobar.
+[Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 246 pruebas de Pink/SEDWARE y 96 anteriores pasan; el loader carga las funciones de cliente. Los controladores multiarmas y el servidor se distribuyen en el lugar de Studio.
 
 ## Ejecutar
 

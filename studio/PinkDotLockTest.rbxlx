@@ -95,11 +95,11 @@
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="RBX13">
+      <Item class="LocalScript" referent="RBX18">
         <Properties>
           <string name="Name">SEDWAREWeaponClient</string>
           <ProtectedString name="Source">--!nonstrict
--- OWNED STUDIO EXPERIENCE ONLY. Equip "SEDWARE Revolver" and click to fire.
+-- OWNED STUDIO EXPERIENCE ONLY. Six compatible Tools share one SEDWARE lock.
 -- C selects through SEDWARE. Locked shots use its public predicted position;
 -- unlocked shots follow the camera/mouse ray. No camera writes or game hooks.
 local RunService=game:GetService("RunService")
@@ -114,7 +114,8 @@ local HttpService=game:GetService("HttpService") -- GenerateGUID only; no HTTP r
 local player=Players.LocalPlayer
 local world=workspace
 local connections,trackedTools,containers={},{},{}
-local controller,destroyed,activeTool=nil,false,nil
+local manager,verification,destroyed=nil,nil,false
+local api
 local owner
 local function logFailure(message)
  warn("[SEDWARE][Weapon] "..tostring(message))
@@ -140,24 +141,38 @@ local function cleanup()
  disconnect(connections)
  for tool,list in trackedTools do disconnect(list);trackedTools[tool]=nil end
  for container,list in containers do disconnect(list);containers[container]=nil end
- if controller then controller:destroy() end
- activeTool=nil
+ if verification then verification:destroy() end
+ if manager then manager:destroy() end
  if owner then pcall(function() owner:Destroy() end);owner=nil end
 end
 local ok,problem=xpcall(function()
  assert(player,"LocalPlayer unavailable")
  local bundle=required(ReplicatedStorage,"PinkDotLock","ModuleScript")
- local api=require(bundle)
+ api=require(bundle)
  assert(type(api)=="table" and api.session and not api.session.destroyed,"SEDWARE initialization failed; inspect [SEDWARE] console messages")
  local modules=required(ReplicatedStorage,"SEDWAREWeaponModules","Folder")
- local Controller=require(required(modules,"ClientController","ModuleScript"))
- local WeaponSettings=require(required(modules,"WeaponSettings","ModuleScript"))
- local settings=WeaponSettings.new()
- local toolName,range=settings.WeaponName,settings.Range
+ local WeaponManager=require(required(modules,"WeaponManager","ModuleScript"))
+ local WeaponProfiles=require(required(modules,"WeaponProfiles","ModuleScript"))
+ local NativeVerification=require(required(modules,"NativeVerification","ModuleScript"))
+ local profiles=WeaponProfiles.defaults()
  local remotes=required(ReplicatedStorage,"SEDWAREWeaponRemotes","Folder")
  assert(remotes:GetAttribute("OwnedSEDWAREWeapon")==true,"Owned Studio weapon remotes marker missing")
  local Fire=required(remotes,"Fire","RemoteEvent")
  local Result=required(remotes,"Result","RemoteEvent")
+ local Verification=required(remotes,"Verification","RemoteFunction")
+ local function invokeVerification(action,targetId,runId)
+  if not remotes.Parent then return {ok=false,reason="native-test-remotes-unavailable"} end
+  local finished,result=false,nil
+  local worker=task.spawn(function()
+   local succeeded,value=pcall(function() return Verification:InvokeServer(action,targetId,runId) end)
+   result=if succeeded then value else {ok=false,reason=tostring(value)}
+   finished=true
+  end)
+  local deadline=os.clock()+5
+  while not finished and remotes.Parent and os.clock()&lt;deadline do task.wait(0.05) end
+  if not finished then pcall(task.cancel,worker);return {ok=false,reason="native-test-control-timeout"} end
+  return result
+ end
  -- This ScreenGui has ResetOnSpawn=false. A direct PlayerGui BindableEvent can
  -- be removed during respawn even while the SEDWARE interface is preserved.
  local ownerContainer=api.session.overlay.gui
@@ -179,15 +194,14 @@ local ok,problem=xpcall(function()
  local cameraRayParams=RaycastParams.new()
  cameraRayParams.FilterType=Enum.RaycastFilterType.Exclude
  cameraRayParams.IgnoreWater=true
- local function getOrigin()
-  local tool=activeTool
+ local function getOrigin(tool)
   if not tool or tool.Parent~=player.Character then return nil end
   local handle=tool:FindFirstChild("Handle")
   if not handle or not handle:IsA("BasePart") then return nil end
   local muzzle=handle:FindFirstChild("Muzzle")
   return if muzzle and muzzle:IsA("Attachment") then muzzle.WorldPosition else nil
  end
- local function getCameraAim()
+ local function getCameraAim(profile)
   local camera=world.CurrentCamera
   if not camera then return nil end
   local size=camera.ViewportSize
@@ -201,21 +215,25 @@ local ok,problem=xpcall(function()
    x,y=mouse.X,mouse.Y
   end
   local ray=camera:ViewportPointToRay(x,y)
-  local direction=ray.Direction*range
+  local direction=ray.Direction*profile.Range
   cameraRayParams.FilterDescendantsInstances=if player.Character then {player.Character} else {}
   local result=world:Raycast(ray.Origin,direction,cameraRayParams)
   return if result then result.Position else ray.Origin+direction
  end
  local function status(kind,details)
   if destroyed then return end
+  if verification then verification:record(kind,details) end
   local caption
   if kind=="Pending" then
-   print("[SEDWARE][Weapon][PENDING] shot="..details.shotId.." mode="..details.mode.." waiting for authoritative server raycast")
+   print("[SEDWARE][Weapon][PENDING] shot="..details.shotId.." weapon="..tostring(details.request.weaponId).." mode="..details.mode.." waiting for server collision result")
    caption="Shot pending | "..details.mode
+  elseif kind=="InFlight" then
+   print("[SEDWARE][Weapon][IN FLIGHT] shot="..details.shotId.." physical projectile launched; no impact confirmed")
+   caption="Projectile in flight | no impact yet"
   elseif kind=="Confirmed" then
    local contact=if details.selectedTargetHit then "Confirmed target hit" elseif details.hit then "Confirmed surface contact" else "Confirmed miss"
    local damage=if type(details.damageApplied)=="number" then " | damage="..details.damageApplied else ""
-   print("[SEDWARE][Weapon][CONFIRMED] shot="..details.shotId.." "..contact..damage
+   print("[SEDWARE][Weapon][CONFIRMED] shot="..details.shotId.." weapon="..tostring(details.weaponId).." "..contact..damage
     .." serverTime="..tostring(details.referenceTime).." impact="..tostring(details.impactPosition))
    caption=contact..damage
    if details.measurement then
@@ -240,31 +258,75 @@ local ok,problem=xpcall(function()
    if not shown then logFailure("Cannot show owned shot status: "..tostring(notifyError)) end
   end
  end
- controller=Controller.new({api=api,clock=function() return world:GetServerTimeNow() end,
-  sessionId=HttpService:GenerateGUID(false),weaponName=toolName,
+ manager=WeaponManager.new({api=api,clock=function() return world:GetServerTimeNow() end,
+  sessionId=HttpService:GenerateGUID(false),profiles=profiles,
   send=function(request) Fire:FireServer(request) end,
   getCameraAim=getCameraAim,getOrigin=getOrigin,
-  isEquipped=function() return activeTool~=nil and activeTool.Parent==player.Character and activeTool:GetAttribute("OwnedSEDWAREWeapon")==true end,
-  onStatus=status,timeout=2,maxPending=64})
+  isEquipped=function(tool) return tool~=nil and tool.Parent==player.Character and tool:GetAttribute("OwnedSEDWAREWeapon")==true
+   and profiles[tool:GetAttribute("SEDWAREProfileId")]~=nil end,
+  onStatus=status,
+  onWeaponChanged=function(profile)
+   print("[SEDWARE][Weapon][EQUIPPED] "..profile.Id.." kind="..profile.Kind.." pellets="..profile.Pellets
+    .." automatic="..tostring(profile.Automatic).." lockedTarget="..tostring(api.GetLockedTarget()))
+  end})
+ local function getTool(id)
+  for _,container in {player.Character,player:FindFirstChildOfClass("Backpack")} do
+   if container then
+    for _,child in container:GetChildren() do
+     if child:IsA("Tool") and child:GetAttribute("OwnedSEDWAREWeapon")==true and child:GetAttribute("SEDWAREProfileId")==id then return child end
+    end
+   end
+  end
+  return nil
+ end
+ verification=NativeVerification.new({api=api,manager=manager,clock=function() return world:GetServerTimeNow() end,
+  wait=task.wait,getTool=getTool,getCameraAim=getCameraAim,runtimeName="RobloxStudio",
+  getHumanoid=function() return assert(player.Character and player.Character:FindFirstChildOfClass("Humanoid"),"Native test shooter is not alive") end,
+  beginRun=function(targetId) return invokeVerification("Begin",targetId) end,
+  endRun=function(runId)
+   task.defer(function()
+    if remotes.Parent then local result=invokeVerification("End",nil,runId)
+     if type(result)~="table" or not result.ok then logFailure("Native test health restore not confirmed: "..tostring(type(result)=="table" and result.reason or result)) end
+    end
+   end)
+  end,
+  publish=function(report)
+   local encoded=HttpService:JSONEncode(report)
+   player:SetAttribute("SEDWARE_NativeReport",encoded)
+   print("[SEDWARE][NATIVE RUN]["..(if report.passed then "PASS" else "FAIL").."] "..encoded)
+  end})
+ connect(connections,UserInputService.InputBegan,function(input,processed)
+  if processed or UserInputService:GetFocusedTextBox() then return end
+  if input.KeyCode==api.session.config.LockKey then
+   task.defer(function() if not destroyed then verification:noteC() end end)
+  elseif input.KeyCode==Enum.KeyCode.F6 then
+   task.spawn(function()
+    local ran,result,problem=pcall(function() return verification:run() end)
+    if not ran or not result then logFailure("Native verification did not complete: "..tostring(if ran then problem else result)) end
+   end)
+  end
+ end)
  connect(connections,Result.OnClientEvent,function(response)
   if destroyed then return end
-  local result,err=controller:receive(response)
+  local result,err=manager:receive(response)
   if not result then logFailure("Ignored owned shot response: "..tostring(err)) end
  end)
- connect(connections,RunService.Heartbeat,function() if not destroyed then controller:step() end end)
+ connect(connections,RunService.Heartbeat,function()
+  if not destroyed then
+   local advanced,problem=pcall(function() manager:step() end)
+   if not advanced then logFailure("Weapon heartbeat failed: "..tostring(problem));cleanup() end
+  end
+ end)
  local function trackTool(tool)
-  if destroyed or not tool:IsA("Tool") or tool.Name~=toolName or tool:GetAttribute("OwnedSEDWAREWeapon")~=true or trackedTools[tool] then return end
+  if destroyed or not tool:IsA("Tool") or tool:GetAttribute("OwnedSEDWAREWeapon")~=true or trackedTools[tool] then return end
+  local id=tool:GetAttribute("SEDWAREProfileId")
+  if not profiles[id] then logFailure("Unsupported owned weapon profile: "..tostring(id));return end
   local list={};trackedTools[tool]=list
-  connect(list,tool.Activated,function()
-   if destroyed or tool.Parent~=player.Character then return end
-   activeTool=tool
-   controller:fire()
-  end)
+  manager:track(tool,id)
   connect(list,tool.Destroying,function()
    disconnect(list);trackedTools[tool]=nil
-   if activeTool==tool then activeTool=nil end
+   if not manager.destroyed then manager:untrack(tool) end
   end)
-  connect(list,tool.Unequipped,function() if activeTool==tool then activeTool=nil end end)
  end
  local function untrackContainer(container)
   local list=containers[container]
@@ -284,18 +346,23 @@ local ok,problem=xpcall(function()
  if player.Character then trackContainer(player.Character) end
  connect(connections,player.CharacterAdded,trackContainer)
  connect(connections,player.CharacterRemoving,function(character)
-  if activeTool and activeTool.Parent==character then activeTool=nil end
+  manager:unequip()
   untrackContainer(character)
   for tool,list in trackedTools do
-   if tool:IsDescendantOf(character) then disconnect(list);trackedTools[tool]=nil end
+   if tool:IsDescendantOf(character) then disconnect(list);trackedTools[tool]=nil;manager:untrack(tool) end
   end
  end)
  connect(connections,owner.Destroying,cleanup)
- print("[SEDWARE][Weapon][READY] Owned Studio weapon connected. Equip "..toolName..", C locks/unlocks, click fires. Camera stays free. Range="..range)
+ print("[SEDWARE][Weapon][READY] WeaponManager ready; six OWN profiles registered. Tools connect on arrival/equip. C locks; click fires; hold for Automatic. F6 native verification after C. Camera stays free.")
 end,function(err)
  return if debug and type(debug.traceback)=="function" then debug.traceback(tostring(err),2) else tostring(err)
 end)
-if not ok then cleanup();logFailure("Owned Studio weapon client initialization failed: "..tostring(problem)) end
+if not ok then
+ cleanup();logFailure("Owned Studio weapon client initialization failed: "..tostring(problem))
+ if api and api.session and not api.session.destroyed and api.session.overlay then
+  pcall(function() api.session.overlay:notify("SEDWARE",world:GetServerTimeNow(),3,"Weapon integration failed | "..tostring(problem)) end)
+ end
+end
 </ProtectedString>
         </Properties>
       </Item>
@@ -309,7 +376,7 @@ if not ok then cleanup();logFailure("Owned Studio weapon client initialization f
       <Properties>
         <string name="Name">PinkDotLock</string>
         <ProtectedString name="Source">--!nonstrict
--- SEDWARE startup v3 | robust LockKey normalization. Edit Config below; X/Y are seconds.
+-- SEDWARE v4 | validated weapon-profile and muzzle APIs. Edit Config below; X/Y are seconds.
 -- The dot shows the observed part, never the predicted aim point.
 -- Camera stays free. Public client APIs only; no weapon integration for Da Hood.
 local function bootTraceback(problem)
@@ -322,7 +389,7 @@ local function bootLog(phase,status,detail)
  local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn
  if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end
 end
-bootLog("Execution","START","SEDWARE startup v3 payload began execution; LockKey normalization enabled")
+bootLog("Execution","START","SEDWARE v4 payload began execution; LockKey normalization and owned-weapon APIs enabled")
 local Config
 local configBuilt,headerError=xpcall(function() Config = {
  Enabled=true, LockKey="C", LockMode="Auto",
@@ -1171,7 +1238,7 @@ end
 return Selection
 end
 -- END Selection
--- BEGIN Prediction | sha256 2e3d17af6457258489c42f77cd1dfed51c2e437292da729032a844b1816fe7dd
+-- BEGIN Prediction | sha256 9b6d1e27b908823f161d61d421925e779ba7cf39a9896563ce219835dd2ccb78
 factories["Prediction"] = function(loadModule)
 --!nonstrict
 -- X/Z use PredictionX seconds; Y uses PredictionY seconds. These configurable
@@ -1339,7 +1406,7 @@ function Prediction:_predict(origin,now,policy,key)
   rawPingMs=if self.pingAvailable then self.latency.raw*2000 else nil,
   smoothedPingMs=if self.pingAvailable then self.latency.smoothed*2000 else nil,
   status=status,flightSeconds=flight,physicsVerified=false,physicsStatus=physicsStatus,
-  sampleTime=sample.t,createdAt=now,range=range,weaponProfile=c.WeaponProfile,policy=policy,
+  sampleTime=sample.t,createdAt=now,range=range,weaponProfile=self.weaponProfileLabel or c.WeaponProfile,policy=policy,
   state=sample.state}
 end
 function Prediction:predict(origin,now,policyOverride)
@@ -2080,7 +2147,7 @@ end
 return ShotAdapter
 end
 -- END ShotAdapter
--- BEGIN Session | sha256 76e76894c0593cbe0c9fe790f39c70f40d7ef4bb553dd7a06a4e533617c18389
+-- BEGIN Session | sha256 4a60c46998e441f190066b94a523fe2818b085455bc3df1d7b83fb4eb68ddc18
 factories["Session"] = function(loadModule)
 --!nonstrict
 -- Public client APIs only. Selection and prediction never write camera,
@@ -2197,9 +2264,44 @@ end
 function Session:GetPrediction()
  return if not self.destroyed and self.comparisons then self.comparisons.active else nil
 end
-function Session:GetPredictedPosition()
+function Session:GetPredictedPosition(origin)
+ if origin~=nil then
+  if not vector(origin) then return nil,"Invalid prediction origin" end
+  local previous=self.lastPredictionOrigin
+  if self.locked and (not previous or previous.X~=origin.X or previous.Y~=origin.Y or previous.Z~=origin.Z) then
+   self:_step(self:_clock(),origin)
+  end
+ end
  local record=self:GetPrediction()
  return record and record.position
+end
+function Session:SetWeaponProfile(name,profile,label)
+ if self.destroyed then return false,"Session is unloaded" end
+ if type(name)~="string" or self.config.Profiles[name]==nil then return false,"Unknown prediction profile slot" end
+ if label~=nil and (type(label)~="string" or #label&lt;1 or #label&gt;64) then return false,"Invalid weapon label" end
+ local options=table.clone(self.config)
+ options.Profiles=table.clone(self.config.Profiles)
+ options.Profiles[name]=profile or options.Profiles[name]
+ options.WeaponProfile=name
+ local normalized,message=Config.new(options)
+ if not normalized then return false,message end
+ self.config.Profiles[name]=normalized.Profiles[name];self.config.WeaponProfile=name
+ self.prediction.config.Profiles[name]=normalized.Profiles[name];self.prediction.config.WeaponProfile=name
+ self.prediction.weaponProfileLabel=label
+ -- Changing a ballistic model invalidates output EMA, not target or Memory.
+ for _,state in self.prediction.policies do
+  state.position=nil;state.targetPosition=nil;state.lastPositionTime=nil
+ end
+ self.comparisons=nil;self.lastPredictionOrigin=nil
+ return true
+end
+function Session:SetPredictionOrigin(provider)
+ if self.destroyed then return false,"Session is unloaded" end
+ if provider~=nil and type(provider)~="function" then return false,"Invalid prediction origin provider" end
+ self.predictionOriginProvider=provider
+ for _,state in self.prediction.policies do state.position=nil;state.targetPosition=nil;state.lastPositionTime=nil end
+ self.comparisons=nil;self.lastPredictionOrigin=nil
+ return true
 end
 function Session:LockTarget(player)
  if self.destroyed or not self.config.Enabled then return false,"Disabled" end
@@ -2280,7 +2382,8 @@ function Session:_ping(t)
  local ok,rtt=pcall(function() return self.player:GetNetworkPing() end)
  self.prediction:samplePing(if ok and finite(rtt) and rtt&gt;=0 and rtt&lt;=2 then rtt else nil,t)
 end
-function Session:_step(t)
+function Session:_step(t,origin)
+ assert(origin==nil or vector(origin),"Invalid prediction origin")
  if self.destroyed then return end
  if not self.config.Enabled then self:destroy();return end
  local camera,inset,reference,fov=self:_view(t)
@@ -2302,7 +2405,13 @@ function Session:_step(t)
      -- Derive remote velocity from recent positions; no future truth is supplied.
      self.prediction:observe(t,data.part.Position,state)
     end
-    self.comparisons=self.prediction:predictComparisons(self:_origin(),t)
+    if origin==nil and self.predictionOriginProvider then
+     local obtained,value=pcall(self.predictionOriginProvider)
+     if not obtained then error("Owned weapon prediction origin failed: "..tostring(value)) end
+     if value~=nil then assert(vector(value),"Invalid owned weapon prediction origin");origin=value end
+    end
+    self.lastPredictionOrigin=origin or self:_origin()
+    self.comparisons=self.prediction:predictComparisons(self.lastPredictionOrigin,t)
    end
   end
  else self.overlay:hideDot() end
@@ -2319,8 +2428,12 @@ function Session:_step(t)
    "status="..tostring(if p then p.status else "Ready | No target"))
  end
 end
-function Session:CreateShotAdapter(fire)
+function Session:CreateShotAdapter(fire,options)
  assert(not self.destroyed,"Session is unloaded")
+ options=options or {}
+ assert(type(options)=="table","Invalid shot adapter options")
+ for key in options do assert(key=="getOrigin" or key=="maxAge","Unknown shot adapter option") end
+ assert(options.getOrigin==nil or type(options.getOrigin)=="function","Invalid shot origin provider")
  for i=#self.adapters,1,-1 do if self.adapters[i].destroyed then table.remove(self.adapters,i) end end
  assert(#self.adapters&lt;32,"Too many active shot adapters")
  local adapter=ShotAdapter.new({
@@ -2328,7 +2441,9 @@ function Session:CreateShotAdapter(fire)
   getSnapshot=function()
    if self.destroyed or not self.locked then return nil end
    local t=self:_clock()
-   self:_step(t)
+   local origin=if options.getOrigin then options.getOrigin() else nil
+   if options.getOrigin and not vector(origin) then return nil end
+   self:_step(t,origin)
    if not self.locked or not self.comparisons or not self.comparisons.active then return nil end
    local p=self.comparisons.active
    return {targetUserId=self.locked.player.UserId,character=self.locked.character,part=self.locked.part,
@@ -2339,7 +2454,7 @@ function Session:CreateShotAdapter(fire)
     and self.locked.character==ticket.character and self.locked.part==ticket.part
     and self:IsValidTarget(self.locked.player)
   end,
-  fire=fire,capacity=120,maxAge=1,
+  fire=fire,capacity=120,maxAge=options.maxAge or 1,
   onMeasurement=function(record)
    self.lastError=record.active and record.active.errorStuds
   end,
@@ -2357,6 +2472,7 @@ function Session:destroy()
  self.destroyed=true
  self.config.Enabled=false
  self.locked=nil;self.comparisons=nil
+ self.predictionOriginProvider=nil
  disconnect(self.targetConnections)
  disconnect(self.connections)
  for _, adapter in self.adapters do pcall(function() adapter:destroy() end) end
@@ -2486,7 +2602,7 @@ end
 return Session
 end
 -- END Session
--- BEGIN Bootstrap | sha256 4a14c23d803f759ec12f9676f1419bd6bff6d18f75f643d8a9debbe976e550e7
+-- BEGIN Bootstrap | sha256 275c02a044f7c3df32da5f3d7a36989bb7ba98b1b94baebd65857c6e20fa8cb2
 factories["Bootstrap"] = function(loadModule)
 --!nonstrict
 -- Protected startup orchestration. Runtime owns readiness; Session owns resources.
@@ -2568,7 +2684,7 @@ function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
   if not session then error(Runtime.errorMessage(report),2) end
   return session
  end
- for _,name in {"GetLockedTarget","GetPredictedPosition","GetPrediction","LockTarget","UnlockTarget","IsValidTarget","CreateShotAdapter","SetEnabled","Unload"} do
+ for _,name in {"GetLockedTarget","GetPredictedPosition","GetPrediction","LockTarget","UnlockTarget","IsValidTarget","CreateShotAdapter","SetWeaponProfile","SetPredictionOrigin","SetEnabled","Unload"} do
   API[name]=function(...)
    if not API.session then return nil,"Not initialized" end
    return API.session[name](API.session,...)
@@ -2619,6 +2735,7 @@ local defaults = {
 	WeaponName = "SEDWARE Revolver", Range = 400, Cooldown = 0.35, Damage = 25,
 	RequestMaxAge = 0.6, ClockTolerance = 0.05, MaxOriginDistance = 3,
 	MaxAimDistance = 2000, MaxSessionsPerPlayer = 64,
+	MaxProjectiles = 64, MaxProjectilesPerPlayer = 8,
 }
 local allowedParts = {}
 for _, name in {
@@ -2632,6 +2749,7 @@ local limits = {
 	Range = { 1, 2000 }, Cooldown = { 0.05, 10 }, Damage = { 0, 100 },
 	RequestMaxAge = { 0.05, 2 }, ClockTolerance = { 0, 0.2 }, MaxOriginDistance = { 0, 5 },
 	MaxAimDistance = { 1, 10000 }, MaxSessionsPerPlayer = { 1, 128 },
+	MaxProjectiles = { 1, 256 }, MaxProjectilesPerPlayer = { 1, 32 },
 }
 function WeaponSettings.new(overrides)
 	local config = table.clone(defaults)
@@ -2648,6 +2766,7 @@ function WeaponSettings.new(overrides)
 		assert(type(value) == "number" and value == value and value &gt;= bounds[1] and value &lt;= bounds[2], "Invalid " .. key)
 	end
 	assert(config.MaxSessionsPerPlayer % 1 == 0, "MaxSessionsPerPlayer must be an integer")
+	assert(config.MaxProjectiles%1==0 and config.MaxProjectilesPerPlayer%1==0,"Projectile capacities must be integers")
 	config.AllowedParts = table.freeze(table.clone(allowedParts))
 	return table.freeze(config)
 end
@@ -2656,6 +2775,77 @@ return WeaponSettings
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="RBX11">
+        <Properties>
+          <string name="Name">WeaponProfiles</string>
+          <ProtectedString name="Source">--!nonstrict
+-- Configurable OWNED weapon definitions. None describe weapons in Da Hood.
+local WeaponProfiles = {}
+local base = {
+ Name="SEDWARE Custom", Family="Custom", Kind="Hitscan", Automatic=false,
+ Range=400, Cooldown=0.35, Damage=25, Pellets=1, SpreadDegrees=0,
+ Speed=0, Gravity=0, Lifetime=3,
+ PredictionXOffset=0, PredictionYOffset=0, LatencyOffsetSeconds=0,
+ CloseOffset=0, MediumOffset=0, LongOffset=0,
+}
+local limits = {
+ Range={1,2000}, Cooldown={0.05,10}, Damage={0,100}, Pellets={1,32}, SpreadDegrees={0,20},
+ Speed={0,3000}, Gravity={0,500}, Lifetime={0.1,5},
+ PredictionXOffset={-0.2,0.2}, PredictionYOffset={-0.2,0.2}, LatencyOffsetSeconds={-0.2,0.2},
+ CloseOffset={-0.2,0.2}, MediumOffset={-0.2,0.2}, LongOffset={-0.2,0.2},
+}
+local examples = {
+ Revolver={Name="SEDWARE Revolver",Family="Revolver",Cooldown=0.35,Damage=25},
+ Pistol={Name="SEDWARE Pistol",Family="Pistol",Cooldown=0.2,Damage=15,Range=300},
+ Shotgun={Name="SEDWARE Shotgun",Family="Shotgun",Cooldown=0.8,Damage=6,Range=180,Pellets=8,SpreadDegrees=3},
+ Rifle={Name="SEDWARE Rifle",Family="Rifle",Cooldown=0.3,Damage=30,Range=600,SpreadDegrees=0.15},
+ Automatic={Name="SEDWARE Automatic",Family="Automatic",Automatic=true,Cooldown=0.12,Damage=8,Range=400,SpreadDegrees=1},
+ Projectile={Name="SEDWARE Projectile",Family="Projectile",Kind="Projectile",Cooldown=0.7,Damage=35,
+  Range=250,Speed=160,Gravity=196.2,Lifetime=3},
+}
+function WeaponProfiles.validId(value)
+ return type(value)=="string" and #value&gt;=1 and #value&lt;=40 and string.match(value,"^[A-Za-z][A-Za-z0-9_]*$")~=nil
+end
+function WeaponProfiles.normalize(id,overrides)
+ assert(WeaponProfiles.validId(id),"Invalid owned weapon ID")
+ assert(type(overrides)=="table" and getmetatable(overrides)==nil,"Weapon profile must be a plain table")
+ local result=table.clone(base)
+ for key,value in overrides do
+  assert(base[key]~=nil or key=="Id","Unknown weapon profile field: "..tostring(key))
+  if key=="Id" then assert(value==id,"Profile ID mismatch") else result[key]=value end
+ end
+ for _,key in {"Name","Family"} do assert(type(result[key])=="string" and #result[key]&gt;0 and #result[key]&lt;=64,"Invalid profile "..key) end
+ assert(result.Kind=="Hitscan" or result.Kind=="Projectile","Invalid weapon kind")
+ assert(type(result.Automatic)=="boolean","Invalid Automatic flag")
+ for key,bounds in limits do
+  local value=result[key]
+  assert(type(value)=="number" and value==value and value&gt;=bounds[1] and value&lt;=bounds[2],"Invalid profile "..key)
+ end
+ assert(result.Pellets%1==0,"Pellets must be an integer")
+ if result.Kind=="Projectile" then
+  assert(result.Speed&gt;0,"Physical projectile requires positive Speed")
+  assert(result.Pellets==1,"This physical projectile controller accepts one projectile per shot")
+ else
+  assert(result.Speed==0 and result.Gravity==0,"Hitscan must not claim projectile speed or gravity")
+ end
+ result.Id=id
+ return table.freeze(result)
+end
+function WeaponProfiles.defaults()
+ local result={}
+ for id,profile in examples do result[id]=WeaponProfiles.normalize(id,profile) end
+ return result
+end
+function WeaponProfiles.prediction(profile)
+ return {Kind=profile.Kind,Speed=profile.Speed,Gravity=profile.Gravity,
+  PredictionXOffset=profile.PredictionXOffset,PredictionYOffset=profile.PredictionYOffset,
+  LatencyOffsetSeconds=profile.LatencyOffsetSeconds,CloseOffset=profile.CloseOffset,
+  MediumOffset=profile.MediumOffset,LongOffset=profile.LongOffset}
+end
+return WeaponProfiles
+</ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX12">
         <Properties>
           <string name="Name">ClientController</string>
           <ProtectedString name="Source">--!nonstrict
@@ -2693,13 +2883,14 @@ function ClientController.new(options)
  end
  assert(type(options.sessionId)=="string" and #options.sessionId&gt;=1 and #options.sessionId&lt;=64,"Invalid owned weapon sessionId")
  assert(options.onStatus==nil or type(options.onStatus)=="function","Invalid onStatus callback")
+ assert(options.getWeapon==nil or type(options.getWeapon)=="function","Invalid weapon provider")
  local timeout,maxPending=options.timeout or 2,options.maxPending or 64
  assert(finite(timeout) and timeout&gt;0 and timeout&lt;=10,"Invalid response timeout")
  assert(integer(maxPending) and maxPending&gt;=1 and maxPending&lt;=500,"Invalid pending capacity")
  local adapter=options.adapter
  if not adapter then
   assert(type(api.CreateShotAdapter)=="function","SEDWARE owned shot adapter API required")
-  local ok,result,problem=invoke(api.CreateShotAdapter)
+  local ok,result,problem=invoke(api.CreateShotAdapter,nil,{getOrigin=options.getOrigin,maxAge=options.maxAge or 1})
   assert(ok and result,"Cannot create owned shot adapter: "..tostring(if ok then problem else result))
   adapter=result
  end
@@ -2707,7 +2898,7 @@ function ClientController.new(options)
   and type(adapter.destroy)=="function","Invalid owned shot adapter")
  return setmetatable({api=api,adapter=adapter,clock=options.clock,send=options.send,getCameraAim=options.getCameraAim,
   getOrigin=options.getOrigin,isEquipped=options.isEquipped,onStatus=options.onStatus,sessionId=options.sessionId,
-  weaponName=options.weaponName or "SEDWARE Revolver",timeout=timeout,maxPending=maxPending,pending={},pendingCount=0,
+  weaponName=options.weaponName or "SEDWARE Revolver",getWeapon=options.getWeapon,timeout=timeout,maxPending=maxPending,pending={},pendingCount=0,
   nextId=0,destroyed=false,lastResult=nil,stats={sent=0,confirmed=0,hits=0,selectedTargetHits=0,misses=0,
    rejected=0,timedOut=0,measurementCount=0}},ClientController)
 end
@@ -2728,6 +2919,13 @@ function ClientController:fire()
  if not clockOK or not finite(now) then return self:_reject("invalid-clock") end
  self:step(now)
  if self.pendingCount&gt;=self.maxPending then return self:_reject("pending-capacity") end
+ local weapon
+ if self.getWeapon then
+  local weaponOK,result=invoke(self.getWeapon)
+  if not weaponOK or type(result)~="table" or type(result.id)~="string" or #result.id&lt;1 or #result.id&gt;40
+   or not finite(result.timeout) or result.timeout&lt;=0 or result.timeout&gt;10 then return self:_reject("invalid-compatible-weapon") end
+  weapon=result
+ end
  local originOK,origin=invoke(self.getOrigin)
  if not originOK or not vector(origin) then return self:_reject("muzzle-origin-unavailable") end
  local lockedOK,target=invoke(self.api.GetLockedTarget)
@@ -2738,7 +2936,7 @@ function ClientController:fire()
   local captured,result,problem=invoke(function() return self.adapter:capture() end)
   if not captured or not result then return self:_reject("prediction-capture-failed: "..tostring(if captured then problem else result)) end
   ticket=result
-  local predicted,resultPosition=invoke(self.api.GetPredictedPosition)
+  local predicted,resultPosition=invoke(self.api.GetPredictedPosition,origin)
   if not predicted or not vector(resultPosition) then return self:_reject("locked-prediction-unavailable") end
   aimpoint=resultPosition -- Exact public API position, never camera direction while locked.
   local currentOK,current=invoke(self.api.GetLockedTarget)
@@ -2756,6 +2954,7 @@ function ClientController:fire()
  if not finite(length) or length&lt;=0.001 then return self:_reject("degenerate-aimpoint") end
  self.nextId+=1
  local request={sessionId=self.sessionId,shotId=self.nextId,mode=mode,capturedAt=now,origin=origin,aimpoint=aimpoint}
+ if weapon then request.weaponId=weapon.id end
  if ticket then
   local partName=if self.api.session and self.api.session.config then self.api.session.config.TargetPart else ticket.part and ticket.part.Name
   if type(partName)~="string" or #partName&lt;1 or #partName&gt;64 then return self:_reject("invalid-target-part") end
@@ -2764,7 +2963,7 @@ function ClientController:fire()
  end
  table.freeze(request)
  -- Register before send, so synchronous owned transports can return a result.
- local entry={request=request,ticket=ticket,sentAt=now}
+ local entry={request=request,ticket=ticket,sentAt=now,timeout=if weapon then weapon.timeout else self.timeout,launched=false}
  self.pending[request.shotId]=entry;self.pendingCount+=1
  self:_status("Pending",{request=request,shotId=request.shotId,mode=mode})
  local sent,result=invoke(self.send,request)
@@ -2787,6 +2986,14 @@ function ClientController:receive(response)
  local request=entry.request
  if type(response.accepted)~="boolean" or (response.mode~=nil and response.mode~=request.mode) then return nil,"malformed-response" end
  if response.ticketId~=nil and response.ticketId~=request.ticketId then return nil,"ticket-mismatch" end
+ if response.weaponId~=request.weaponId then return nil,"weapon-mismatch" end
+ if response.pending==true then
+  if response.accepted~=true or response.mode~=request.mode or response.stage~="Launched" or response.hit~=nil
+   or response.selectedTargetHit~=nil or response.damageApplied~=nil or entry.launched then return nil,"invalid-launch-confirmation" end
+  entry.launched=true
+  self:_status("InFlight",{shotId=request.shotId,mode=request.mode,weaponId=request.weaponId})
+  return {pending=true,shotId=request.shotId,weaponId=request.weaponId}
+ end
  if response.accepted then
   if response.mode~=request.mode or type(response.hit)~="boolean" or type(response.selectedTargetHit)~="boolean"
    or (response.selectedTargetHit and (not response.hit or request.mode~="Locked"))
@@ -2804,7 +3011,9 @@ function ClientController:receive(response)
  local result={sessionId=self.sessionId,shotId=request.shotId,mode=request.mode,accepted=response.accepted,
   reason=response.reason,referenceTime=response.referenceTime,impactPosition=response.impactPosition,
   hit=response.accepted and response.hit==true,selectedTargetHit=response.accepted and response.selectedTargetHit==true,
-  damageApplied=response.damageApplied,hitName=response.hitName,request=request}
+  damageApplied=response.damageApplied,hitName=response.hitName,request=request,weaponId=request.weaponId,
+  pelletCount=response.pelletCount,pelletHits=response.pelletHits,pellets=response.pellets,
+  engine=response.engine,physicsKind=response.physicsKind}
  if response.accepted then
   self.stats.confirmed+=1
   if result.hit then self.stats.hits+=1 else self.stats.misses+=1 end
@@ -2829,7 +3038,7 @@ function ClientController:step(now)
  end
  if not finite(now) then return end
  for id,entry in self.pending do
-  if now-entry.sentAt&gt;=self.timeout then
+  if now-entry.sentAt&gt;=entry.timeout then
    self.pending[id]=nil;self.pendingCount-=1;self.stats.timedOut+=1
    self:_status("Timeout",{shotId=id,mode=entry.request.mode,reason="server-response-timeout"})
   end
@@ -2845,13 +3054,13 @@ function ClientController:destroy()
  self.destroyed=true
  table.clear(self.pending);self.pendingCount=0
  self.adapter:destroy()
- self.api=nil;self.send=nil;self.clock=nil;self.getCameraAim=nil;self.getOrigin=nil;self.isEquipped=nil;self.onStatus=nil
+ self.api=nil;self.send=nil;self.clock=nil;self.getCameraAim=nil;self.getOrigin=nil;self.isEquipped=nil;self.onStatus=nil;self.getWeapon=nil
 end
 return ClientController
 </ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX12">
+      <Item class="ModuleScript" referent="RBX13">
         <Properties>
           <string name="Name">ServerController</string>
           <ProtectedString name="Source">--!nonstrict
@@ -2859,12 +3068,14 @@ return ClientController
 -- All Roblox accesses live in the injected native wrapper, so this exact
 -- controller can also be exercised by deterministic tests.
 local WeaponSettings = if script then require(script.Parent.WeaponSettings) else require("./WeaponSettings")
+local WeaponProfiles = if script then require(script.Parent.WeaponProfiles) else require("./WeaponProfiles")
+local Spread = if script then require(script.Parent.Spread) else require("./Spread")
 local ServerController = {}
 ServerController.__index = ServerController
 local fields = {
 	sessionId = true, shotId = true, ticketId = true, mode = true,
 	capturedAt = true, origin = true, aimpoint = true, targetUserId = true,
-	targetCharacter = true, partName = true, sampleTime = true,
+	targetCharacter = true, partName = true, sampleTime = true, weaponId = true,
 }
 local function finite(value)
 	return type(value) == "number" and value == value and math.abs(value) &lt; math.huge
@@ -2891,6 +3102,7 @@ local function response(request, reason)
 		if integer(request.shotId) then result.shotId = request.shotId end
 		if integer(request.ticketId) then result.ticketId = request.ticketId end
 		if request.mode == "Normal" or request.mode == "Locked" then result.mode = request.mode end
+		if WeaponProfiles.validId(request.weaponId) then result.weaponId=request.weaponId end
 	end
 	return result
 end
@@ -2901,8 +3113,93 @@ function ServerController.new(options)
 		assert(type(options[name]) == "function", name .. " callback required")
 	end
 	assert(options.isVector == nil or type(options.isVector) == "function", "isVector must be a function")
-	return setmetatable({ settings = WeaponSettings.new(options.settings), callbacks = options,
-		states = {}, destroyed = false }, ServerController)
+	local profiles
+	if options.profiles then
+		profiles={}
+		for id,profile in options.profiles do profiles[id]=WeaponProfiles.normalize(id,profile) end
+		for _,profile in profiles do
+			if profile.Kind=="Projectile" then
+				assert(type(options.launchProjectile)=="function" and type(options.onResult)=="function","Native projectile launch/result callbacks required")
+			end
+		end
+	end
+	return setmetatable({ settings = WeaponSettings.new(options.settings), callbacks = options, profiles=profiles,
+		states = {}, jobs={},nextJob=0,jobCount=0,destroyed = false }, ServerController)
+end
+
+function ServerController:_result(context,entries,reason,endPosition)
+	local callbacks,request,profile=context.callbacks,context.request,context.profile
+	local isVector=callbacks.isVector or finiteVector
+	local referenceTime=callbacks.clock()
+	assert(finite(referenceTime),"Reference clock unavailable after collision query")
+	local actualPosition
+	if context.target then
+		local ok,value=pcall(function() return context.target.part.Position end)
+		if ok and isVector(value) and finiteVector(value) then actualPosition=value end
+	end
+	local result={sessionId=request.sessionId,shotId=request.shotId,ticketId=request.ticketId,weaponId=request.weaponId,
+		accepted=true,mode=request.mode,referenceTime=referenceTime,serverTime=referenceTime,
+		hit=false,selectedTargetHit=false,damageApplied=0,origin=context.origin,
+		impactPosition=endPosition,physicsKind=profile.Kind,pelletCount=#entries,pelletHits=0,pellets={},reason=reason or "miss"}
+	for _,entry in entries do
+		local pellet={hit=entry.result~=nil,impactPosition=entry.endPosition,selectedTargetHit=false,damageApplied=0}
+		if entry.result then
+			local description=callbacks.describeHit(entry.result,context.player)
+			assert(type(description)=="table" and isVector(description.position) and finiteVector(description.position),"Invalid actual impact description")
+			pellet.impactPosition=description.position;pellet.hitName=description.name
+			pellet.selectedTargetHit=context.target~=nil and description.character==context.target.character
+			if not result.hit then result.impactPosition=description.position;result.hitName=description.name;result.hitPlayerUserId=description.playerUserId end
+			result.hit=true;result.pelletHits+=1
+			if pellet.selectedTargetHit then result.selectedTargetHit=true end
+			if description.humanoid and description.character~=context.weapon.character and health(description.humanoid) then
+				local damage=callbacks.applyDamage(description.humanoid,profile.Damage)
+				assert(type(damage)=="table" and finite(damage.before) and finite(damage.after),"Damage callback must return measured health")
+				pellet.damageApplied=math.max(0,damage.before-damage.after)
+				result.damageApplied+=pellet.damageApplied
+			end
+		end
+		table.insert(result.pellets,pellet)
+	end
+	if result.selectedTargetHit then result.reason="selected-target-hit" elseif result.hit then result.reason="surface-impact" end
+	if context.target then
+		result.targetUserId=context.target.player.UserId;result.character=context.target.character;result.actualPosition=actualPosition
+	end
+	return result
+end
+
+function ServerController:_launch(context,direction)
+	if self.jobCount&gt;=self.settings.MaxProjectiles then return response(context.request,"projectile-capacity") end
+	local count=0;for _,job in self.jobs do if job.context.player==context.player then count+=1 end end
+	if count&gt;=self.settings.MaxProjectilesPerPlayer then return response(context.request,"player-projectile-capacity") end
+	self.nextJob+=1
+	local id=self.nextJob
+	local job={context=context,done=false,published=false}
+	self.jobs[id]=job;self.jobCount+=1
+	local function complete(hit,reason,position)
+		if job.done or self.destroyed then return end
+		job.done=true;self.jobs[id]=nil;self.jobCount-=1
+		local ok,result=pcall(function()
+			local isVector=context.callbacks.isVector or finiteVector
+			if not isVector(position) or not finiteVector(position) then return response(context.request,"invalid-projectile-reference") end
+			if reason~="impact" and reason~="range-expired" and reason~="lifetime-expired" then
+				return response(context.request,"projectile-error: "..tostring(reason))
+			end
+			return self:_result(context,{{result=hit,endPosition=position}},reason,position)
+		end)
+		if not ok then local detail=result;result=response(context.request,"server-error");result.error=tostring(detail) end
+		if job.published then context.callbacks.onResult(context.player,result) else job.result=result end
+	end
+	local launched,cancel=pcall(context.callbacks.launchProjectile,context.origin,direction*context.profile.Speed,
+		context.profile,context.weapon.character,complete)
+	if not launched or type(cancel)~="function" then
+		if not job.done then self.jobs[id]=nil;self.jobCount-=1;job.done=true end
+		error("Physical projectile launch failed: "..tostring(cancel))
+	end
+	job.cancel=cancel
+	if job.result then return job.result end
+	job.published=true
+	return {sessionId=context.request.sessionId,shotId=context.request.shotId,ticketId=context.request.ticketId,
+		weaponId=context.request.weaponId,accepted=true,pending=true,stage="Launched",mode=context.request.mode}
 end
 
 function ServerController:_process(player, request)
@@ -2913,6 +3210,11 @@ function ServerController:_process(player, request)
 	if type(request.sessionId) ~= "string" or #request.sessionId &lt; 1 or #request.sessionId &gt; 64 or not integer(request.shotId) then return rejected end
 	if request.mode ~= "Normal" and request.mode ~= "Locked" then rejected.reason = "invalid-mode"; return rejected end
 	if request.ticketId ~= nil and not integer(request.ticketId) then rejected.reason = "invalid-ticket"; return rejected end
+	local profile
+	if self.profiles then
+		profile=self.profiles[request.weaponId]
+		if not WeaponProfiles.validId(request.weaponId) or not profile then rejected.reason="unsupported-weapon";return rejected end
+	elseif request.weaponId~=nil then rejected.reason="unsupported-weapon";return rejected end
 	local settings, callbacks = self.settings, self.callbacks
 	local now = callbacks.clock()
 	if not finite(now) then rejected.reason = "invalid-server-clock"; return rejected end
@@ -2949,6 +3251,8 @@ function ServerController:_process(player, request)
 	if type(weapon) ~= "table" or not weapon.tool or not weapon.character or not health(weapon.humanoid)
 		or not isVector(weapon.origin) or not finiteVector(weapon.origin) then rejected.reason = "weapon-not-equipped"; return rejected end
 	local authoritativeOrigin = weapon.origin
+	if profile and weapon.profileId~=request.weaponId then rejected.reason="weapon-profile-mismatch";return rejected end
+	profile=profile or {Kind="Hitscan",Range=settings.Range,Cooldown=settings.Cooldown,Damage=settings.Damage,Pellets=1,SpreadDegrees=0}
 	if magnitude(request.origin - authoritativeOrigin) &gt; settings.MaxOriginDistance then rejected.reason = "invalid-origin"; return rejected end
 	local delta = request.aimpoint - authoritativeOrigin
 	local distance = magnitude(delta)
@@ -2960,52 +3264,20 @@ function ServerController:_process(player, request)
 		if type(target) ~= "table" or not target.player or target.player.UserId ~= request.targetUserId
 			or target.character ~= request.targetCharacter or not target.part or not health(target.humanoid)
 			or not isVector(target.position) or not finiteVector(target.position) then rejected.reason = "target-lost"; return rejected end
-		if magnitude(target.position - authoritativeOrigin) &gt; settings.Range then rejected.reason = "target-out-of-range"; return rejected end
+		if magnitude(target.position - authoritativeOrigin) &gt; profile.Range then rejected.reason = "target-out-of-range"; return rejected end
 	end
 	-- Rate is consumed before any raycast/damage callback, including a failed
 	-- callback. Retrying cannot cause duplicated physical damage.
-	state.nextFire = now + settings.Cooldown
-	local rayDirection = delta / distance * settings.Range
-	local rayResult = callbacks.raycast(authoritativeOrigin, rayDirection, weapon.character)
-	local hitDescription
-	if rayResult ~= nil then
-		hitDescription = callbacks.describeHit(rayResult, player)
-		if type(hitDescription) ~= "table" or not isVector(hitDescription.position) or not finiteVector(hitDescription.position) then
-			error("Raycast returned an impact without a valid description")
-		end
+	state.nextFire = now + profile.Cooldown
+	local directions=Spread.directions(delta,profile.Pellets,profile.SpreadDegrees,callbacks.random,callbacks.makeVector)
+	local context={callbacks=callbacks,player=player,request=request,profile=profile,target=target,weapon=weapon,origin=authoritativeOrigin}
+	if profile.Kind=="Projectile" then return self:_launch(context,directions[1]) end
+	local entries={}
+	for _,direction in directions do
+		local rayDirection=direction*profile.Range
+		table.insert(entries,{result=callbacks.raycast(authoritativeOrigin,rayDirection,weapon.character,profile),endPosition=authoritativeOrigin+rayDirection})
 	end
-	local selectedHit = target ~= nil and hitDescription ~= nil and hitDescription.character == target.character
-	local referenceTime = callbacks.clock()
-	if not finite(referenceTime) then error("Reference clock unavailable after raycast") end
-	local actualPosition
-	if target then
-		-- Capture the reference before damage can remove a dead character.
-		actualPosition = target.part.Position
-		if not isVector(actualPosition) or not finiteVector(actualPosition) then error("Target reference position unavailable") end
-	end
-	local damageApplied = 0
-	if hitDescription and hitDescription.humanoid and hitDescription.character ~= weapon.character and health(hitDescription.humanoid) then
-		local damage = callbacks.applyDamage(hitDescription.humanoid, settings.Damage)
-		assert(type(damage) == "table" and finite(damage.before) and finite(damage.after), "Damage callback must return measured health")
-		damageApplied = math.max(0, damage.before - damage.after)
-	end
-	local accepted = {
-		sessionId = request.sessionId, shotId = request.shotId, ticketId = request.ticketId,
-		accepted = true, mode = request.mode, serverTime = referenceTime, referenceTime = referenceTime,
-		hit = rayResult ~= nil, selectedTargetHit = selectedHit, damageApplied = damageApplied,
-		impactPosition = if hitDescription then hitDescription.position else authoritativeOrigin + rayDirection,
-		origin = authoritativeOrigin,
-		reason = if selectedHit then "selected-target-hit" elseif hitDescription then "surface-impact" else "miss",
-	}
-	if hitDescription then accepted.hitName = hitDescription.name; accepted.hitPlayerUserId = hitDescription.playerUserId end
-	if target then
-		-- Actual position is read independently at the server reference time;
-		-- no prediction value or proximity check decides an impact.
-		accepted.targetUserId = target.player.UserId
-		accepted.character = target.character
-		accepted.actualPosition = actualPosition
-	end
-	return accepted
+	return self:_result(context,entries,nil,entries[1].endPosition)
 end
 
 function ServerController:process(player, request)
@@ -3018,10 +3290,18 @@ function ServerController:process(player, request)
 end
 function ServerController:removePlayer(player)
 	self.states[player] = nil
+	for id,job in self.jobs do
+		if job.context.player==player then
+			job.done=true;self.jobs[id]=nil;self.jobCount-=1
+			if job.cancel then pcall(job.cancel) end
+		end
+	end
 end
 function ServerController:destroy()
 	if self.destroyed then return end
 	self.destroyed = true
+	for _,job in self.jobs do job.done=true;if job.cancel then pcall(job.cancel) end end
+	table.clear(self.jobs);self.jobCount=0
 	table.clear(self.states)
 	self.callbacks = nil
 end
@@ -3029,13 +3309,413 @@ return ServerController
 </ProtectedString>
         </Properties>
       </Item>
+      <Item class="ModuleScript" referent="RBX14">
+        <Properties>
+          <string name="Name">Spread</string>
+          <ProtectedString name="Source">--!nonstrict
+-- Server-selected uniform cone spread. The aim point remains the cone axis;
+-- neither a target nor prediction proximity is used to decide a pellet hit.
+local Spread = {}
+function Spread.directions(direction,count,degrees,sample,makeVector)
+ assert(type(count)=="number" and count%1==0 and count&gt;=1 and count&lt;=32,"Invalid pellet count")
+ assert(type(degrees)=="number" and degrees==degrees and degrees&gt;=0 and degrees&lt;=20,"Invalid spread angle")
+ local length=direction.Magnitude
+ assert(length&gt;0 and length&lt;math.huge,"Invalid spread direction")
+ local forward=direction/length
+ if degrees==0 then
+  local results={}
+  for _=1,count do table.insert(results,forward) end
+  return results
+ end
+ assert(type(sample)=="function" and type(makeVector)=="function","Server random/vector callbacks required for spread")
+ local ax,ay,az=if math.abs(forward.Y)&lt;0.99 then 0 else 1,if math.abs(forward.Y)&lt;0.99 then 1 else 0,0
+ local right=makeVector(forward.Y*az-forward.Z*ay,forward.Z*ax-forward.X*az,forward.X*ay-forward.Y*ax)
+ right=right/right.Magnitude
+ local up=makeVector(right.Y*forward.Z-right.Z*forward.Y,right.Z*forward.X-right.X*forward.Z,right.X*forward.Y-right.Y*forward.X)
+ local results={}
+ local minimumCos=math.cos(math.rad(degrees))
+ for _=1,count do
+  local u,v=sample(),sample()
+  assert(type(u)=="number" and type(v)=="number" and u&gt;=0 and u&lt;=1 and v&gt;=0 and v&lt;=1,"Invalid server random sample")
+  local cosine=1-u*(1-minimumCos)
+  local sine=math.sqrt(math.max(0,1-cosine*cosine))
+  local angle=2*math.pi*v
+  table.insert(results,forward*cosine+(right*math.cos(angle)+up*math.sin(angle))*sine)
+ end
+ return results
+end
+return Spread
+</ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX15">
+        <Properties>
+          <string name="Name">ProjectileTracker</string>
+          <ProtectedString name="Source">--!nonstrict
+-- Reads positions of a REAL server-owned physical Part in native wiring.
+-- Sweeps each observed segment through Workspace:Raycast; no analytic target
+-- proximity or predicted positions manufacture a collision.
+local ProjectileTracker={}
+ProjectileTracker.__index=ProjectileTracker
+local function finite(n) return type(n)=="number" and n==n and math.abs(n)&lt;math.huge end
+local function vector(v)
+ local ok,x,y,z=pcall(function() return v.X,v.Y,v.Z end)
+ return ok and finite(x) and finite(y) and finite(z)
+end
+function ProjectileTracker.new(options)
+ for _,name in {"clock","getPosition","raycast","onComplete","dispose"} do assert(type(options[name])=="function",name.." callback required") end
+ assert(vector(options.origin) and finite(options.range) and options.range&gt;0 and finite(options.lifetime) and options.lifetime&gt;0,"Invalid projectile limits")
+ local started=options.clock()
+ assert(finite(started),"Invalid projectile clock")
+ return setmetatable({options=options,last=options.origin,started=started,traveled=0,done=false},ProjectileTracker)
+end
+function ProjectileTracker:_finish(result,reason,position)
+ if self.done then return end
+ self.done=true
+ local options=self.options
+ -- Remove the physical resource before a callback can re-enter this tracker.
+ local disposed,disposeError=pcall(options.dispose)
+ local completed,completionError=pcall(options.onComplete,result,reason,position,self.traveled)
+ self.options=nil
+ if not disposed then error("Projectile cleanup failed: "..tostring(disposeError)) end
+ if not completed then error("Projectile completion failed: "..tostring(completionError)) end
+end
+function ProjectileTracker:step(now)
+ if self.done then return end
+ local options=self.options
+ now=now or options.clock()
+ if not finite(now) or now&lt;self.started then self:_finish(nil,"invalid-clock",self.last);return end
+ local ok,current=pcall(options.getPosition)
+ if not ok or not vector(current) then self:_finish(nil,"projectile-lost",self.last);return end
+ local delta=current-self.last
+ local length=delta.Magnitude
+ if not finite(length) then self:_finish(nil,"invalid-projectile-position",self.last);return end
+ if length&gt;0 then
+  local distance=math.min(length,math.max(0,options.range-self.traveled))
+  local direction=delta/length*distance
+  local hitOK,hit=pcall(options.raycast,self.last,direction)
+  if not hitOK then self:_finish(nil,"raycast-error: "..tostring(hit),self.last);return end
+  self.traveled+=distance
+  local endPosition=self.last+direction
+  if hit then self:_finish(hit,"impact",endPosition);return end
+  self.last=endPosition
+  if self.traveled&gt;=options.range then self:_finish(nil,"range-expired",self.last);return end
+ end
+ if now-self.started&gt;=options.lifetime then self:_finish(nil,"lifetime-expired",self.last) end
+end
+function ProjectileTracker:cancel()
+ if self.done then return end
+ self.done=true
+ local options=self.options;self.options=nil
+ options.dispose()
+end
+return ProjectileTracker
+</ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX16">
+        <Properties>
+          <string name="Name">WeaponManager</string>
+          <ProtectedString name="Source">--!nonstrict
+-- One selection/Memory session and one shot-ID stream across compatible Tools.
+-- Registration is explicit: this never discovers or hooks foreign weapons.
+local ClientController=if script then require(script.Parent.ClientController) else require("./ClientController")
+local WeaponProfiles=if script then require(script.Parent.WeaponProfiles) else require("./WeaponProfiles")
+local WeaponManager={}
+WeaponManager.__index=WeaponManager
+local function finite(n) return type(n)=="number" and n==n and math.abs(n)&lt;math.huge end
+local function disconnect(list)
+ for _,connection in list do pcall(function() connection:Disconnect() end) end
+ table.clear(list)
+end
+function WeaponManager.new(options)
+ assert(type(options)=="table" and type(options.api)=="table" and type(options.api.SetWeaponProfile)=="function","Current SEDWARE profile API required")
+ assert(type(options.api.SetPredictionOrigin)=="function","Current SEDWARE muzzle-origin API required")
+ for _,name in {"clock","send","getOrigin","getCameraAim","isEquipped"} do assert(type(options[name])=="function",name.." callback required") end
+ local self=setmetatable({options=options,api=options.api,profiles={},controllers={},tools={},active=nil,
+  held=false,nextFire=-math.huge,destroyed=false},WeaponManager)
+ local configured=options.profiles or WeaponProfiles.defaults()
+ for id,profile in configured do self:register(id,profile) end
+ local session=self.api.session
+ if session then
+  self.saved={slot=session.config.WeaponProfile,custom=table.clone(session.config.Profiles.Custom),
+   label=session.prediction and session.prediction.weaponProfileLabel,origin=session.predictionOriginProvider}
+ end
+ local function origin() return if self.active then options.getOrigin(self.active.tool) else nil end
+ local adapter=options.adapter or self.api.CreateShotAdapter(nil,{getOrigin=origin,maxAge=8})
+ self.client=ClientController.new({api=self.api,clock=options.clock,sessionId=options.sessionId,adapter=adapter,
+  getOrigin=origin,getCameraAim=function() return if self.active then options.getCameraAim(self.active.profile) else nil end,
+  isEquipped=function() return self.active~=nil and options.isEquipped(self.active.tool)==true end,
+  getWeapon=function() return if self.active then {id=self.active.profile.Id,timeout=if self.active.profile.Kind=="Projectile" then self.active.profile.Lifetime+2 else 2} else nil end,
+  send=function(request)
+   local profile=self.profiles[request.weaponId]
+   assert(profile,"Unregistered weapon controller")
+   local context={profile=profile,aimpoint=request.aimpoint,mode=request.mode,
+    targetUserId=request.targetUserId,targetCharacter=request.targetCharacter}
+   local controller=self.controllers[request.weaponId] or options.send
+   return controller(request,context)
+  end,
+  onStatus=options.onStatus,maxPending=64,timeout=2})
+ local originSet,problem=self.api.SetPredictionOrigin(origin)
+ if not originSet then self.client:destroy();error("Cannot set owned muzzle origin: "..tostring(problem)) end
+ return self
+end
+function WeaponManager:register(id,profile)
+ assert(not self.destroyed,"WeaponManager is destroyed")
+ assert(self.profiles[id]==nil,"Weapon profile already registered")
+ local count=0;for _ in self.profiles do count+=1 end
+ assert(count&lt;64,"Too many registered weapon profiles")
+ self.profiles[id]=WeaponProfiles.normalize(id,profile)
+ return self.profiles[id]
+end
+function WeaponManager:registerController(id,callback)
+ assert(not self.destroyed and self.profiles[id],"Registered weapon profile required")
+ assert(type(callback)=="function","Owned controller callback required")
+ self.controllers[id]=callback
+end
+function WeaponManager:equip(tool,id)
+ if self.destroyed then return false,"destroyed" end
+ local profile=self.profiles[id]
+ if not profile then return false,"unsupported-weapon" end
+ if tool==nil or self.options.isEquipped(tool)~=true then return false,"weapon-not-equipped" end
+ if self.active and self.active.tool==tool and self.active.profile.Id==id then return true end
+ local ok,message=self.api.SetWeaponProfile("Custom",WeaponProfiles.prediction(profile),id)
+ if not ok then return false,"prediction-profile-rejected: "..tostring(message) end
+ self.held=false
+ self.active={tool=tool,profile=profile}
+ if self.options.onWeaponChanged then pcall(self.options.onWeaponChanged,profile,tool) end
+ return true
+end
+function WeaponManager:unequip(tool)
+ if self.active and (tool==nil or self.active.tool==tool) then self.held=false;self.active=nil end
+ -- Selection and Memory deliberately belong to SEDWARE, not the equipped Tool.
+end
+function WeaponManager:fire()
+ if self.destroyed then return nil,"destroyed" end
+ if not self.active then return nil,"no-compatible-weapon" end
+ if self.options.isEquipped(self.active.tool)~=true then self:unequip();return nil,"weapon-not-equipped" end
+ local now=self.options.clock()
+ if not finite(now) then return nil,"invalid-clock" end
+ if now+1e-7&lt;self.nextFire then return nil,"client-cooldown" end
+ local profile=self.active.profile
+ local request,message=self.client:fire()
+ if request then self.nextFire=now+profile.Cooldown end
+ return request,message
+end
+function WeaponManager:press()
+ if self.destroyed or not self.active then return nil,"no-compatible-weapon" end
+ self.held=self.active.profile.Automatic
+ return self:fire()
+end
+function WeaponManager:release() self.held=false end
+function WeaponManager:step(now)
+ if self.destroyed then return end
+ now=now or self.options.clock()
+ if not finite(now) then self.held=false;return end
+ self.client:step(now)
+ if self.held and self.active and self.active.profile.Automatic and now+1e-7&gt;=self.nextFire then
+  local cooldown=self.active.profile.Cooldown
+  local request,problem=self:fire()
+  -- No catch-up bursts. A failed held shot backs off rather than spamming.
+  if not request then self.nextFire=now+cooldown end
+ end
+end
+function WeaponManager:track(tool,id)
+ assert(not self.destroyed and self.profiles[id],"Compatible registered Tool required")
+ if self.tools[tool] then return end
+ assert(tool:IsA("Tool"),"Only an authorized Tool can be tracked")
+ local bindings={};self.tools[tool]=bindings
+ local function bind(signal,callback)
+  local connection=signal:Connect(callback)
+  assert(connection and connection.Connected,"Weapon Tool event failed to connect")
+  table.insert(bindings,connection)
+ end
+ local function equipped()
+  local ok,message=self:equip(tool,id)
+  if not ok and self.options.onStatus then pcall(self.options.onStatus,"ClientRejected",{reason=message}) end
+  return ok
+ end
+ bind(tool.Equipped,equipped)
+ bind(tool.Unequipped,function() self:unequip(tool) end)
+ bind(tool.Activated,function()
+  if self.options.isEquipped(tool)==true and equipped() then self:press() end
+ end)
+ bind(tool.Deactivated,function() if self.active and self.active.tool==tool then self:release() end end)
+ bind(tool.AncestryChanged,function() if self.active and self.active.tool==tool and self.options.isEquipped(tool)~=true then self:unequip(tool) end end)
+ bind(tool.Destroying,function() self:untrack(tool) end)
+ if self.options.isEquipped(tool)==true then equipped() end
+end
+function WeaponManager:untrack(tool)
+ self:unequip(tool)
+ local list=self.tools[tool]
+ if list then disconnect(list);self.tools[tool]=nil end
+end
+function WeaponManager:receive(response)
+ if self.destroyed then return nil,"destroyed" end
+ return self.client:receive(response)
+end
+function WeaponManager:summary() return self.client:summary() end
+function WeaponManager:destroy()
+ if self.destroyed then return end
+ self.destroyed=true;self.held=false;self.active=nil
+ for tool in self.tools do self:untrack(tool) end
+ self.client:destroy()
+ if self.saved and self.api.session and not self.api.session.destroyed then
+  self.api.SetWeaponProfile("Custom",self.saved.custom)
+  self.api.SetWeaponProfile(self.saved.slot,nil,self.saved.label)
+  self.api.SetPredictionOrigin(self.saved.origin)
+ end
+ table.clear(self.profiles);table.clear(self.controllers)
+ self.options=nil;self.api=nil
+end
+return WeaponManager
+</ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="RBX17">
+        <Properties>
+          <string name="Name">NativeVerification</string>
+          <ProtectedString name="Source">--!nonstrict
+-- Opt-in F6 exercise of ACTUAL equipped Tool.Activated + server responses.
+-- This does not inject keyboard input, predict collisions or claim a pass from
+-- mathematical errors. A native pass requires confirmed target contact/damage.
+local NativeVerification={}
+NativeVerification.__index=NativeVerification
+function NativeVerification.new(options)
+ for _,name in {"clock","wait","getTool","getHumanoid","getCameraAim","beginRun","endRun","publish"} do
+  assert(type(options[name])=="function",name.." native verification callback required")
+ end
+ return setmetatable({options=options,running=false,destroyed=false,records={},order={},observedC=false,runId=nil},NativeVerification)
+end
+function NativeVerification:noteC()
+ self.observedC=true
+ self.observedTarget=self.options.api.GetLockedTarget()
+ self.observedCharacter=self.observedTarget and self.observedTarget.Character
+end
+function NativeVerification:record(kind,details)
+ if not self.running then return end
+ if kind=="Pending" then
+  if #self.order&gt;=64 then self.overflow=true;return end
+  local request=details.request
+  local profile=self.options.manager.profiles[request.weaponId]
+  local ok,aim=pcall(self.options.getCameraAim,profile)
+  self.records[request.shotId]={request=request,normalAim=if ok then aim else nil}
+  table.insert(self.order,request.shotId)
+ elseif kind=="Confirmed" or kind=="ServerRejected" then
+  local record=self.records[details.shotId]
+  if record then record.result=details end
+ elseif kind=="Timeout" then
+  local record=self.records[details.shotId]
+  if record then record.error="server-response-timeout" end
+ end
+end
+function NativeVerification:_waitUntil(callback,seconds)
+ local deadline=self.options.clock()+seconds
+ while not self.destroyed and self.running and self.options.clock()&lt;deadline do
+  if callback() then return true end
+  self.options.wait(0.05)
+ end
+ return callback() and not self.destroyed
+end
+function NativeVerification:_exercise(id,target)
+ local o=self.options
+ local profile=o.manager.profiles[id]
+ local tool=o.getTool(id)
+ assert(tool,"Native test Tool missing: "..id)
+ o.manager:release()
+ o.getHumanoid():EquipTool(tool)
+ assert(self:_waitUntil(function() return o.manager.active and o.manager.active.profile.Id==id end,2),"Equip did not reach WeaponManager: "..id)
+ assert(o.api.GetLockedTarget()==target,"Weapon change lost the locked target")
+ local dotVisible=o.api.session.overlay.dot.Visible==true
+ local delay=math.max(0,o.manager.nextFire-o.clock())+0.1
+ o.wait(delay)
+ local before=#self.order
+ tool:Activate() -- Actual Tool event path, not a direct call to a mock fire API.
+ if profile.Automatic then o.wait(profile.Cooldown*2.4) else o.wait(0.05) end
+ tool:Deactivate();o.manager:release()
+ assert(self:_waitUntil(function()
+  if #self.order&lt;=before then return false end
+  for i=before+1,#self.order do local r=self.records[self.order[i]];if not r.result and not r.error then return false end end
+  return true
+ end,profile.Lifetime+2.5),"No authoritative final response: "..id)
+ local record={weaponId=id,kind=profile.Kind,dotVisible=dotVisible,lockRetained=o.api.GetLockedTarget()==target,
+  shots=0,targetHits=0,damageApplied=0,allAccepted=true,allNative=true,aimDiffers=false}
+ for i=before+1,#self.order do
+  local item=self.records[self.order[i]]
+  local result=item.result
+  record.shots+=1
+  if not result or not result.accepted then record.allAccepted=false end
+  if not result or result.engine~="RobloxWorkspace" or result.physicsKind~=profile.Kind then record.allNative=false end
+  if result and result.selectedTargetHit then record.targetHits+=1;record.damageApplied+=result.damageApplied or 0 end
+  if item.normalAim and (item.normalAim-item.request.aimpoint).Magnitude&gt;1 then record.aimDiffers=true end
+ end
+ record.passed=record.lockRetained and record.dotVisible and record.allAccepted and record.allNative
+  and record.targetHits&gt;0 and record.damageApplied&gt;0 and (not profile.Automatic or record.shots&gt;=2)
+ return record
+end
+function NativeVerification:run()
+ if self.destroyed or self.running then return nil,"verification-already-running-or-destroyed" end
+ local o=self.options
+ local target=o.api.GetLockedTarget()
+ if not target or not self.observedC or target~=self.observedTarget or target.Character~=self.observedCharacter then
+  return nil,"Press C to select the current real player before F6"
+ end
+ local begun,setup=pcall(o.beginRun,target.UserId)
+ if not begun or type(setup)~="table" or not setup.ok then return nil,"Native setup failed: "..tostring(if begun and type(setup)=="table" then setup.reason else setup) end
+ self.runId=setup.runId;self.running=true;self.records={};self.order={};self.overflow=false
+ local report={runId=setup.runId,runtime=o.runtimeName or "Unknown",observedC=self.observedC,
+  targetUserId=target.UserId,startedAt=o.clock(),weapons={},passed=false}
+ local ok,problem=xpcall(function()
+  local ids={};for id in o.manager.profiles do table.insert(ids,id) end;table.sort(ids)
+  for _,id in ids do
+   assert(not self.destroyed,"Native verification cancelled")
+   table.insert(report.weapons,self:_exercise(id,target))
+  end
+  o.api.UnlockTarget()
+  assert(o.api.GetLockedTarget()==nil,"Unlock did not clear selection")
+  local id=if o.manager.profiles.Pistol then "Pistol" else ids[1]
+  o.getHumanoid():EquipTool(assert(o.getTool(id)))
+  assert(self:_waitUntil(function() return o.manager.active and o.manager.active.profile.Id==id end,2),"Normal-fire Tool missing")
+  o.wait(math.max(0,o.manager.nextFire-o.clock())+0.1)
+  local before=#self.order
+  local tool=o.getTool(id);tool:Activate();o.wait(0.05);tool:Deactivate();o.manager:release()
+  assert(self:_waitUntil(function() return #self.order&gt;before and self.records[self.order[before+1]].result~=nil end,3),"Normal fire was not confirmed")
+  local normal=self.records[self.order[before+1]]
+  report.normalFire=normal.request.mode=="Normal" and normal.request.targetUserId==nil
+   and normal.result.accepted==true and normal.result.engine=="RobloxWorkspace"
+  local allPassed,aimDiffers=true,false
+  for _,entry in report.weapons do allPassed=allPassed and entry.passed;aimDiffers=aimDiffers or entry.aimDiffers end
+  report.aimDiffersFromMira=aimDiffers
+  report.passed=allPassed and report.normalFire and aimDiffers and not self.overflow and report.runtime=="RobloxStudio"
+ end,debug.traceback)
+ if not ok then report.error=tostring(problem) end
+ self.running=false
+ pcall(o.endRun,self.runId);self.runId=nil
+ report.finishedAt=o.clock()
+ o.publish(report)
+ return report
+end
+function NativeVerification:destroy()
+ if self.destroyed then return end
+ self.destroyed=true;self.running=false
+ if self.runId then
+  local id=self.runId;self.runId=nil
+  -- Native cleanup supplies a nonblocking endpoint wrapper; no shot is claimed.
+  pcall(self.options.endRun,id)
+ end
+ table.clear(self.records);table.clear(self.order)
+end
+return NativeVerification
+</ProtectedString>
+        </Properties>
+      </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="RBX14">
+  <Item class="ServerScriptService" referent="RBX19">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="RBX15">
+    <Item class="Script" referent="RBX20">
       <Properties>
         <string name="Name">SEDWAREWeaponServer</string>
         <ProtectedString name="Source">--!nonstrict
@@ -3050,6 +3730,8 @@ end
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
+local HttpService = game:GetService("HttpService")
 local modules = ReplicatedStorage:WaitForChild("SEDWAREWeaponModules", 10)
 assert(modules and modules:IsA("Folder"), "[SEDWARE Weapon] owned weapon module folder missing or invalid")
 local function loadRequired(name)
@@ -3061,7 +3743,10 @@ local function loadRequired(name)
 end
 local WeaponSettings = loadRequired("WeaponSettings")
 local ServerController = loadRequired("ServerController")
+local WeaponProfiles = loadRequired("WeaponProfiles")
+local ProjectileTracker = loadRequired("ProjectileTracker")
 local settings = WeaponSettings.new()
+local profiles = WeaponProfiles.defaults()
 
 local previous = ReplicatedStorage:FindFirstChild("SEDWAREWeaponRemotes")
 assert(not previous or previous:IsA("Folder") and previous:GetAttribute("OwnedSEDWAREWeapon") == true,
@@ -3081,28 +3766,41 @@ local Result = Instance.new("RemoteEvent")
 Result.Name = "Result"; Result.Parent = folder
 local StopOwner = Instance.new("BindableEvent")
 StopOwner.Name = "StopOwner"; StopOwner.Parent = folder
+local Verification = Instance.new("RemoteFunction")
+Verification.Name = "Verification"; Verification.Parent = folder
+assert(not Workspace:FindFirstChild("SEDWAREWeaponPhysics"),"SEDWARE physics namespace conflict")
+local physicsFolder=Instance.new("Folder")
+physicsFolder.Name="SEDWAREWeaponPhysics";physicsFolder.Parent=Workspace
 
 -- A real equipped Tool produces the origin used by the server raycast.
+local templates={}
+for id,profile in profiles do
 local template = Instance.new("Tool")
-template.Name = settings.WeaponName
+template.Name = profile.Name
 template.RequiresHandle = true
 template.CanBeDropped = false
 template.ToolTip = "SEDWARE owned Studio test weapon: C locks; click fires"
 template:SetAttribute("OwnedSEDWAREWeapon", true)
+template:SetAttribute("SEDWAREProfileId",id)
 local handle = Instance.new("Part")
 handle.Name = "Handle"
 handle.Size = Vector3.new(0.45, 0.6, 1.8)
 handle.Color = Color3.fromRGB(255, 105, 180)
 handle.Material = Enum.Material.Metal
 handle.CanCollide = false
+handle.CanTouch = false
+handle.CanQuery = false
 handle.Massless = true
 handle.Parent = template
 local muzzle = Instance.new("Attachment")
 muzzle.Name = "Muzzle"
 muzzle.Position = Vector3.new(0, 0, -0.9)
 muzzle.Parent = handle
+templates[id]=template
+end
 
 local connections, playerConnections, playerTools = {}, {}, {}
+local trackers,verificationRuns={},{}
 local destroyed = false
 local function finite(value)
 	return type(value) == "number" and value == value and math.abs(value) &lt; math.huge
@@ -3110,13 +3808,52 @@ end
 local function vector(value)
 	return typeof(value) == "Vector3" and finite(value.X) and finite(value.Y) and finite(value.Z)
 end
+local function query(from,direction,ignoreCharacter)
+	local parameters=RaycastParams.new()
+	parameters.FilterType=Enum.RaycastFilterType.Exclude
+	parameters.FilterDescendantsInstances={ignoreCharacter,physicsFolder}
+	return Workspace:Raycast(from,direction,parameters)
+end
+local function trace(from,to)
+	local distance=(to-from).Magnitude
+	if distance&lt;0.001 then return end
+	local part=Instance.new("Part")
+	part.Name="AuthoritativeRayTrace";part.Anchored=true;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
+	part.Material=Enum.Material.Neon;part.Color=Color3.fromRGB(255,105,180)
+	part.Size=Vector3.new(0.035,0.035,distance)
+	part.CFrame=CFrame.lookAt((from+to)/2,to);part.Parent=physicsFolder
+	Debris:AddItem(part,0.1)
+end
+local function deliver(player,result)
+	if destroyed or player.Parent~=Players then return end
+	result.engine="RobloxWorkspace"
+	if result.error then warn("[SEDWARE Weapon] "..tostring(result.error)) end
+	if result.sessionId and result.shotId then
+		print("[SEDWARE Weapon][RESULT] "..HttpService:JSONEncode({shotId=result.shotId,weaponId=result.weaponId,
+			mode=result.mode,pending=result.pending==true,accepted=result.accepted,hit=result.hit,
+			selectedTargetHit=result.selectedTargetHit,damageApplied=result.damageApplied,
+			pelletCount=result.pelletCount,pelletHits=result.pelletHits,reason=result.reason,
+			physicsKind=result.physicsKind,referenceTime=result.referenceTime,engine=result.engine}))
+		Result:FireClient(player,result)
+	end
+end
+local random=Random.new()
 local controller = ServerController.new({
+	profiles=profiles,
+	settings={MaxProjectiles=settings.MaxProjectiles,MaxProjectilesPerPlayer=settings.MaxProjectilesPerPlayer},
+	random=function() return random:NextNumber() end,
+	makeVector=Vector3.new,
+	onResult=deliver,
 	clock = function() return Workspace:GetServerTimeNow() end,
 	isVector = vector,
 	getEquippedWeapon = function(player)
-		local character, tool = player.Character, playerTools[player]
+		local character, tool,profileId = player.Character,nil,nil
+		for id,candidate in playerTools[player] or {} do
+			if candidate.Parent==character then tool=candidate;profileId=id;break end
+		end
 		if not character or not character:IsDescendantOf(Workspace) or not tool or tool.Parent ~= character
-			or tool.Name ~= settings.WeaponName or tool:GetAttribute("OwnedSEDWAREWeapon") ~= true then return nil end
+			or tool.Name ~= profiles[profileId].Name or tool:GetAttribute("OwnedSEDWAREWeapon") ~= true
+			or tool:GetAttribute("SEDWAREProfileId")~=profileId then return nil end
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		local head = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
 		local part = tool:FindFirstChild("Handle")
@@ -3125,7 +3862,7 @@ local controller = ServerController.new({
 			or not part or not part:IsA("BasePart") or not attachment or not attachment:IsA("Attachment") then return nil end
 		local from = attachment.WorldPosition
 		if not vector(from) or (from - head.Position).Magnitude &gt; 8 then return nil end
-		return { tool = tool, character = character, humanoid = humanoid, origin = from }
+		return { tool = tool, profileId=profileId, character = character, humanoid = humanoid, origin = from }
 	end,
 	getTarget = function(userId, partName, expectedCharacter)
 		local player = Players:GetPlayerByUserId(userId)
@@ -3136,10 +3873,38 @@ local controller = ServerController.new({
 		return { player = player, character = character, humanoid = humanoid, part = part, position = part.Position }
 	end,
 	raycast = function(from, direction, ignoreCharacter)
-		local parameters = RaycastParams.new()
-		parameters.FilterType = Enum.RaycastFilterType.Exclude
-		parameters.FilterDescendantsInstances = { ignoreCharacter }
-		return Workspace:Raycast(from, direction, parameters)
+		local result=query(from,direction,ignoreCharacter)
+		trace(from,if result then result.Position else from+direction)
+		return result
+	end,
+	launchProjectile=function(from,velocity,profile,ignoreCharacter,complete)
+		local part=Instance.new("Part")
+		local tracker
+		local ok,problem=xpcall(function()
+			part.Name="PhysicalProjectile";part.Shape=Enum.PartType.Ball;part.Size=Vector3.new(0.25,0.25,0.25)
+			part.Color=Color3.fromRGB(255,105,180);part.Material=Enum.Material.Neon
+			part.Anchored=false;part.CanCollide=false;part.CanTouch=false;part.CanQuery=false
+			part.Position=from;part.Parent=physicsFolder
+			part:SetNetworkOwner(nil)
+			local attachment=Instance.new("Attachment");attachment.Parent=part
+			local force=Instance.new("VectorForce")
+			force.Attachment0=attachment;force.RelativeTo=Enum.ActuatorRelativeTo.World;force.ApplyAtCenterOfMass=true
+			force.Force=Vector3.new(0,(Workspace.Gravity-profile.Gravity)*part.AssemblyMass,0);force.Parent=part
+			part.AssemblyLinearVelocity=velocity
+			tracker=ProjectileTracker.new({origin=from,range=profile.Range,lifetime=profile.Lifetime,
+				clock=function() return Workspace:GetServerTimeNow() end,
+				getPosition=function()
+					if not part.Parent then return nil end
+					force.Force=Vector3.new(0,(Workspace.Gravity-profile.Gravity)*part.AssemblyMass,0)
+					return part.Position
+				end,
+				raycast=function(origin,direction) return query(origin,direction,ignoreCharacter) end,
+				onComplete=complete,
+				dispose=function() if tracker then trackers[tracker]=nil end;part:Destroy() end})
+			trackers[tracker]=true
+		end,debug.traceback)
+		if not ok then part:Destroy();error(problem) end
+		return function() tracker:cancel() end
 	end,
 	describeHit = function(result)
 		local model, humanoid = result.Instance:FindFirstAncestorOfClass("Model"), nil
@@ -3159,11 +3924,19 @@ local controller = ServerController.new({
 	end,
 })
 
+local function restoreRun(player)
+	local run=verificationRuns[player]
+	if not run then return end
+	verificationRuns[player]=nil
+	local restored,problem=pcall(function() run.humanoid.MaxHealth=run.maxHealth;run.humanoid.Health=run.health end)
+	if not restored then warn("[SEDWARE Native] health restore failed: "..tostring(problem)) end
+end
 local function clearPlayer(player)
+	for owner,run in verificationRuns do if owner==player or run.target==player then restoreRun(owner) end end
 	local binding = playerConnections[player]
 	if binding then binding:Disconnect(); playerConnections[player] = nil end
-	local tool = playerTools[player]
-	if tool then tool:Destroy(); playerTools[player] = nil end
+	for _,tool in playerTools[player] or {} do tool:Destroy() end
+	playerTools[player]=nil
 	controller:removePlayer(player)
 end
 local function grant(player, character)
@@ -3171,14 +3944,16 @@ local function grant(player, character)
 	local backpack = player:FindFirstChildOfClass("Backpack") or player:WaitForChild("Backpack", 5)
 	if destroyed or player.Parent ~= Players or player.Character ~= character or not backpack then return end
 	local prior = playerTools[player]
-	if prior then prior:Destroy() end
+	if prior then for _,tool in prior do tool:Destroy() end end
+	playerTools[player]={}
 	-- Do not modify a foreign Tool using the same name.
-	if backpack:FindFirstChild(settings.WeaponName) or character:FindFirstChild(settings.WeaponName) then
-		warn("[SEDWARE Weapon] Tool name conflict for " .. player.Name); playerTools[player] = nil; return
+	for id,template in templates do
+		if backpack:FindFirstChild(template.Name) or character:FindFirstChild(template.Name) then
+			warn("[SEDWARE Weapon] Tool name conflict: "..template.Name.." for "..player.Name)
+		else
+			local tool=template:Clone();playerTools[player][id]=tool;tool.Parent=backpack
+		end
 	end
-	local tool = template:Clone()
-	playerTools[player] = tool
-	tool.Parent = backpack
 end
 local function attachPlayer(player)
 	if playerConnections[player] then return end
@@ -3193,34 +3968,72 @@ local function cleanup()
 	for player in playerConnections do clearPlayer(player) end
 	for player in playerTools do clearPlayer(player) end
 	controller:destroy()
-	template:Destroy()
+	for tracker in trackers do tracker:cancel() end
+	for _,template in templates do template:Destroy() end
+	for player in verificationRuns do restoreRun(player) end
+	Verification.OnServerInvoke=nil
+	physicsFolder:Destroy()
 	folder:Destroy()
 end
 table.insert(connections, StopOwner.Event:Connect(cleanup))
 table.insert(connections, Fire.OnServerEvent:Connect(function(player, request)
 	if destroyed then return end
-	local result = controller:process(player, request)
-	if result.reason == "server-error" then warn("[SEDWARE Weapon] " .. tostring(result.error)) end
 	-- Malformed packets without an attributable ID are discarded; valid packets
 	-- always receive an explicit accepted/rejected result.
-	if result.sessionId and result.shotId then Result:FireClient(player, result) end
+	deliver(player,controller:process(player,request))
 end))
+table.insert(connections,RunService.Heartbeat:Connect(function()
+	local now=Workspace:GetServerTimeNow()
+	for player,run in verificationRuns do
+		if now&gt;=run.deadline or not run.humanoid.Parent then restoreRun(player) end
+	end
+	for tracker in trackers do
+		local ok,problem=pcall(function() tracker:step(Workspace:GetServerTimeNow()) end)
+		if not ok then warn("[SEDWARE Weapon] projectile tracker: "..tostring(problem));tracker:cancel();trackers[tracker]=nil end
+	end
+end))
+-- Optional F6 native verification uses these OWN Studio-only controls. Raising
+-- health is test setup; every damage delta is still measured after TakeDamage.
+Verification.OnServerInvoke=function(player,action,targetId,runId)
+	if destroyed or player.Parent~=Players then return {ok=false,reason="server-unavailable"} end
+	if action=="End" then
+		local run=verificationRuns[player]
+		if not run or run.id~=runId then return {ok=false,reason="unknown-native-run"} end
+		restoreRun(player)
+		return {ok=true}
+	end
+	if action~="Begin" then return {ok=false,reason="invalid-native-test-action"} end
+	for _ in verificationRuns do return {ok=false,reason="native-run-already-active"} end
+	local target=if finite(targetId) and targetId%1==0 then Players:GetPlayerByUserId(targetId) else nil
+	local character=target and target.Character
+	local humanoid=character and character:FindFirstChildOfClass("Humanoid")
+	local root=character and character:FindFirstChild("HumanoidRootPart")
+	local ownRoot=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not target or target==player or not humanoid or humanoid.Health&lt;=0 or not root or not ownRoot
+		or (root.Position-ownRoot.Position).Magnitude&gt;40 then return {ok=false,reason="native-test-requires-two-live-players-within-40-studs"} end
+	local run={id=HttpService:GenerateGUID(false),humanoid=humanoid,target=target,maxHealth=humanoid.MaxHealth,
+		health=humanoid.Health,deadline=Workspace:GetServerTimeNow()+90}
+	verificationRuns[player]=run
+	humanoid.MaxHealth=10000;humanoid.Health=10000
+	print("[SEDWARE Native] Started "..run.id.."; target health temporarily 10000, restored after test. Hits remain native collision results.")
+	return {ok=true,runId=run.id,engine="RobloxWorkspace"}
+end
 table.insert(connections, Players.PlayerAdded:Connect(attachPlayer))
 table.insert(connections, Players.PlayerRemoving:Connect(clearPlayer))
 table.insert(connections, script.Destroying:Connect(cleanup))
 folder.Parent = ReplicatedStorage
 for _, player in Players:GetPlayers() do attachPlayer(player) end
-print("[SEDWARE Weapon] OWN Studio server ready: real equipped Tool, authoritative raycast and measured damage")
+print("[SEDWARE Weapon] OWN Studio controllers ready: six Tool templates, server spread and physical projectile launcher. Each shot still requires equipped-Tool validation and an actual collision result.")
 </ProtectedString>
       </Properties>
     </Item>
   </Item>
-  <Item class="Players" referent="RBX16">
+  <Item class="Players" referent="RBX21">
     <Properties>
       <string name="Name">Players</string>
     </Properties>
   </Item>
-  <Item class="Lighting" referent="RBX17">
+  <Item class="Lighting" referent="RBX22">
     <Properties>
       <string name="Name">Lighting</string>
     </Properties>

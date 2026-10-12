@@ -20,7 +20,7 @@ def main():
         if result.returncode:
             sys.stderr.buffer.write(result.stderr);sys.exit(result.returncode)
     print(f'Pink compilation passed: {len(sources)} files',flush=True)
-    for test in ('pink_selection','pink_prediction','pink_adapter','pink_weapon'):
+    for test in ('pink_selection','pink_prediction','pink_adapter','pink_weapon','pink_multiweapon'):
         subprocess.run([runner,f'tests/{test}.luau'],cwd=ROOT,check=True)
     source=(ROOT/'PinkDotLock.lua').read_text(encoding='utf-8')
     level=0
@@ -38,6 +38,7 @@ def main():
         'require("./pink_startup_body")(reloadBundle)\n'
         'require("./pink_lockkey_body")(reloadBundle)\n'
         'require("./pink_weapon_body")(mock,bundle,reloadBundle)\n'
+        'require("./pink_multiweapon_body")(reloadBundle)\n'
         'require("./pink_loader_body")(source,'+loader_literal+')\n',encoding='utf-8')
     try: subprocess.run([runner,str(harness)],cwd=ROOT,check=True)
     finally: harness.unlink(missing_ok=True)

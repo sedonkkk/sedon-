@@ -33,13 +33,14 @@ function ClientController.new(options)
  end
  assert(type(options.sessionId)=="string" and #options.sessionId>=1 and #options.sessionId<=64,"Invalid owned weapon sessionId")
  assert(options.onStatus==nil or type(options.onStatus)=="function","Invalid onStatus callback")
+ assert(options.getWeapon==nil or type(options.getWeapon)=="function","Invalid weapon provider")
  local timeout,maxPending=options.timeout or 2,options.maxPending or 64
  assert(finite(timeout) and timeout>0 and timeout<=10,"Invalid response timeout")
  assert(integer(maxPending) and maxPending>=1 and maxPending<=500,"Invalid pending capacity")
  local adapter=options.adapter
  if not adapter then
   assert(type(api.CreateShotAdapter)=="function","SEDWARE owned shot adapter API required")
-  local ok,result,problem=invoke(api.CreateShotAdapter)
+  local ok,result,problem=invoke(api.CreateShotAdapter,nil,{getOrigin=options.getOrigin,maxAge=options.maxAge or 1})
   assert(ok and result,"Cannot create owned shot adapter: "..tostring(if ok then problem else result))
   adapter=result
  end
@@ -47,7 +48,7 @@ function ClientController.new(options)
   and type(adapter.destroy)=="function","Invalid owned shot adapter")
  return setmetatable({api=api,adapter=adapter,clock=options.clock,send=options.send,getCameraAim=options.getCameraAim,
   getOrigin=options.getOrigin,isEquipped=options.isEquipped,onStatus=options.onStatus,sessionId=options.sessionId,
-  weaponName=options.weaponName or "SEDWARE Revolver",timeout=timeout,maxPending=maxPending,pending={},pendingCount=0,
+  weaponName=options.weaponName or "SEDWARE Revolver",getWeapon=options.getWeapon,timeout=timeout,maxPending=maxPending,pending={},pendingCount=0,
   nextId=0,destroyed=false,lastResult=nil,stats={sent=0,confirmed=0,hits=0,selectedTargetHits=0,misses=0,
    rejected=0,timedOut=0,measurementCount=0}},ClientController)
 end
@@ -68,6 +69,13 @@ function ClientController:fire()
  if not clockOK or not finite(now) then return self:_reject("invalid-clock") end
  self:step(now)
  if self.pendingCount>=self.maxPending then return self:_reject("pending-capacity") end
+ local weapon
+ if self.getWeapon then
+  local weaponOK,result=invoke(self.getWeapon)
+  if not weaponOK or type(result)~="table" or type(result.id)~="string" or #result.id<1 or #result.id>40
+   or not finite(result.timeout) or result.timeout<=0 or result.timeout>10 then return self:_reject("invalid-compatible-weapon") end
+  weapon=result
+ end
  local originOK,origin=invoke(self.getOrigin)
  if not originOK or not vector(origin) then return self:_reject("muzzle-origin-unavailable") end
  local lockedOK,target=invoke(self.api.GetLockedTarget)
@@ -78,7 +86,7 @@ function ClientController:fire()
   local captured,result,problem=invoke(function() return self.adapter:capture() end)
   if not captured or not result then return self:_reject("prediction-capture-failed: "..tostring(if captured then problem else result)) end
   ticket=result
-  local predicted,resultPosition=invoke(self.api.GetPredictedPosition)
+  local predicted,resultPosition=invoke(self.api.GetPredictedPosition,origin)
   if not predicted or not vector(resultPosition) then return self:_reject("locked-prediction-unavailable") end
   aimpoint=resultPosition -- Exact public API position, never camera direction while locked.
   local currentOK,current=invoke(self.api.GetLockedTarget)
@@ -96,6 +104,7 @@ function ClientController:fire()
  if not finite(length) or length<=0.001 then return self:_reject("degenerate-aimpoint") end
  self.nextId+=1
  local request={sessionId=self.sessionId,shotId=self.nextId,mode=mode,capturedAt=now,origin=origin,aimpoint=aimpoint}
+ if weapon then request.weaponId=weapon.id end
  if ticket then
   local partName=if self.api.session and self.api.session.config then self.api.session.config.TargetPart else ticket.part and ticket.part.Name
   if type(partName)~="string" or #partName<1 or #partName>64 then return self:_reject("invalid-target-part") end
@@ -104,7 +113,7 @@ function ClientController:fire()
  end
  table.freeze(request)
  -- Register before send, so synchronous owned transports can return a result.
- local entry={request=request,ticket=ticket,sentAt=now}
+ local entry={request=request,ticket=ticket,sentAt=now,timeout=if weapon then weapon.timeout else self.timeout,launched=false}
  self.pending[request.shotId]=entry;self.pendingCount+=1
  self:_status("Pending",{request=request,shotId=request.shotId,mode=mode})
  local sent,result=invoke(self.send,request)
@@ -127,6 +136,14 @@ function ClientController:receive(response)
  local request=entry.request
  if type(response.accepted)~="boolean" or (response.mode~=nil and response.mode~=request.mode) then return nil,"malformed-response" end
  if response.ticketId~=nil and response.ticketId~=request.ticketId then return nil,"ticket-mismatch" end
+ if response.weaponId~=request.weaponId then return nil,"weapon-mismatch" end
+ if response.pending==true then
+  if response.accepted~=true or response.mode~=request.mode or response.stage~="Launched" or response.hit~=nil
+   or response.selectedTargetHit~=nil or response.damageApplied~=nil or entry.launched then return nil,"invalid-launch-confirmation" end
+  entry.launched=true
+  self:_status("InFlight",{shotId=request.shotId,mode=request.mode,weaponId=request.weaponId})
+  return {pending=true,shotId=request.shotId,weaponId=request.weaponId}
+ end
  if response.accepted then
   if response.mode~=request.mode or type(response.hit)~="boolean" or type(response.selectedTargetHit)~="boolean"
    or (response.selectedTargetHit and (not response.hit or request.mode~="Locked"))
@@ -144,7 +161,9 @@ function ClientController:receive(response)
  local result={sessionId=self.sessionId,shotId=request.shotId,mode=request.mode,accepted=response.accepted,
   reason=response.reason,referenceTime=response.referenceTime,impactPosition=response.impactPosition,
   hit=response.accepted and response.hit==true,selectedTargetHit=response.accepted and response.selectedTargetHit==true,
-  damageApplied=response.damageApplied,hitName=response.hitName,request=request}
+  damageApplied=response.damageApplied,hitName=response.hitName,request=request,weaponId=request.weaponId,
+  pelletCount=response.pelletCount,pelletHits=response.pelletHits,pellets=response.pellets,
+  engine=response.engine,physicsKind=response.physicsKind}
  if response.accepted then
   self.stats.confirmed+=1
   if result.hit then self.stats.hits+=1 else self.stats.misses+=1 end
@@ -169,7 +188,7 @@ function ClientController:step(now)
  end
  if not finite(now) then return end
  for id,entry in self.pending do
-  if now-entry.sentAt>=self.timeout then
+  if now-entry.sentAt>=entry.timeout then
    self.pending[id]=nil;self.pendingCount-=1;self.stats.timedOut+=1
    self:_status("Timeout",{shotId=id,mode=entry.request.mode,reason="server-response-timeout"})
   end
@@ -185,6 +204,6 @@ function ClientController:destroy()
  self.destroyed=true
  table.clear(self.pending);self.pendingCount=0
  self.adapter:destroy()
- self.api=nil;self.send=nil;self.clock=nil;self.getCameraAim=nil;self.getOrigin=nil;self.isEquipped=nil;self.onStatus=nil
+ self.api=nil;self.send=nil;self.clock=nil;self.getCameraAim=nil;self.getOrigin=nil;self.isEquipped=nil;self.onStatus=nil;self.getWeapon=nil
 end
 return ClientController

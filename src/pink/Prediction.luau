@@ -164,7 +164,7 @@ function Prediction:_predict(origin,now,policy,key)
   rawPingMs=if self.pingAvailable then self.latency.raw*2000 else nil,
   smoothedPingMs=if self.pingAvailable then self.latency.smoothed*2000 else nil,
   status=status,flightSeconds=flight,physicsVerified=false,physicsStatus=physicsStatus,
-  sampleTime=sample.t,createdAt=now,range=range,weaponProfile=c.WeaponProfile,policy=policy,
+  sampleTime=sample.t,createdAt=now,range=range,weaponProfile=self.weaponProfileLabel or c.WeaponProfile,policy=policy,
   state=sample.state}
 end
 function Prediction:predict(origin,now,policyOverride)

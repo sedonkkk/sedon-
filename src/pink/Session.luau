@@ -113,9 +113,44 @@ end
 function Session:GetPrediction()
  return if not self.destroyed and self.comparisons then self.comparisons.active else nil
 end
-function Session:GetPredictedPosition()
+function Session:GetPredictedPosition(origin)
+ if origin~=nil then
+  if not vector(origin) then return nil,"Invalid prediction origin" end
+  local previous=self.lastPredictionOrigin
+  if self.locked and (not previous or previous.X~=origin.X or previous.Y~=origin.Y or previous.Z~=origin.Z) then
+   self:_step(self:_clock(),origin)
+  end
+ end
  local record=self:GetPrediction()
  return record and record.position
+end
+function Session:SetWeaponProfile(name,profile,label)
+ if self.destroyed then return false,"Session is unloaded" end
+ if type(name)~="string" or self.config.Profiles[name]==nil then return false,"Unknown prediction profile slot" end
+ if label~=nil and (type(label)~="string" or #label<1 or #label>64) then return false,"Invalid weapon label" end
+ local options=table.clone(self.config)
+ options.Profiles=table.clone(self.config.Profiles)
+ options.Profiles[name]=profile or options.Profiles[name]
+ options.WeaponProfile=name
+ local normalized,message=Config.new(options)
+ if not normalized then return false,message end
+ self.config.Profiles[name]=normalized.Profiles[name];self.config.WeaponProfile=name
+ self.prediction.config.Profiles[name]=normalized.Profiles[name];self.prediction.config.WeaponProfile=name
+ self.prediction.weaponProfileLabel=label
+ -- Changing a ballistic model invalidates output EMA, not target or Memory.
+ for _,state in self.prediction.policies do
+  state.position=nil;state.targetPosition=nil;state.lastPositionTime=nil
+ end
+ self.comparisons=nil;self.lastPredictionOrigin=nil
+ return true
+end
+function Session:SetPredictionOrigin(provider)
+ if self.destroyed then return false,"Session is unloaded" end
+ if provider~=nil and type(provider)~="function" then return false,"Invalid prediction origin provider" end
+ self.predictionOriginProvider=provider
+ for _,state in self.prediction.policies do state.position=nil;state.targetPosition=nil;state.lastPositionTime=nil end
+ self.comparisons=nil;self.lastPredictionOrigin=nil
+ return true
 end
 function Session:LockTarget(player)
  if self.destroyed or not self.config.Enabled then return false,"Disabled" end
@@ -196,7 +231,8 @@ function Session:_ping(t)
  local ok,rtt=pcall(function() return self.player:GetNetworkPing() end)
  self.prediction:samplePing(if ok and finite(rtt) and rtt>=0 and rtt<=2 then rtt else nil,t)
 end
-function Session:_step(t)
+function Session:_step(t,origin)
+ assert(origin==nil or vector(origin),"Invalid prediction origin")
  if self.destroyed then return end
  if not self.config.Enabled then self:destroy();return end
  local camera,inset,reference,fov=self:_view(t)
@@ -218,7 +254,13 @@ function Session:_step(t)
      -- Derive remote velocity from recent positions; no future truth is supplied.
      self.prediction:observe(t,data.part.Position,state)
     end
-    self.comparisons=self.prediction:predictComparisons(self:_origin(),t)
+    if origin==nil and self.predictionOriginProvider then
+     local obtained,value=pcall(self.predictionOriginProvider)
+     if not obtained then error("Owned weapon prediction origin failed: "..tostring(value)) end
+     if value~=nil then assert(vector(value),"Invalid owned weapon prediction origin");origin=value end
+    end
+    self.lastPredictionOrigin=origin or self:_origin()
+    self.comparisons=self.prediction:predictComparisons(self.lastPredictionOrigin,t)
    end
   end
  else self.overlay:hideDot() end
@@ -235,8 +277,12 @@ function Session:_step(t)
    "status="..tostring(if p then p.status else "Ready | No target"))
  end
 end
-function Session:CreateShotAdapter(fire)
+function Session:CreateShotAdapter(fire,options)
  assert(not self.destroyed,"Session is unloaded")
+ options=options or {}
+ assert(type(options)=="table","Invalid shot adapter options")
+ for key in options do assert(key=="getOrigin" or key=="maxAge","Unknown shot adapter option") end
+ assert(options.getOrigin==nil or type(options.getOrigin)=="function","Invalid shot origin provider")
  for i=#self.adapters,1,-1 do if self.adapters[i].destroyed then table.remove(self.adapters,i) end end
  assert(#self.adapters<32,"Too many active shot adapters")
  local adapter=ShotAdapter.new({
@@ -244,7 +290,9 @@ function Session:CreateShotAdapter(fire)
   getSnapshot=function()
    if self.destroyed or not self.locked then return nil end
    local t=self:_clock()
-   self:_step(t)
+   local origin=if options.getOrigin then options.getOrigin() else nil
+   if options.getOrigin and not vector(origin) then return nil end
+   self:_step(t,origin)
    if not self.locked or not self.comparisons or not self.comparisons.active then return nil end
    local p=self.comparisons.active
    return {targetUserId=self.locked.player.UserId,character=self.locked.character,part=self.locked.part,
@@ -255,7 +303,7 @@ function Session:CreateShotAdapter(fire)
     and self.locked.character==ticket.character and self.locked.part==ticket.part
     and self:IsValidTarget(self.locked.player)
   end,
-  fire=fire,capacity=120,maxAge=1,
+  fire=fire,capacity=120,maxAge=options.maxAge or 1,
   onMeasurement=function(record)
    self.lastError=record.active and record.active.errorStuds
   end,
@@ -273,6 +321,7 @@ function Session:destroy()
  self.destroyed=true
  self.config.Enabled=false
  self.locked=nil;self.comparisons=nil
+ self.predictionOriginProvider=nil
  disconnect(self.targetConnections)
  disconnect(self.connections)
  for _, adapter in self.adapters do pcall(function() adapter:destroy() end) end

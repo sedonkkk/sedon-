@@ -1,5 +1,7 @@
 # SEDWARE: predicción conectada a un arma propia
 
+**La actualización vigente es [SEDWARE v4 multiarmas](SEDWARE_MULTIWEAPON.md)**: WeaponManager y seis Tools propios, incluyendo disparo automático, dispersión y una Part física. La comprobación F6 está preparada para ejecutarse con el motor; **no se ha ejecutado aquí Roblox Studio**. La auditoría de la integración faltante de Da Hood que sigue continúa siendo aplicable.
+
 La causa de que el Revolver original siga la cámara es concreta: **PinkDotLock.lua no registra un controlador de disparo de Da Hood**. Seleccionar con C, calcular una posición y dibujar un DOT no altera el destino que el controlador original envía a su servidor.
 
 ## Auditoría del código existente
@@ -20,7 +22,7 @@ Durante la revisión del ciclo de vida también se corrigió el marcador de prop
 
 ## Demostración completa para Studio
 
-Abre [`studio/PinkDotLockTest.rbxlx`](../studio/PinkDotLockTest.rbxlx). Incluye el mismo PinkDotLock.lua y seis fuentes empaquetadas: el payload, tres módulos del arma y los scripts cliente/servidor. El servidor crea y entrega un **Tool SEDWARE Revolver**, de color rosado, con Handle y Attachment Muzzle. No requiere un loader HTTP ni otros archivos descargados por separado.
+Abre [`studio/PinkDotLockTest.rbxlx`](../studio/PinkDotLockTest.rbxlx). Incluye el mismo PinkDotLock.lua y once fuentes empaquetadas: el payload, ocho módulos del sistema de armas y los scripts cliente/servidor. El servidor crea y entrega seis Tools propios, con Handle y Attachment Muzzle. No requiere un loader HTTP ni otros archivos descargados por separado. [Perfiles, cambios de arma y procedimiento F6](SEDWARE_MULTIWEAPON.md).
 
 También puedes usar Rojo con [`sedware.project.json`](../sedware.project.json) en tu propio lugar. Los dos scripts de demostración comprueban RunService:IsStudio(); esta entrega está destinada a pruebas en Studio.
 
@@ -84,7 +86,7 @@ python3 scripts/check.py
 
 Las pruebas automatizadas ejecutan los controladores y el payload existentes con transportes, APIs y raycasts sustituidos explícitamente por dobles. Cubren el puente Locked/Normal, espera de confirmación, impactos/fallos/obstáculos, daño, identidad, rechazos, timeout y limpieza. **No certifican la física, red, Tool ni render nativos de Roblox.** Esta máquina Linux no ejecutó Roblox Studio ni Da Hood. El lugar y la guía anterior permiten realizar esa verificación nativa pendiente.
 
-Resultados con Luau oficial 0.695:
+Resultados de la entrega anterior de un arma, conservados por la ampliación v4 (el total actual está en la guía multiarmas), con Luau oficial 0.695:
 
 | Grupo | Pruebas | Comprobaciones | Fallos |
 | --- | ---: | ---: | ---: |
@@ -96,7 +98,7 @@ Resultados con Luau oficial 0.695:
 
 La compilación pasó para las 26 fuentes del conjunto Pink/SEDWARE. Se verificó que PinkDotLock.lua coincide con sus 13 módulos, que ambos lugares contienen exactamente sus fuentes y que los parámetros iniciales X/Y se mantienen. La regresión de respawn reproduce que la versión anterior dejaba dos listeners InputBegan y dos RenderStepped; la versión corregida conserva uno de cada uno.
 
-La entrega se publicó en el commit [`ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e`](https://github.com/sedonkkk/sedon-/commit/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e). El [lugar de Studio completo, Raw](https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/studio/PinkDotLockTest.rbxlx) respondió HTTP 200 y sus 154.439 bytes coinciden con el paquete comprobado; SHA-256 `5b2a82d59c9007e1aeb1d0ccb16f97c225bf7eaa32cc22b934e6fce0f2548692`. El [payload autónomo actualizado](https://raw.githubusercontent.com/sedonkkk/sedon-/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e/PinkDotLock.lua) también respondió HTTP 200 y coincide byte por byte. La integración del arma incluye componentes de servidor y se distribuye como lugar de Studio; el payload autónomo conserva solamente las funciones de cliente.
+La entrega anterior de un arma se publicó en [`ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e`](https://github.com/sedonkkk/sedon-/commit/ed141a9b2f0dcf8e4c9a677aa6c5a4fb0edcc28e). Ese commit fijo **no incluye la actualización multiarmas**. Usa la entrega vigente de [SEDWARE v4](SEDWARE_MULTIWEAPON.md). El payload autónomo conserva funciones de cliente; instalar el puente de disparo requiere también sus componentes propios de servidor.
 
 En Output filtra por `[SEDWARE]` para la inicialización, C y Memory; por `[SEDWARE][Weapon]` para el cliente del arma, y por `[SEDWARE Weapon]` para el servidor. Ante Shot rejected consulta reason. Un timeout indica ausencia de respuesta del servidor y no confirma ningún impacto. Si aparece el DOT pero no Weapon READY, el cliente de arma propia no llegó a conectar sus módulos/eventos; no es una integración activa.
 
