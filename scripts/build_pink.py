@@ -14,6 +14,8 @@ MODULES = {
     **{name: ROOT / f'src/pink/{name}.luau' for name in
        ('Config', 'ModeDetector', 'Selection', 'Prediction', 'Overlay', 'Runtime', 'ShotAdapter', 'Session', 'Bootstrap')},
 }
+WEAPON_MODULES = {name: ROOT / f'src/pink_weapon/{name}.luau' for name in
+                  ('WeaponSettings', 'ClientController', 'ServerController')}
 IMPORT = re.compile(r'if script then require\(script\.[A-Za-z0-9_.]+\) else require\("(?:\./|\.\./shared/)([A-Za-z0-9_]+)"\)')
 
 
@@ -148,9 +150,12 @@ def studio_place(source_path, demo=False):
     if demo:
         storage,_=item(document,'ReplicatedStorage','ReplicatedStorage')
         code(storage,'ModuleScript','PinkDotLock',source_path)
-        code(scripts,'LocalScript','PinkDotLockProbe',ROOT/'src/pink_demo/Probe.client.luau')
+        modules,_=item(storage,'Folder','SEDWAREWeaponModules')
+        for name,path in WEAPON_MODULES.items():
+            code(modules,'ModuleScript',name,path)
+        code(scripts,'LocalScript','SEDWAREWeaponClient',ROOT/'src/pink_demo/Probe.client.luau')
         servers,_=item(document,'ServerScriptService','ServerScriptService')
-        code(servers,'Script','PinkDotLockProbe',ROOT/'src/pink_demo/Probe.server.luau')
+        code(servers,'Script','SEDWAREWeaponServer',ROOT/'src/pink_demo/Probe.server.luau')
     else:
         code(scripts,'LocalScript','PinkDotLock',source_path)
     item(document,'Players','Players');item(document,'Lighting','Lighting')
@@ -158,7 +163,8 @@ def studio_place(source_path, demo=False):
     output=ROOT/('build/PinkDotLockTest.rbxlx' if demo else 'build/PinkDotLock.rbxlx')
     ET.ElementTree(document).write(output,encoding='utf-8',xml_declaration=True)
     loaded=ET.parse(output).findall('.//ProtectedString[@name="Source"]')
-    expected=[source_path]+([ROOT/'src/pink_demo/Probe.client.luau',ROOT/'src/pink_demo/Probe.server.luau'] if demo else [])
+    expected=[source_path]+([*WEAPON_MODULES.values(), ROOT/'src/pink_demo/Probe.client.luau',
+                            ROOT/'src/pink_demo/Probe.server.luau'] if demo else [])
     assert len(loaded)==len(expected)
     assert sorted(node.text for node in loaded)==sorted(path.read_text(encoding='utf-8') for path in expected)
     print(f'Packaged Studio place: {output} (runtime validation still required)')

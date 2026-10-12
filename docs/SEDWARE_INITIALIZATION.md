@@ -93,7 +93,7 @@ python3 scripts/check_pink.py
 python3 scripts/check.py
 ```
 
-Compilación con Luau oficial 0.695 correcta. Resultado actual: **156 pruebas de Pink/SEDWARE y 96 anteriores: 252 pruebas, 78.279 comprobaciones, 0 fallos**. Las 34 pruebas de arranque abarcan todos los diez casos pedidos, más timeout conjunto, viewport, LocalPlayer, excepciones, cancelación, error del encabezado y autoinicio sin game. Otras 3 pruebas ejercitan el loader real, la causa original de un error HTTP y la identificación de un fallo de compilación. La actualización v3 añade 30 pruebas específicas de LockKey.
+Compilación con Luau oficial 0.695 correcta. Resultado actual: **210 pruebas de Pink/SEDWARE y 96 anteriores: 306 pruebas, 79.051 comprobaciones, 0 fallos**. Las 36 pruebas de arranque abarcan todos los diez casos pedidos, más timeout conjunto, viewport, LocalPlayer, excepciones, cancelación, error del encabezado, autoinicio sin game y reemplazo de sesión tras respawn. Otras 3 pruebas ejercitan el loader real, la causa original de un error HTTP y la identificación de un fallo de compilación. La actualización v3 añade 30 pruebas específicas de LockKey; el [arma propia](SEDWARE_WEAPON_INTEGRATION.md) añade 52 pruebas de integración.
 
 La lógica de arranque y los callbacks se ejecutaron sobre el archivo autónomo real con dobles deterministas. **No son pruebas de Roblox Studio ni Da Hood real.** Esas ejecuciones y las limitaciones específicas del host externo siguen pendientes. El loader depende de loadstring compatible con Luau y game:HttpGet proporcionados por un host autorizado; esas funciones no habilitan código remoto desde un LocalScript normal publicado. El script no intenta eludir esas restricciones.
 

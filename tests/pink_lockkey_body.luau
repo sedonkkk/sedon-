@@ -13,7 +13,7 @@ return function(reloadBundle)
 		return type(text) == "string" and string.find(text, fragment, 1, true) ~= nil
 	end
 	local function cleanup(mock)
-		for _, node in ipairs(mock.playerGui:GetChildren()) do
+		for _, node in ipairs(mock.playerGui:GetDescendants()) do
 			if node.Name == "PinkDotLock_Owner_v1" and node:IsA("BindableEvent") then node:Fire() end
 		end
 		for _, node in ipairs(mock.playerGui:GetChildren()) do node:Destroy() end

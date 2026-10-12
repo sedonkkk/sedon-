@@ -301,7 +301,9 @@ function Session.init(options,report)
  assert(report.ready,Runtime.errorMessage(report))
  local self=setmetatable({config=config,services=report.services,player=report.player,world=report.world,
   playerGui=report.playerGui,connections={},targetConnections={},adapters={},destroyed=false,report=report},Session)
- local old=report.playerGui:FindFirstChild(OWNER_NAME)
+ -- The current owner lives under the persistent ScreenGui; a legacy owner
+ -- may still be a direct PlayerGui child. Find either before replacing it.
+ local old=report.playerGui:FindFirstChild(OWNER_NAME,true)
  if old and not old:IsA("BindableEvent") then error("Owner namespace is occupied by another object") end
  if not config.Enabled then
   if old then old:Fire() end
@@ -385,7 +387,10 @@ function Session.init(options,report)
    local key=Config.keyName(config.LockKey)
    self:_notify("SEDWARE","Successfully Loaded | Press "..key.." to Lock",config.WelcomeDuration)
   end
-  self.owner.Parent=self.playerGui
+  -- PlayerGui removes ordinary children when the local character respawns.
+  -- Keep the handoff event with the ResetOnSpawn=false graphics so a later
+  -- execution can still find and unload this session's Input/Render listeners.
+  self.owner.Parent=self.overlay.gui
   if old then old:Fire() end
   assert(not self.destroyed and self.inputConnection.Connected and self.renderConnection.Connected,"Session became inactive during startup")
  end,Runtime.traceback)

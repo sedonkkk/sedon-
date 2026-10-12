@@ -1,0 +1,22 @@
+{
+  "name": "SEDWAREOwnedWeapon",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "PinkDotLock": {"$path": "PinkDotLock.lua"},
+      "SEDWAREWeaponModules": {"$path": "src/pink_weapon"}
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "SEDWAREWeaponServer": {"$path": "src/pink_demo/Probe.server.luau"}
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "SEDWAREWeaponClient": {"$path": "src/pink_demo/Probe.client.luau"}
+      }
+    }
+  }
+}

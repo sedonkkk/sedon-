@@ -45,7 +45,7 @@ return function(reloadBundle)
 		mock.services.UserInputService.InputBegan:Fire(mock:input("Keyboard", 0, 0, "C"), processed == true)
 	end
 	local function cleanup(mock)
-		for _, node in ipairs(mock.playerGui:GetChildren()) do
+		for _, node in ipairs(mock.playerGui:GetDescendants()) do
 			if node.Name == "PinkDotLock_Owner_v1" and node:IsA("BindableEvent") then node:Fire() end
 		end
 		for _, node in ipairs(mock.playerGui:GetChildren()) do node:Destroy() end
@@ -361,7 +361,7 @@ return function(reloadBundle)
 		check(first.destroyed and first.overlay.destroyed and #first.connections == 0 and #first.targetConnections == 0)
 		check(mock:countSignalConnections(mock.services.UserInputService.InputBegan) == 1)
 		local owners, overlays = 0, 0
-		for _, child in ipairs(mock.playerGui:GetChildren()) do
+		for _, child in ipairs(mock.playerGui:GetDescendants()) do
 			if child.Name == "PinkDotLock_Owner_v1" then owners += 1 end
 			if child.Name == "PinkDotLock" then overlays += 1 end
 		end
@@ -372,6 +372,64 @@ return function(reloadBundle)
 		check(mock:countConnections() == 0)
 		mock:resetCounters(); pressC(mock)
 		check(mock.counters.candidateScans == 0)
+	end)
+
+	test("persistent owner survives PlayerGui respawn reset and the next execution replaces all listeners", function(mock, api)
+		local target = mock:addPlayer("RespawnRestartTarget", mock.env.Vector3.new(0, 0, -50))
+		mock:setPointer(640, 360)
+		local first = api.init({DebugMode = true})
+		pressC(mock)
+		check(first:GetLockedTarget() == target)
+		check(first.owner.Parent == first.overlay.gui and first.overlay.gui.ResetOnSpawn == false)
+		local transient = mock.env.Instance.new("ScreenGui")
+		transient.Name = "TransientGui"; transient.ResetOnSpawn = true; transient.Parent = mock.playerGui
+		local directEvent = mock.env.Instance.new("BindableEvent")
+		directEvent.Name = "TransientEvent"; directEvent.Parent = mock.playerGui
+		-- Reproduce PlayerGui's documented reset: ordinary children are removed,
+		-- while the ResetOnSpawn=false ScreenGui and its descendants persist.
+		for _, child in ipairs(mock.playerGui:GetChildren()) do
+			if not (child:IsA("ScreenGui") and child.ResetOnSpawn == false) then child:Destroy() end
+		end
+		check(transient.Parent == nil and directEvent.Parent == nil)
+		mock:respawn(mock.services.Players.LocalPlayer, mock.env.Vector3.new(0, 0, 0))
+		check(not first.destroyed and first.owner.Parent == first.overlay.gui)
+		mock:advance(0.05)
+		check(first.overlay.dot.Visible, "the surviving session lost its DOT during local respawn")
+		local secondApi = reloadBundle(mock.env)
+		local second, report = secondApi.tryInit()
+		check(second ~= nil and active(report))
+		check(first.destroyed and first.overlay.destroyed and #first.connections == 0 and #first.targetConnections == 0)
+		check(second.owner.Parent == second.overlay.gui)
+		check(mock:countSignalConnections(mock.services.UserInputService.InputBegan) == 1)
+		check(mock:countSignalConnections(mock.services.RunService.RenderStepped) == 1)
+		local owners, overlays = 0, 0
+		for _, child in ipairs(mock.playerGui:GetDescendants()) do
+			if child.Name == "PinkDotLock_Owner_v1" then owners += 1 end
+			if child.Name == "PinkDotLock" then overlays += 1 end
+		end
+		check(owners == 1 and overlays == 1)
+		check(second.config.PredictionX == 0.1205 and second.config.PredictionY == 0.0800)
+		mock:resetCounters(); pressC(mock)
+		check(second:GetLockedTarget() == target and mock.counters.candidateScans == 1)
+		check(second.overlay.dot.Visible)
+		check(mock.counters.cameraWrites == 0 and mock.counters.mouseWrites == 0)
+		pressC(mock)
+		check(second:GetLockedTarget() == nil)
+		second:destroy()
+		check(mock:countConnections() == 0)
+	end)
+
+	test("recursive owner lookup still replaces legacy sessions parented directly to PlayerGui", function(mock, api)
+		local first = api.init()
+		first.owner.Parent = mock.playerGui
+		local secondApi = reloadBundle(mock.env)
+		local second = secondApi.init()
+		check(first.destroyed and first.overlay.destroyed)
+		check(second.owner.Parent == second.overlay.gui)
+		check(mock:countSignalConnections(mock.services.UserInputService.InputBegan) == 1)
+		check(mock:countSignalConnections(mock.services.RunService.RenderStepped) == 1)
+		second:destroy()
+		check(mock:countConnections() == 0)
 	end)
 
 	test("failed replacement preserves a working session and its C connection", function(mock, api)
@@ -405,7 +463,7 @@ return function(reloadBundle)
 		check(failureToast(mock) == nil, "normal supersession was announced as a load failure")
 		check(mock:countSignalConnections(mock.services.UserInputService.InputBegan) == 1)
 		local owners, overlays = 0, 0
-		for _, child in ipairs(mock.playerGui:GetChildren()) do
+		for _, child in ipairs(mock.playerGui:GetDescendants()) do
 			if child.Name == "PinkDotLock_Owner_v1" then owners += 1 end
 			if child.Name == "PinkDotLock" then overlays += 1 end
 		end

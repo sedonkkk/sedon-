@@ -14,13 +14,15 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Configuración, API, demo de disparo propio y pruebas](docs/PINK_DOT_LOCK.md). `python3 scripts/build_pink.py` genera el archivo y los lugares de Studio; `python3 scripts/check_pink.py` ejecuta sus comprobaciones.
 
+[Auditoría y arma propia integrada](docs/SEDWARE_WEAPON_INTEGRATION.md): la demostración de Studio incluye un Tool **SEDWARE Revolver**. C bloquea; clic consume la posición predicha, o la mira cuando no existe bloqueo. Su servidor valida y confirma raycast/daño reales. Este Tool es propio y no modifica el Revolver original de Da Hood. Abre [PinkDotLockTest](studio/PinkDotLockTest.rbxlx) con servidor y dos jugadores; ejecución nativa pendiente.
+
 [Corrección de inicialización y guía de consola SEDWARE](docs/SEDWARE_INITIALIZATION.md): espera limitada de recursos, diagnósticos por fase y de C; valores X/Y conservados.
 
-[Corrección de LockKey en v3](docs/SEDWARE_LOCKKEY.md): acepta `"C"` y Enum.KeyCode.C mediante normalización nativa estricta. 252 pruebas pasan; no se verifica Da Hood mediante dobles.
+[Corrección de LockKey en v3](docs/SEDWARE_LOCKKEY.md): acepta `"C"` y Enum.KeyCode.C mediante normalización nativa estricta. 306 pruebas pasan, incluida la integración del arma propia; no se verifica Da Hood mediante dobles.
 
 [SEDWARE.lua](SEDWARE.lua) ofrece una entrada estable que carga PinkDotLock.lua de main; recibe futuras correcciones usando la misma URL.
 
-[Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 156 pruebas de Pink/SEDWARE y 96 anteriores pasan; motor de Studio y Da Hood sin comprobar.
+[Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/02e0e72f1ec0a66e23ae490e5c15819fe2f20cf7/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 210 pruebas de Pink/SEDWARE y 96 anteriores pasan; motor de Studio y Da Hood sin comprobar.
 
 ## Ejecutar
 

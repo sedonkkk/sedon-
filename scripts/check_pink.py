@@ -12,6 +12,7 @@ def main():
     runner=find_tool('luau','LUAU')
     subprocess.run([sys.executable,'scripts/build_pink.py','--check'],cwd=ROOT,check=True)
     sources=sorted((ROOT/'src/pink').glob('*.luau'))+sorted((ROOT/'src/pink_demo').glob('*.luau'))
+    sources+=sorted((ROOT/'src/pink_weapon').glob('*.luau'))
     sources+=sorted((ROOT/'tests').glob('pink*.luau'))+[ROOT/'tests/PinkMock.luau',ROOT/'PinkDotLock.lua']
     if (ROOT/'PinkLoader.lua').exists(): sources.append(ROOT/'PinkLoader.lua')
     for path in sources:
@@ -19,7 +20,7 @@ def main():
         if result.returncode:
             sys.stderr.buffer.write(result.stderr);sys.exit(result.returncode)
     print(f'Pink compilation passed: {len(sources)} files',flush=True)
-    for test in ('pink_selection','pink_prediction','pink_adapter'):
+    for test in ('pink_selection','pink_prediction','pink_adapter','pink_weapon'):
         subprocess.run([runner,f'tests/{test}.luau'],cwd=ROOT,check=True)
     source=(ROOT/'PinkDotLock.lua').read_text(encoding='utf-8')
     level=0
@@ -36,6 +37,7 @@ def main():
         'local bundle=reloadBundle(mock.env)\nrequire("./pink_gui_body")(mock,bundle,reloadBundle)\n'
         'require("./pink_startup_body")(reloadBundle)\n'
         'require("./pink_lockkey_body")(reloadBundle)\n'
+        'require("./pink_weapon_body")(mock,bundle,reloadBundle)\n'
         'require("./pink_loader_body")(source,'+loader_literal+')\n',encoding='utf-8')
     try: subprocess.run([runner,str(harness)],cwd=ROOT,check=True)
     finally: harness.unlink(missing_ok=True)

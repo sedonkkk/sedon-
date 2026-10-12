@@ -12,6 +12,7 @@ Proyecto independiente de DH PREDICTION LAB: C selecciona un personaje, muestra 
 - `src/pink/`: configuración, detección de cámara, selección, predicción X/Y, overlay, auditoría de APIs, adaptador de disparo y ciclo de vida.
 - `src/shared/`: se reutilizan **sin cambios** Settings, MotionHistory, Latency y Ballistics de DH PREDICTION LAB.
 - `src/pink_demo/`: cliente y servidor opcionales del disparo propio de prueba. Estos scripts funcionan exclusivamente en Studio.
+- `src/pink_weapon/`: controladores del Tool propio, validación del servidor y configuración del arma de laboratorio.
 
 En una experiencia propia, copia `PinkDotLock.lua` a un **LocalScript de StarterPlayerScripts** y usa Play. También puedes generar los lugares completos:
 
@@ -19,7 +20,7 @@ En una experiencia propia, copia `PinkDotLock.lua` a un **LocalScript de Starter
 python3 scripts/build_pink.py
 ```
 
-`build/PinkDotLock.rbxlx` incluye el único LocalScript y el escenario básico. `build/PinkDotLockTest.rbxlx` incluye además el adaptador de disparo propio. Su XML preserva las fuentes exactamente; abrirlos y probar el motor en Studio está pendiente.
+`build/PinkDotLock.rbxlx` incluye el único LocalScript y el escenario básico. `build/PinkDotLockTest.rbxlx` incluye además el Tool **SEDWARE Revolver** y sus controladores cliente/servidor. Su XML preserva las fuentes exactamente; abrirlos y probar el motor en Studio está pendiente.
 
 También se incluyen las mismas copias listas para abrir en [`studio/PinkDotLock.rbxlx`](../studio/PinkDotLock.rbxlx) y [`studio/PinkDotLockTest.rbxlx`](../studio/PinkDotLockTest.rbxlx), para descargarlas desde GitHub sin instalar el compilador ni Python.
 
@@ -121,9 +122,9 @@ local measured, rejection = adapter:record(ticket.id, {
 local metrics = adapter:summary()
 ```
 
-OwnedFire y las variables de medición del ejemplo pertenecen a tu integración; el ejemplo no está conectado a Da Hood. El código completo funcional de ese puente está en `src/pink_demo/Probe.client.luau` y `Probe.server.luau`. Abre el lugar generado **PinkDotLockTest** en Studio con **Start Server y 2 Players**, coloca los personajes a la vista, usa C y dispara con F. El servidor crea exclusivamente sus propios eventos PinkDotLockProbe, valida el tiro de prueba y calcula un raycast hitscan de laboratorio. Compara la predicción capturada con la posición del personaje al procesar ese tiro. No aplica daño ni reproduce la física del Revolver de Da Hood.
+OwnedFire y las variables de medición del ejemplo pertenecen a tu integración; el ejemplo no está conectado a Da Hood. La [auditoría y demostración completa del arma propia](SEDWARE_WEAPON_INTEGRATION.md) documenta el puente real de `src/pink_demo/` y `src/pink_weapon/`. Abre **PinkDotLockTest** en Studio con **Start Server y 2 Players**, coloca los personajes a la vista, equipa **SEDWARE Revolver**, usa C y dispara con clic. Sin bloqueo dispara hacia la mira; con bloqueo consume GetPredictedPosition() conservando la cámara libre. El servidor crea exclusivamente sus propios eventos SEDWAREWeaponRemotes/Fire y Result, valida el Tool equipado, ejecuta un raycast hitscan de laboratorio y mide el daño aplicado. No reproduce la física ni modifica el Revolver de Da Hood.
 
-La referencia usa el reloj y la posición medidos en el servidor en ese momento, independientemente de hX/hY; no elige una fecha que favorezca la predicción. El cliente asocia la respuesta con el ticket y registra errores de objetivo activo/manual/auto, RMSE horizontal/vertical/total y sesgo por perfil/rango. La comparación de posición usa targetPosition; excluye el desplazamiento de apuntado por gravedad. El éxito geométrico del raycast y el error de predicción son métricas diferentes. Los relojes deben compartir la base temporal de GetServerTimeNow; la caducidad y el rechazo de identidades impiden mezclar tiros obsoletos, duplicados o respawns.
+La referencia usa el reloj y la posición medidos en el servidor después del raycast, independientemente de hX/hY; no elige una fecha que favorezca la predicción. El cliente mantiene PENDING hasta una respuesta del servidor y distingue accepted, contacto físico, impacto en el personaje bloqueado y daño efectivo. Asocia la respuesta con el ticket y registra errores activo/manual/auto, RMSE horizontal/vertical/total y sesgo por perfil/rango. La comparación de posición usa targetPosition; excluye el desplazamiento de apuntado por gravedad. El impacto y el error de predicción son métricas diferentes. Los relojes deben compartir la base temporal de GetServerTimeNow; la caducidad y el rechazo de identidades impiden mezclar tiros obsoletos, duplicados o respawns. Si el objetivo muere o cambia antes de recibir la respuesta, se conserva el resultado físico confirmado y puede rechazarse la medición del adaptador por identidad.
 
 ## Pruebas y límites
 
@@ -134,7 +135,7 @@ python3 scripts/check.py
 
 Herramienta oficial Luau 0.695, commit `1f6ff5d6f0072f2fab2adf35d1ffbaae7d848ad0`. La primera orden verifica que el archivo coincide con sus fuentes, compila y ejecuta pruebas matemáticas, del adaptador y del **archivo completo** mediante dobles de eventos/APIs. La segunda conserva las pruebas anteriores. Los mensajes Load Failed de las pruebas corresponden a fallos provocados deliberadamente.
 
-Resultados verificados: **156 pruebas de Pink/SEDWARE, 2.384 comprobaciones, 0 fallos**, incluidas **34 de arranque, 30 de LockKey y 3 del loader**; **96 pruebas anteriores, 75.895 comprobaciones, 0 fallos**. Total **252 pruebas, 78.279 comprobaciones**. El archivo autónomo integra 13 módulos y no contiene requires externos. Las fuentes anteriores de DH PREDICTION LAB se preservan.
+Resultados verificados: **210 pruebas de Pink/SEDWARE, 3.156 comprobaciones, 0 fallos**, incluidas **36 de arranque, 30 de LockKey, 52 del puente de armas y 3 del loader**; **96 pruebas anteriores, 75.895 comprobaciones, 0 fallos**. Total **306 pruebas, 79.051 comprobaciones**. El archivo autónomo integra 13 módulos y no contiene requires externos. Las fuentes anteriores de DH PREDICTION LAB se preservan.
 
 | Requisito de las 23 comprobaciones | Evidencia automatizada | Studio / Da Hood real |
 | --- | --- | --- |

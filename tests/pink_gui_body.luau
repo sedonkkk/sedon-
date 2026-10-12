@@ -339,7 +339,7 @@ return function(mock, api, reloadBundle)
 		near(#first.targetConnections, 0)
 		near(#first.connections, 0)
 		local overlays, owners = 0, 0
-		for _, child in ipairs(mock.playerGui:GetChildren()) do
+		for _, child in ipairs(mock.playerGui:GetDescendants()) do
 			if child.Name == "PinkDotLock" then overlays += 1 end
 			if child.Name == "PinkDotLock_Owner_v1" then owners += 1 end
 		end

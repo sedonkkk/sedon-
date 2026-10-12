@@ -34,7 +34,7 @@ python3 scripts/check.py
 
 Compilador oficial Luau 0.695. **30 pruebas de LockKey y 292 comprobaciones**, cubriendo texto C, Enum C, miembros incorrectos, nombres inexistentes, formas falsificadas, variantes y excepciones de typeof/tostring, conservación de identidad, arranque completo, C lock/unlock, limpieza y fallos posteriores de inicialización. Las fallas se informan en consola y en un aviso breve cuando PlayerGui y las APIs de visualización están disponibles.
 
-Total: **156 pruebas de Pink/SEDWARE + 96 anteriores = 252 pruebas, 78.279 comprobaciones, 0 fallos**. Los casos de cliente usan el bundle real con dobles deterministas. **No se ejecutaron Roblox Studio ni Da Hood real.** La corrección elimina el rechazo reproducido; la ejecución en el entorno del usuario requiere sus APIs nativas y no se certifica mediante estos dobles.
+Total actual, incluyendo la integración del arma propia: **210 pruebas de Pink/SEDWARE + 96 anteriores = 306 pruebas, 79.051 comprobaciones, 0 fallos**. Los casos de cliente usan el bundle real con dobles deterministas. **No se ejecutaron Roblox Studio ni Da Hood real.** La corrección elimina el rechazo reproducido; la ejecución en el entorno del usuario requiere sus APIs nativas y no se certifica mediante estos dobles.
 
 Para comprobar qué versión ejecutas, busca `[SEDWARE][Execution][START] SEDWARE startup v3` y después `Configuration READY`, `Input READY`, `Session ACTIVE`. Si aparece otro FAIL, conserva su explicación y el stack completo. DebugMode informa la tecla detectada y los resultados de selección. El loader fijado al commit anterior continuará ejecutando el código antiguo; debe usarse el enlace de la publicación nueva.
 
