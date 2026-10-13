@@ -34,11 +34,8 @@ end
 function PredictionEngine:predict(origin,now)
  local output=self.prediction:predict(origin,now)
  if output then
-  output.camPrediction=self.config.CamPrediction
-  output.camGain=self.config.CamPrediction/Config.referenceCamPrediction
   output.hitPart=self.config.HitPart
   output.predictionUnits="seconds"
-  output.camPredictionUnits="dimensionless"
  end
  return output
 end

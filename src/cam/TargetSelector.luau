@@ -2,6 +2,7 @@
 -- Reuse the existing deterministic screen-distance selector. Character and
 -- visibility checks happen on acquisition; a valid locked player is retained.
 local Selection=if script then require(script.Parent.Parent.pink.Selection) else require("../pink/Selection")
+local ModeDetector=if script then require(script.Parent.Parent.pink.ModeDetector) else require("../pink/ModeDetector")
 local TargetSelector={}
 TargetSelector.__index=TargetSelector
 local function finite(n) return type(n)=="number" and n==n and math.abs(n)<math.huge end
@@ -10,11 +11,29 @@ local function vector(v)
  return ok and result
 end
 function TargetSelector.new(config,report)
- local self=setmetatable({config=config,world=report.world,player=report.player,services=report.services},TargetSelector)
+ local self=setmetatable({config=config,world=report.world,player=report.player,services=report.services,
+  registry=report.registry,modeDetector=ModeDetector.new()},TargetSelector)
  if config.VisibilityCheck then
   self.rayParams=RaycastParams.new();self.rayParams.FilterType=Enum.RaycastFilterType.Exclude;self.rayParams.IgnoreWater=true
  end
  return self
+end
+function TargetSelector:reference(now)
+ local camera=self.world.CurrentCamera;if not camera then return nil end
+ local character=self.player.Character
+ local head=character and character:FindFirstChild("Head")
+ local position=camera.CFrame.Position
+ local mode=self.modeDetector:update(now or self.world:GetServerTimeNow(),{
+  forcedFirstPerson=self.player.CameraMode==Enum.CameraMode.LockFirstPerson,
+  subjectIsLocal=camera.CameraSubject and character and camera.CameraSubject:IsDescendantOf(character)==true,
+  headDistance=head and (position-head.Position).Magnitude,
+  focusDistance=camera.Focus and (position-camera.Focus.Position).Magnitude,
+ })
+ local input=self.services.UserInputService
+ if mode=="FirstPerson" or input.MouseBehavior==Enum.MouseBehavior.LockCenter then
+  return Selection.reference("FirstPerson",camera.ViewportSize)
+ end
+ return Selection.reference("ThirdPerson",camera.ViewportSize,input:GetMouseLocation())
 end
 function TargetSelector:origin()
  local camera=self.world.CurrentCamera
@@ -55,13 +74,18 @@ function TargetSelector:visible(data)
  return hit==nil or (hit.Instance and hit.Instance:IsDescendantOf(data.character))
 end
 function TargetSelector:acquire(player)
+ self.acquisitionCount=(self.acquisitionCount or 0)+1
  local camera=self.world.CurrentCamera
  local size=camera and camera.ViewportSize
  if not size or not finite(size.X) or not finite(size.Y) or size.X<=0 or size.Y<=0 then return nil,"camera viewport unavailable" end
- -- Center reference is consistent in both first and third person.
- local reference=Selection.reference("FirstPerson",size,nil,nil)
+ local reference=self:reference()
+ if not reference then return nil,"selection reference unavailable" end
  local candidates,diagnostics={}, {reference=reference,evaluated=0,valid=0,reasons={}}
- for _,candidate in if player then {player} else self.services.Players:GetPlayers() do
+ local players={}
+ if player then players={player}
+ elseif self.registry then for _,entry in self.registry.list do table.insert(players,entry.player) end
+ else players=self.services.Players:GetPlayers() end
+ for _,candidate in players do
   if candidate~=self.player then
    diagnostics.evaluated+=1
    local data,reason=self:resolve(candidate)

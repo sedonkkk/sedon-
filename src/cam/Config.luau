@@ -1,15 +1,19 @@
 --!nonstrict
--- SEDWARE CAM LOCK. CamPrediction is a dimensionless gain, NOT seconds.
--- gain = CamPrediction / 13.80; X/Z use PredictionX * gain seconds, and Y
--- uses PredictionY * gain seconds. Auto's total RTT-calibrated horizons use
--- the same gain. Horizons are bounded; RTT is never added a second time.
+-- V2 uses direct X/Z and Y horizons in seconds; no prediction gain.
 local PinkConfig = if script then require(script.Parent.Parent.pink.Config) else require("../pink/Config")
 local Config = {}
 
 -- The standalone builder copies this literal to the editable file header.
 Config.sourceLiteral = [=[{
- Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
- PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+ Enabled=false, HitPart="UpperTorso",
+ PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=180,
+ LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
+ Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
+ FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
+ MovementAuthorized=false,
+ ESP=false, Hitboxes=false, Names=false, ESPTargetMode="All", ESPUsername="",
+ ESPUpdateHz=20, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
+ ShowFOV=false,
  -- Internal settings: these intentionally have no extra GUI controls.
  LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
  PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
@@ -26,12 +30,13 @@ Config.sourceLiteral = [=[{
  MaxAccelerationHorizon=0.18,
 }]=]
 
-Config.referenceCamPrediction = 13.80
 Config.HitParts = {"Head", "UpperTorso", "HumanoidRootPart"}
 Config.hitParts = Config.HitParts
 Config.numericLimits = {
- CamPrediction={0,69}, PredictionX={0,0.6}, PredictionY={0,0.6}, Smoothness={0,1}, Radius={1,2000},
- CameraDebugInterval={0.1,10},
+ PredictionX={0,0.6}, PredictionY={0,0.6}, Smoothness={0,1}, Radius={1,2000},
+ CameraDebugInterval={0.1,10}, NotificationCooldown={0.1,30},
+ FlySpeed={1,200}, WalkSpeed={1,100}, FlySmoothing={0,1}, FlyMaxForce={1000,10000000},
+ ESPUpdateHz={1,30}, ESPMaxDistance={10,2000},
  PingSmoothing={0.05,10}, MinPredictionX={0,0.6}, MaxPredictionX={0,0.6}, MinPredictionY={0,0.6}, MaxPredictionY={0,0.6},
  PredictionSlew={0.001,2}, PredictionSmoothing={0,2}, MaxDistance={10,2000}, AcquisitionInterval={0.05,2},
  CloseDistance={1,2000}, MediumDistance={2,2000}, CloseOffset={-0.2,0.2}, MediumOffset={-0.2,0.2}, LongOffset={-0.2,0.2},
@@ -42,14 +47,26 @@ Config.numericLimits = {
 }
 Config.limits = Config.numericLimits
 Config.controls = {
- {key="Enabled",label="Enable",kind="toggle"},
- {key="HitPart",label="Hit Part",kind="choice",options=Config.HitParts},
- {key="CamPrediction",label="Cam Prediction",kind="number",unit="gain",decimals=2},
- {key="PredictionX",label="Prediction X",kind="number",unit="seconds",decimals=4},
- {key="PredictionY",label="Prediction Y",kind="number",unit="seconds",decimals=4},
- {key="Smoothness",label="Smoothness",kind="number",unit="response",decimals=3},
- {key="Radius",label="Radius",kind="number",unit="pixels",decimals=0},
+ {key="Enabled",label="Enable",kind="toggle",tab="MAIN"},
+ {key="HitPart",label="Hit Part",kind="choice",options=Config.HitParts,tab="MAIN"},
+ {key="PredictionX",label="Prediction X",kind="number",decimals=4,tab="MAIN"},
+ {key="PredictionY",label="Prediction Y",kind="number",decimals=4,tab="MAIN"},
+ {key="Smoothness",label="Smoothness",kind="number",decimals=3,tab="MAIN"},
+ {key="Radius",label="Radius",kind="number",decimals=0,tab="MAIN"},
+ {key="Fly",label="Fly",kind="toggle",tab="MISC",section="MOVEMENT"},
+ {key="FlyKeybind",label="Fly Keybind",kind="keybind",tab="MISC",section="MOVEMENT"},
+ {key="FlySpeed",label="Fly Speed",kind="number",decimals=0,tab="MISC",section="MOVEMENT"},
+ {key="Speed",label="Speed",kind="toggle",tab="MISC",section="MOVEMENT"},
+ {key="SpeedKeybind",label="Speed Keybind",kind="keybind",tab="MISC",section="MOVEMENT"},
+ {key="WalkSpeed",label="Walk Speed",kind="number",decimals=0,tab="MISC",section="MOVEMENT"},
+ {key="ESP",label="ESP",kind="toggle",tab="MISC",section="ESP"},
+ {key="Hitboxes",label="Hitboxes",kind="toggle",tab="MISC",section="ESP"},
+ {key="Names",label="Names",kind="toggle",tab="MISC",section="ESP"},
+ {key="ESPTargetMode",label="Target Mode",kind="choice",options={"All","Specific Player"},tab="MISC",section="ESP"},
+ {key="ESPUsername",label="Player Username",kind="text",tab="MISC",section="ESP"},
 }
+Config.keyFields={LockKey=true,FlyKeybind=true,SpeedKeybind=true,FlyUpKey=true,FlyDownKey=true}
+
 Config.fields = {}
 for _,field in Config.controls do
  local bounds=Config.numericLimits[field.key]
@@ -59,8 +76,15 @@ end
 
 function Config.defaults()
  return {
-  Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
-  PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+  Enabled=false, HitPart="UpperTorso",
+  PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=180,
+  LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
+  Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
+  FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
+  MovementAuthorized=false,
+  ESP=false, Hitboxes=false, Names=false, ESPTargetMode="All", ESPUsername="",
+  ESPUpdateHz=20, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
+  ShowFOV=false,
   LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
   PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
   MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
@@ -87,7 +111,7 @@ local function shape(overrides)
  for key,value in overrides do
   local expected=defaults[key]
   if type(key)~="string" or expected==nil then return false,"Config: campo desconocido "..tostring(key) end
-  if key=="LockKey" then
+  if Config.keyFields[key] then
    local resolved,message=PinkConfig.normalizeLockKey(value)
    if not resolved then return false,message end
   elseif key=="PingReferences" then
@@ -132,21 +156,11 @@ function Config.toPredictionConfig(config)
  for _,key in sharedFields do legacy[key]=config[key] end
  legacy.TargetPart=config.HitPart
  legacy.WeaponProfile="Default"
- local gain=config.CamPrediction/Config.referenceCamPrediction
- -- A zero gain disables future lead, while observation age is still known
- -- elapsed time and remains integrated once by the original estimator.
- if gain==0 then legacy.MinPredictionX=0;legacy.MinPredictionY=0 end
- legacy.PredictionX=math.clamp(config.PredictionX*gain,legacy.MinPredictionX,legacy.MaxPredictionX)
- legacy.PredictionY=math.clamp(config.PredictionY*gain,legacy.MinPredictionY,legacy.MaxPredictionY)
+ legacy.PredictionX=math.clamp(config.PredictionX,config.MinPredictionX,config.MaxPredictionX)
+ legacy.PredictionY=math.clamp(config.PredictionY,config.MinPredictionY,config.MaxPredictionY)
  legacy.PingReferences={}
- for _,point in config.PingReferences do
-  table.insert(legacy.PingReferences,{PingMs=point.PingMs,
-   X=math.clamp(point.X*gain,0,0.6),Y=math.clamp(point.Y*gain,0,0.6)})
- end
- for _,range in {"Close","Medium","Long"} do
-  -- Distance offsets are optional empirical seconds, not physical flight.
-  legacy[range.."Offset"]=math.clamp(config[range.."Offset"]*gain,-0.2,0.2)
- end
+ for _,point in config.PingReferences do table.insert(legacy.PingReferences,table.clone(point)) end
+ for _,range in {"Close","Medium","Long"} do legacy[range.."Offset"]=config[range.."Offset"] end
  return PinkConfig.new(legacy)
 end
 
@@ -170,7 +184,7 @@ function Config.new(overrides)
   return nil,"Límites de predicción invertidos"
  end
  if config.CloseDistance>=config.MediumDistance then return nil,"Rangos de distancia invertidos" end
- -- Validate the raw curve before gain/clamping could hide malformed points.
+ -- Validate the empirical ping curve.
  local previous=-math.huge
  for _,point in config.PingReferences do
   if point.PingMs<0 or point.PingMs>2000 or point.PingMs<=previous
@@ -179,8 +193,30 @@ function Config.new(overrides)
   end
   previous=point.PingMs
  end
- config.LockKey,message=PinkConfig.normalizeLockKey(config.LockKey)
- if not config.LockKey then return nil,message end
+ if config.ESPTargetMode~="All" and config.ESPTargetMode~="Specific Player" then return nil,"ESP Target Mode inválido" end
+ if config.ESPOcclusionMode~="VisibleOnly" then return nil,"ESP solo admite VisibleOnly" end
+ if #config.ESPUsername>20 or (config.ESPUsername~="" and not config.ESPUsername:match("^[%w_]+$")) then return nil,"Username inválido" end
+ if config.LogoAssetId~="rbxassetid://COLOCAR_ID_REAL" and config.LogoAssetId~=""
+  and not config.LogoAssetId:match("^rbxassetid://[1-9]%d*$") then return nil,"LogoAssetId requiere un ID real rbxassetid://" end
+ for key in Config.keyFields do
+  config[key],message=PinkConfig.normalizeLockKey(config[key])
+  if not config[key] then return nil,key..": "..tostring(message) end
+  local name=PinkConfig.keyName(config[key])
+  if name:match("^Button") or name:match("^Thumbstick") or name:match("^DPad") then return nil,"Keybind requiere tecla de teclado" end
+ end
+ local used={}
+ for _,key in {"LockKey","FlyKeybind","SpeedKeybind","FlyUpKey","FlyDownKey"} do
+  local name=PinkConfig.keyName(config[key])
+  if used[name] then return nil,"Keybind duplicado: "..name end
+  used[name]=key
+ end
+ for _,key in {"LockKey","FlyKeybind","SpeedKeybind"} do
+  local name=PinkConfig.keyName(config[key])
+  if table.find({"W","A","S","D","Escape","Return","Tab","Backspace"},name) then return nil,"Tecla reservada: "..name end
+ end
+ for _,key in {"FlyUpKey","FlyDownKey"} do
+  if table.find({"W","A","S","D","Escape","Return","Tab","Backspace"},PinkConfig.keyName(config[key])) then return nil,"Tecla de vuelo reservada" end
+ end
  local legacy
  legacy,message=Config.toPredictionConfig(config)
  if not legacy then return nil,message end

@@ -24,15 +24,13 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/e18ba899586cd12214bee587802f927fa258d4c9/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 246 pruebas de Pink/SEDWARE y 96 anteriores pasan; el loader carga las funciones de cliente. Los controladores multiarmas y el servidor se distribuyen en el lugar de Studio.
 
-## SEDWARE CAM LOCK — nueva variante
+## SEDWARE CAM LOCK V2 — PINK EDITION
 
-[`SedwareCamLock.lua`](SedwareCamLock.lua) abre una mini GUI negra/rosada con siete controles y una S rosada nativa. Enable arranca OFF; al activarlo selecciona un jugador visible dentro de Radius y orienta la cámara hacia el Hit Part predicho. Reutiliza Memory, X/Y y latencia, con interpolación temporal después de la cámara de Roblox. Los proyectos anteriores se conservan.
+[`SedwareCamLock.lua`](SedwareCamLock.lua) actualiza la variante existente con MAIN/MISC, panel minimizable y arrastrable tras respawn, dropdowns sobre una capa independiente y un ImageLabel preparado para el logo original. CamPrediction se elimina: X/Y son segundos directos, Radius arranca en 180. Conserva Memory, Auto Prediction y el controlador sin roll.
 
-[Controles, fórmulas, diagnóstico y pruebas](docs/SEDWARE_CAM_LOCK.md) · [Lugar para probar con dos clientes](studio/SedwareCamLock.rbxlx). `python3 scripts/check_cam.py` comprueba el archivo real con dobles; falta ejecución nativa en Roblox y no integra armas de Da Hood.
+MISC incorpora Fly/Speed para experiencias autorizadas, keybinds configurables y ESP visible con cajas visuales, nombres y selección exacta de Username. No modifica colisiones ni remotes de juegos ajenos. No se dispone todavía de un asset ID del logo; se utiliza un fallback temporal explícito.
 
-[SedwareCamLock.lua](SedwareCamLock.lua). [Corrección de Camera Roll](docs/SEDWARE_CAMERA_ROLL.md): yaw/pitch nivelados respecto a Y global y sin transportar UpVector. 85 pruebas de Cam Lock y 342 anteriores pasan. [Runner nativo de Studio](studio/SedwareCamRollTest.rbxlx) preparado; ejecución nativa pendiente.
-
-[Raw corregido y verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/64678f60e84762cb9cbc29df6ee86f7395059254/SedwareCamLock.lua) · [CamLoader.lua actualizado](CamLoader.lua). Los loaders con el commit anterior deben sustituirse para recibir esta corrección.
+[Guía y límites](docs/SEDWARE_V2.md) · [Demo de experiencia propia](studio/SedwareCamLock.rbxlx) · [Pruebas nativas preparadas](studio/SedwareCamV2Test.rbxlx). `python3 scripts/check_cam.py` pasa 108 casos de V2/cámara y 342 anteriores; las mediciones de CLI con jugadores simulados no son FPS de Roblox. La ejecución nativa sigue pendiente.
 
 ## Ejecutar el laboratorio original
 

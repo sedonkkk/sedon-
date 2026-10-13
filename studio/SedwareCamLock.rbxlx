@@ -99,8 +99,8 @@
         <Properties>
           <string name="Name">SedwareCamLock</string>
           <ProtectedString name="Source">--!nonstrict
--- SEDWARE CAM LOCK v1 | zero-roll yaw/pitch correction; edit Config below.
--- Prediction X/Y are seconds. CamPrediction is a gain: value / 13.80.
+-- SEDWARE CAM LOCK V2 — PINK EDITION | edit Config below.
+-- Prediction X/Y are direct horizons in seconds. Movement requires authorization.
 -- Enabled=false opens the GUI without controlling the camera.
 -- Public client APIs only. No remote weapon integration or bypass.
 local function bootTraceback(problem)
@@ -113,11 +113,18 @@ local function bootLog(phase,status,detail)
  local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn
  if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end
 end
-bootLog("CamExecution","START","SEDWARE CAM LOCK v1 payload began execution")
+bootLog("CamExecution","START","SEDWARE CAM LOCK V2 — PINK EDITION payload began execution")
 local Config
 local configBuilt,headerError=xpcall(function() Config = {
- Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
- PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+ Enabled=false, HitPart="UpperTorso",
+ PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=180,
+ LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
+ Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
+ FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
+ MovementAuthorized=false,
+ ESP=false, Hitboxes=false, Names=false, ESPTargetMode="All", ESPUsername="",
+ ESPUpdateHz=20, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
+ ShowFOV=false,
  -- Internal settings: these intentionally have no extra GUI controls.
  LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
  PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
@@ -1040,6 +1047,104 @@ end
 return Selection
 end
 -- END Selection
+-- BEGIN ModeDetector | sha256 4b515fe1f8d371b57f807e7f49b5d4bbbf246fd5383181146c3605d645f9b4cb
+factories["ModeDetector"] = function(loadModule)
+--!nonstrict
+-- Pure camera-mode classification. No camera writes, Roblox services or targets.
+-- Auto requires corroborated camera-to-head AND camera-to-focus distances;
+-- proximity to the head alone is insufficient (e.g. a third-person obstruction).
+local ModeDetector = {}
+ModeDetector.__index = ModeDetector
+
+local function finite(value)
+	return type(value) == "number" and value == value and math.abs(value) &lt; math.huge
+end
+
+local function distance(value)
+	return finite(value) and value &gt;= 0
+end
+
+local function resetPending(self)
+	self.pendingMode = nil
+	self.pendingSince = nil
+end
+
+function ModeDetector.new(config)
+	return setmetatable({
+		config = config or {},
+		mode = "ThirdPerson",
+		pendingMode = nil,
+		pendingSince = nil,
+		lastTime = nil,
+	}, ModeDetector)
+end
+
+function ModeDetector:update(now, observation)
+	-- Bad/out-of-order time cannot satisfy a dwell interval.
+	if not finite(now) or (self.lastTime ~= nil and now &lt; self.lastTime) then
+		resetPending(self)
+		return self.mode
+	end
+	self.lastTime = now
+	local config = self.config
+	local override = config.LockMode
+	if override == "FirstPerson" or override == "ThirdPerson" then
+		self.mode = override
+		resetPending(self)
+		return self.mode
+	end
+	if type(observation) ~= "table" then
+		resetPending(self)
+		return self.mode
+	end
+	-- The runtime obtains this explicit setting from Player.CameraMode.
+	-- It is strong evidence and does not need the heuristic's dwell interval.
+	if observation.forcedFirstPerson == true then
+		self.mode = "FirstPerson"
+		resetPending(self)
+		return self.mode
+	end
+
+	local enter = config.ModeEnterDistance
+	local exit = config.ModeExitDistance
+	local dwell = config.ModeDwellSeconds
+	if not distance(enter) then enter = 0.75 end
+	if not distance(exit) or exit &lt;= enter then exit = math.max(1.5, enter + 0.75) end
+	if not distance(dwell) then dwell = 0.2 end
+
+	local desired = nil
+	if observation.subjectIsLocal == false then
+		-- A confirmed different subject is not local first-person evidence.
+		desired = "ThirdPerson"
+	elseif observation.subjectIsLocal == true
+		and distance(observation.headDistance) and distance(observation.focusDistance) then
+		if observation.headDistance &lt;= enter and observation.focusDistance &lt;= enter then
+			desired = "FirstPerson"
+		elseif observation.headDistance &gt;= exit and observation.focusDistance &gt;= exit then
+			desired = "ThirdPerson"
+		end
+	end
+
+	-- Missing data and the hysteresis band preserve the established mode, but
+	-- invalidate pending evidence so separated near samples cannot accumulate.
+	if desired == nil or desired == self.mode then
+		resetPending(self)
+		return self.mode
+	end
+	if self.pendingMode ~= desired then
+		self.pendingMode = desired
+		self.pendingSince = now
+	end
+	if now - self.pendingSince &gt;= dwell then
+		self.mode = desired
+		resetPending(self)
+	end
+	return self.mode
+end
+
+return ModeDetector
+end
+-- END ModeDetector
 -- BEGIN Runtime | sha256 7f89e3c53bea65650c255a3e091eaa869ac8c167c97aa6a62e89181886bd7f50
 factories["Runtime"] = function(loadModule)
 --!nonstrict
@@ -1556,20 +1661,24 @@ end
 return Overlay
 end
 -- END Overlay
--- BEGIN Config | sha256 8ff0039846d1a2b57044da7ef8c97aec2c67b706cc606eac2bcc3b3c8ac82e04
+-- BEGIN Config | sha256 760722619e386a730489cf47fbe6414e2dc9cb6819dd72197e5bf41fac4c4ac2
 factories["Config"] = function(loadModule)
 --!nonstrict
--- SEDWARE CAM LOCK. CamPrediction is a dimensionless gain, NOT seconds.
--- gain = CamPrediction / 13.80; X/Z use PredictionX * gain seconds, and Y
--- uses PredictionY * gain seconds. Auto's total RTT-calibrated horizons use
--- the same gain. Horizons are bounded; RTT is never added a second time.
+-- V2 uses direct X/Z and Y horizons in seconds; no prediction gain.
 local PinkConfig = loadModule("PinkConfig")
 local Config = {}
 
 -- The standalone builder copies this literal to the editable file header.
 Config.sourceLiteral = [=[{
- Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
- PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+ Enabled=false, HitPart="UpperTorso",
+ PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=180,
+ LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
+ Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
+ FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
+ MovementAuthorized=false,
+ ESP=false, Hitboxes=false, Names=false, ESPTargetMode="All", ESPUsername="",
+ ESPUpdateHz=20, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
+ ShowFOV=false,
  -- Internal settings: these intentionally have no extra GUI controls.
  LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
  PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
@@ -1586,12 +1695,13 @@ Config.sourceLiteral = [=[{
  MaxAccelerationHorizon=0.18,
 }]=]
 
-Config.referenceCamPrediction = 13.80
 Config.HitParts = {"Head", "UpperTorso", "HumanoidRootPart"}
 Config.hitParts = Config.HitParts
 Config.numericLimits = {
- CamPrediction={0,69}, PredictionX={0,0.6}, PredictionY={0,0.6}, Smoothness={0,1}, Radius={1,2000},
- CameraDebugInterval={0.1,10},
+ PredictionX={0,0.6}, PredictionY={0,0.6}, Smoothness={0,1}, Radius={1,2000},
+ CameraDebugInterval={0.1,10}, NotificationCooldown={0.1,30},
+ FlySpeed={1,200}, WalkSpeed={1,100}, FlySmoothing={0,1}, FlyMaxForce={1000,10000000},
+ ESPUpdateHz={1,30}, ESPMaxDistance={10,2000},
  PingSmoothing={0.05,10}, MinPredictionX={0,0.6}, MaxPredictionX={0,0.6}, MinPredictionY={0,0.6}, MaxPredictionY={0,0.6},
  PredictionSlew={0.001,2}, PredictionSmoothing={0,2}, MaxDistance={10,2000}, AcquisitionInterval={0.05,2},
  CloseDistance={1,2000}, MediumDistance={2,2000}, CloseOffset={-0.2,0.2}, MediumOffset={-0.2,0.2}, LongOffset={-0.2,0.2},
@@ -1602,14 +1712,26 @@ Config.numericLimits = {
 }
 Config.limits = Config.numericLimits
 Config.controls = {
- {key="Enabled",label="Enable",kind="toggle"},
- {key="HitPart",label="Hit Part",kind="choice",options=Config.HitParts},
- {key="CamPrediction",label="Cam Prediction",kind="number",unit="gain",decimals=2},
- {key="PredictionX",label="Prediction X",kind="number",unit="seconds",decimals=4},
- {key="PredictionY",label="Prediction Y",kind="number",unit="seconds",decimals=4},
- {key="Smoothness",label="Smoothness",kind="number",unit="response",decimals=3},
- {key="Radius",label="Radius",kind="number",unit="pixels",decimals=0},
+ {key="Enabled",label="Enable",kind="toggle",tab="MAIN"},
+ {key="HitPart",label="Hit Part",kind="choice",options=Config.HitParts,tab="MAIN"},
+ {key="PredictionX",label="Prediction X",kind="number",decimals=4,tab="MAIN"},
+ {key="PredictionY",label="Prediction Y",kind="number",decimals=4,tab="MAIN"},
+ {key="Smoothness",label="Smoothness",kind="number",decimals=3,tab="MAIN"},
+ {key="Radius",label="Radius",kind="number",decimals=0,tab="MAIN"},
+ {key="Fly",label="Fly",kind="toggle",tab="MISC",section="MOVEMENT"},
+ {key="FlyKeybind",label="Fly Keybind",kind="keybind",tab="MISC",section="MOVEMENT"},
+ {key="FlySpeed",label="Fly Speed",kind="number",decimals=0,tab="MISC",section="MOVEMENT"},
+ {key="Speed",label="Speed",kind="toggle",tab="MISC",section="MOVEMENT"},
+ {key="SpeedKeybind",label="Speed Keybind",kind="keybind",tab="MISC",section="MOVEMENT"},
+ {key="WalkSpeed",label="Walk Speed",kind="number",decimals=0,tab="MISC",section="MOVEMENT"},
+ {key="ESP",label="ESP",kind="toggle",tab="MISC",section="ESP"},
+ {key="Hitboxes",label="Hitboxes",kind="toggle",tab="MISC",section="ESP"},
+ {key="Names",label="Names",kind="toggle",tab="MISC",section="ESP"},
+ {key="ESPTargetMode",label="Target Mode",kind="choice",options={"All","Specific Player"},tab="MISC",section="ESP"},
+ {key="ESPUsername",label="Player Username",kind="text",tab="MISC",section="ESP"},
 }
+Config.keyFields={LockKey=true,FlyKeybind=true,SpeedKeybind=true,FlyUpKey=true,FlyDownKey=true}
+
 Config.fields = {}
 for _,field in Config.controls do
  local bounds=Config.numericLimits[field.key]
@@ -1619,8 +1741,15 @@ end
 
 function Config.defaults()
  return {
-  Enabled=false, HitPart="UpperTorso", CamPrediction=13.80,
-  PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=50,
+  Enabled=false, HitPart="UpperTorso",
+  PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=180,
+  LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
+  Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
+  FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
+  MovementAuthorized=false,
+  ESP=false, Hitboxes=false, Names=false, ESPTargetMode="All", ESPUsername="",
+  ESPUpdateHz=20, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
+  ShowFOV=false,
   LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
   PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
   MinPredictionX=0, MaxPredictionX=0.35, MinPredictionY=0, MaxPredictionY=0.35, PredictionSlew=0.06,
@@ -1647,7 +1776,7 @@ local function shape(overrides)
  for key,value in overrides do
   local expected=defaults[key]
   if type(key)~="string" or expected==nil then return false,"Config: campo desconocido "..tostring(key) end
-  if key=="LockKey" then
+  if Config.keyFields[key] then
    local resolved,message=PinkConfig.normalizeLockKey(value)
    if not resolved then return false,message end
   elseif key=="PingReferences" then
@@ -1692,21 +1821,11 @@ function Config.toPredictionConfig(config)
  for _,key in sharedFields do legacy[key]=config[key] end
  legacy.TargetPart=config.HitPart
  legacy.WeaponProfile="Default"
- local gain=config.CamPrediction/Config.referenceCamPrediction
- -- A zero gain disables future lead, while observation age is still known
- -- elapsed time and remains integrated once by the original estimator.
- if gain==0 then legacy.MinPredictionX=0;legacy.MinPredictionY=0 end
- legacy.PredictionX=math.clamp(config.PredictionX*gain,legacy.MinPredictionX,legacy.MaxPredictionX)
- legacy.PredictionY=math.clamp(config.PredictionY*gain,legacy.MinPredictionY,legacy.MaxPredictionY)
+ legacy.PredictionX=math.clamp(config.PredictionX,config.MinPredictionX,config.MaxPredictionX)
+ legacy.PredictionY=math.clamp(config.PredictionY,config.MinPredictionY,config.MaxPredictionY)
  legacy.PingReferences={}
- for _,point in config.PingReferences do
-  table.insert(legacy.PingReferences,{PingMs=point.PingMs,
-   X=math.clamp(point.X*gain,0,0.6),Y=math.clamp(point.Y*gain,0,0.6)})
- end
- for _,range in {"Close","Medium","Long"} do
-  -- Distance offsets are optional empirical seconds, not physical flight.
-  legacy[range.."Offset"]=math.clamp(config[range.."Offset"]*gain,-0.2,0.2)
- end
+ for _,point in config.PingReferences do table.insert(legacy.PingReferences,table.clone(point)) end
+ for _,range in {"Close","Medium","Long"} do legacy[range.."Offset"]=config[range.."Offset"] end
  return PinkConfig.new(legacy)
 end
 
@@ -1730,7 +1849,7 @@ function Config.new(overrides)
   return nil,"Límites de predicción invertidos"
  end
  if config.CloseDistance&gt;=config.MediumDistance then return nil,"Rangos de distancia invertidos" end
- -- Validate the raw curve before gain/clamping could hide malformed points.
+ -- Validate the empirical ping curve.
  local previous=-math.huge
  for _,point in config.PingReferences do
   if point.PingMs&lt;0 or point.PingMs&gt;2000 or point.PingMs&lt;=previous
@@ -1739,8 +1858,30 @@ function Config.new(overrides)
   end
   previous=point.PingMs
  end
- config.LockKey,message=PinkConfig.normalizeLockKey(config.LockKey)
- if not config.LockKey then return nil,message end
+ if config.ESPTargetMode~="All" and config.ESPTargetMode~="Specific Player" then return nil,"ESP Target Mode inválido" end
+ if config.ESPOcclusionMode~="VisibleOnly" then return nil,"ESP solo admite VisibleOnly" end
+ if #config.ESPUsername&gt;20 or (config.ESPUsername~="" and not config.ESPUsername:match("^[%w_]+$")) then return nil,"Username inválido" end
+ if config.LogoAssetId~="rbxassetid://COLOCAR_ID_REAL" and config.LogoAssetId~=""
+  and not config.LogoAssetId:match("^rbxassetid://[1-9]%d*$") then return nil,"LogoAssetId requiere un ID real rbxassetid://" end
+ for key in Config.keyFields do
+  config[key],message=PinkConfig.normalizeLockKey(config[key])
+  if not config[key] then return nil,key..": "..tostring(message) end
+  local name=PinkConfig.keyName(config[key])
+  if name:match("^Button") or name:match("^Thumbstick") or name:match("^DPad") then return nil,"Keybind requiere tecla de teclado" end
+ end
+ local used={}
+ for _,key in {"LockKey","FlyKeybind","SpeedKeybind","FlyUpKey","FlyDownKey"} do
+  local name=PinkConfig.keyName(config[key])
+  if used[name] then return nil,"Keybind duplicado: "..name end
+  used[name]=key
+ end
+ for _,key in {"LockKey","FlyKeybind","SpeedKeybind"} do
+  local name=PinkConfig.keyName(config[key])
+  if table.find({"W","A","S","D","Escape","Return","Tab","Backspace"},name) then return nil,"Tecla reservada: "..name end
+ end
+ for _,key in {"FlyUpKey","FlyDownKey"} do
+  if table.find({"W","A","S","D","Escape","Return","Tab","Backspace"},PinkConfig.keyName(config[key])) then return nil,"Tecla de vuelo reservada" end
+ end
  local legacy
  legacy,message=Config.toPredictionConfig(config)
  if not legacy then return nil,message end
@@ -1772,28 +1913,32 @@ Config.keyName=PinkConfig.keyName
 return Config
 end
 -- END Config
--- BEGIN Branding | sha256 2cf8a5798fbd8bc84f40cb675025539d6a8a0994f969d6e301731821e5739b0a
+-- BEGIN Branding | sha256 fc26ed4f6d2b0d8d99ae5ccb4877c2501f4c816fc1d77bdd383666d1927978f4
 factories["Branding"] = function(loadModule)
 --!nonstrict
 -- Native geometry keeps the Sedware mark visible without an uploaded asset.
 local Branding = {
-	Title = "SEDWARE", Subtitle = "CAM LOCK", Version = "v1",
+	Title = "SEDWARE", Subtitle = "CAM LOCK · PINK EDITION", Version = "v2",
 	Colors = if Color3 then {
-		Background = Color3.fromRGB(10, 10, 10), Surface = Color3.fromRGB(20, 20, 20),
-		Input = Color3.fromRGB(27, 27, 27), Border = Color3.fromRGB(49, 39, 45),
+		Background = Color3.fromRGB(10, 10, 14), Surface = Color3.fromRGB(19, 19, 25),
+		Input = Color3.fromRGB(29, 29, 38), Border = Color3.fromRGB(57, 42, 61),
 		Pink = Color3.fromRGB(255, 105, 180), Neon = Color3.fromRGB(255, 20, 147),
-		White = Color3.fromRGB(255, 255, 255), Muted = Color3.fromRGB(158, 151, 155),
+		White = Color3.fromRGB(245, 245, 250), Muted = Color3.fromRGB(155, 155, 170),
 	} else nil,
 }
 
 -- create(className, properties, parent) is supplied by the owning UI so every
 -- piece is included in its construction-failure and unload cleanup.
-function Branding.addLogo(parent, create, position, size, zIndex)
+function Branding.addLogo(parent, create, position, size, zIndex, config, connect)
 	local logo = create("Frame", {
 		Name = "SedwareLogo", Active = false, BackgroundTransparency = 1,
 		Position = position or UDim2.fromOffset(14, 12), Size = size or UDim2.fromOffset(26, 29),
 		ZIndex = zIndex or 4,
 	}, parent)
+	local fallback=create("Frame",{Name="TemporaryFallback",Active=false,BackgroundTransparency=1,
+  Size=UDim2.fromScale(1,1),ZIndex=zIndex or 4},logo)
+	local image=create("ImageLabel",{Name="OriginalLogoImage",Active=false,BackgroundTransparency=1,
+  Size=UDim2.fromScale(1,1),ScaleType=Enum.ScaleType.Fit,Image="",Visible=false,ZIndex=zIndex or 4},logo)
 	local bars = {
 		{"STop", 0.17, 0.07, 0.77, 0.17},
 		{"SUpper", 0.10, 0.15, 0.23, 0.39},
@@ -1806,15 +1951,443 @@ function Branding.addLogo(parent, create, position, size, zIndex)
 			Name = bar[1], Active = false, BackgroundColor3 = Branding.Colors.Neon,
 			BorderSizePixel = 0, Position = UDim2.fromScale(bar[2], bar[3]),
 			Size = UDim2.fromScale(bar[4], bar[5]), Rotation = -12, ZIndex = zIndex or 4,
-		}, logo)
+		}, fallback)
 	end
+	if connect then connect(image:GetPropertyChangedSignal("IsLoaded"),function()
+  local loaded=image.Image:match("^rbxassetid://[1-9]%d*$")~=nil and image.IsLoaded==true
+  fallback.Visible=not loaded;image.Visible=loaded;logo:SetAttribute("OriginalLogoAvailable",loaded)
+ end) end
+ Branding.setLogo(logo,config and config.LogoAssetId or "")
 	return logo
+end
+function Branding.setLogo(logo,asset)
+ local image=logo:FindFirstChild("OriginalLogoImage")
+ local fallback=logo:FindFirstChild("TemporaryFallback")
+ local valid=type(asset)=="string" and asset:match("^rbxassetid://[1-9]%d*$")~=nil
+ image.Image=if valid then asset else ""
+ image.Visible=valid and image.IsLoaded==true;fallback.Visible=not image.Visible
+ logo:SetAttribute("OriginalLogoAvailable",image.Visible)
 end
 
 return Branding
 end
 -- END Branding
--- BEGIN NotificationSystem | sha256 aed7057f7cd61315ac3ad73ecfd9ebafc2782597644e46a97049cc43b8c52d49
+-- BEGIN UIAnimations | sha256 53558e0dc2f437ad011b6ec0a69a91d2f17a2d656dd4876ef54aad1a5ef8956c
+factories["UIAnimations"] = function(loadModule)
+--!nonstrict
+-- One cancellable tween per instance, created only on state changes.
+local UIAnimations={}
+UIAnimations.__index=UIAnimations
+function UIAnimations.new()
+ local ok,service=pcall(function() return game:GetService("TweenService") end)
+ return setmetatable({service=if ok then service else nil,active={},destroyed=false},UIAnimations)
+end
+function UIAnimations:cancel(instance)
+ local record=self.active[instance]
+ if not record then return end
+ self.active[instance]=nil
+ if record.connection then record.connection:Disconnect() end
+ pcall(function() record.tween:Cancel();record.tween:Destroy() end)
+end
+function UIAnimations:play(instance,duration,properties)
+ if self.destroyed then return false end
+ self:cancel(instance)
+ if not self.service then for key,value in properties do instance[key]=value end;return false end
+ local tween=self.service:Create(instance,TweenInfo.new(duration,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),properties)
+ local record={tween=tween};self.active[instance]=record
+ record.connection=tween.Completed:Connect(function()
+  if self.active[instance]==record then self.active[instance]=nil end
+  record.connection:Disconnect();tween:Destroy()
+ end)
+ tween:Play();return true
+end
+function UIAnimations:destroy()
+ if self.destroyed then return end
+ self.destroyed=true
+ local objects={};for object in self.active do table.insert(objects,object) end
+ for _,object in objects do self:cancel(object) end
+end
+return UIAnimations
+end
+-- END UIAnimations
+-- BEGIN PlayerRegistry | sha256 52b9e920b9c09311935041e17fcde764d598cf5332c4d15a38a2da0bfc994d15
+factories["PlayerRegistry"] = function(loadModule)
+--!nonstrict
+-- Event-driven roster/character cache. GetPlayers is used exactly once.
+local Cleanup=loadModule("Cleanup")
+local PlayerRegistry={}
+PlayerRegistry.__index=PlayerRegistry
+function PlayerRegistry.new(players,onChange)
+ local self=setmetatable({entries={},list={},byUsername={},cleanup=Cleanup.new(),onChange=onChange,destroyed=false},PlayerRegistry)
+ local ok,problem=pcall(function()
+  self.cleanup:connect(players.PlayerAdded,function(player) self:_add(player) end)
+  self.cleanup:connect(players.PlayerRemoving,function(player) self:_remove(player) end)
+  for _,player in players:GetPlayers() do self:_add(player) end
+ end)
+ if not ok then self:destroy();error(problem,2) end
+ return self
+end
+function PlayerRegistry:_emit(kind,entry)
+ if not self.destroyed and self.onChange then self.onChange(kind,entry) end
+end
+function PlayerRegistry:_refresh(entry)
+ local character=entry.character
+ local oldHumanoid=entry.humanoid
+ entry.humanoid=character and character:FindFirstChildOfClass("Humanoid")
+ entry.root=character and character:FindFirstChild("HumanoidRootPart")
+ entry.head=character and character:FindFirstChild("Head")
+ if oldHumanoid~=entry.humanoid then
+  if entry.deathConnection then entry.deathConnection:Disconnect();entry.deathConnection=nil end
+  if entry.humanoid then
+   entry.deathConnection=entry.charCleanup:connect(entry.humanoid.Died,function() self:_emit("Died",entry) end)
+  end
+ end
+ self:_emit("Ready",entry)
+end
+function PlayerRegistry:_character(entry,character)
+ entry.charCleanup:destroy();entry.charCleanup=Cleanup.new();entry.deathConnection=nil
+ entry.character=character;entry.humanoid=nil;entry.root=nil;entry.head=nil
+ if character then
+  entry.charCleanup:connect(character.ChildAdded,function() self:_refresh(entry) end)
+  entry.charCleanup:connect(character.ChildRemoved,function() self:_refresh(entry) end)
+  entry.charCleanup:connect(character.AncestryChanged,function() self:_refresh(entry) end)
+  self:_refresh(entry)
+ else self:_emit("CharacterRemoving",entry) end
+end
+function PlayerRegistry:_add(player)
+ if self.destroyed or self.entries[player] then return end
+ local entry={player=player,username=string.lower(player.Name),cleanup=Cleanup.new(),charCleanup=Cleanup.new()}
+ self.entries[player]=entry;self.byUsername[string.lower(player.Name)]=entry;table.insert(self.list,entry)
+ entry.cleanup:connect(player.CharacterAdded,function(character) self:_character(entry,character) end)
+ entry.cleanup:connect(player.CharacterRemoving,function(character)
+  if entry.character==character then self:_character(entry,nil) end
+ end)
+ self:_character(entry,player.Character);self:_emit("PlayerAdded",entry)
+end
+function PlayerRegistry:_remove(player)
+ local entry=self.entries[player];if not entry then return end
+ self.entries[player]=nil;self.byUsername[string.lower(player.Name)]=nil
+ for index,value in self.list do if value==entry then table.remove(self.list,index);break end end
+ self:_emit("PlayerRemoving",entry)
+ entry.cleanup:destroy();entry.charCleanup:destroy()
+end
+function PlayerRegistry:lookup(username) return self.byUsername[string.lower(username)] end
+function PlayerRegistry:destroy()
+ if self.destroyed then return end
+ self.destroyed=true;self.cleanup:destroy()
+ for _,entry in self.list do entry.cleanup:destroy();entry.charCleanup:destroy() end
+ table.clear(self.entries);table.clear(self.list);table.clear(self.byUsername)
+end
+return PlayerRegistry
+end
+-- END PlayerRegistry
+-- BEGIN MovementAccess | sha256 e99ede22a5aa6cc71d3581c5a2070c3cf0ddae87bb3e26eb370e7d5c1160a5b6
+factories["MovementAccess"] = function(loadModule)
+--!nonstrict
+-- A declaration/attribute for an owned or explicitly authorized experience.
+-- This is not a server permission bypass or a replication guarantee.
+local MovementAccess={}
+function MovementAccess.allowed(config,report)
+ if config.MovementAuthorized then return true end
+ return report.player:GetAttribute("SEDWAREMovementAuthorized")==true
+  or report.world:GetAttribute("SEDWAREMovementAuthorized")==true
+end
+function MovementAccess.ready(entry,world)
+ return entry and entry.character and entry.character:IsDescendantOf(world)
+  and entry.humanoid and entry.humanoid.Health&gt;0 and entry.root and entry.root:IsA("BasePart")
+end
+return MovementAccess
+end
+-- END MovementAccess
+-- BEGIN FlyController | sha256 3c0eeccfc851fbde895c33414da4afcf93f417a037d49e6af76ca6a3fcb97971
+factories["FlyController"] = function(loadModule)
+--!nonstrict
+local MovementAccess=loadModule("MovementAccess")
+local FlyController={}
+FlyController.__index=FlyController
+function FlyController.new(config,report)
+ return setmetatable({config=config,report=report,active=false,velocity=Vector3.zero},FlyController)
+end
+function FlyController:stop()
+ if self.constraint then self.constraint:Destroy();self.constraint=nil end
+ if self.attachment then self.attachment:Destroy();self.attachment=nil end
+ if self.humanoid and self.original then
+  pcall(function()
+   self.humanoid.AutoRotate=self.original.autoRotate;self.humanoid.PlatformStand=self.original.platformStand
+   if self.humanoid.Health&gt;0 then self.humanoid:ChangeState(self.original.state) end
+  end)
+ end
+ self.humanoid=nil;self.root=nil;self.original=nil;self.active=false;self.velocity=Vector3.zero
+end
+function FlyController:start(entry)
+ if not MovementAccess.allowed(self.config,self.report) then return false,"Fly requiere una experiencia propia o autorización explícita" end
+ if not MovementAccess.ready(entry,self.report.world) then return true,"Waiting for character" end
+ if self.active and self.root==entry.root then return true end
+ self:stop()
+ self.humanoid=entry.humanoid;self.root=entry.root
+ self.original={autoRotate=self.humanoid.AutoRotate,platformStand=self.humanoid.PlatformStand,state=self.humanoid:GetState()}
+ local ok,problem=pcall(function()
+  self.attachment=Instance.new("Attachment");self.attachment.Name="SEDWAREFlyAttachment";self.attachment.Parent=self.root
+  self.constraint=Instance.new("LinearVelocity");self.constraint.Name="SEDWAREFlyVelocity"
+  self.constraint.Attachment0=self.attachment;self.constraint.RelativeTo=Enum.ActuatorRelativeTo.World
+  self.constraint.VelocityConstraintMode=Enum.VelocityConstraintMode.Vector;self.constraint.ForceLimitsEnabled=true
+  self.constraint.MaxForce=self.config.FlyMaxForce;self.constraint.VectorVelocity=Vector3.zero;self.constraint.Parent=self.root
+  self.humanoid.AutoRotate=false;self.humanoid.PlatformStand=true;self.humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+  self.active=true
+ end)
+ if not ok then self:stop();return false,"Fly API: "..tostring(problem) end
+ return true
+end
+function FlyController:update(entry,camera,dt,keys)
+ if not self.config.Fly or not MovementAccess.allowed(self.config,self.report) or not MovementAccess.ready(entry,self.report.world) then self:stop();return end
+ if not self.active or self.root~=entry.root then
+  local started,reason=self:start(entry);assert(started,reason)
+ end
+ if not self.active then return end
+ if not camera then self.velocity=Vector3.zero;self.constraint.VectorVelocity=Vector3.zero;return end
+ if type(dt)~="number" or dt&lt;=0 or dt~=dt or dt==math.huge then return end
+ local direction=camera.CFrame.LookVector*((keys.W and 1 or 0)-(keys.S and 1 or 0))
+  +camera.CFrame.RightVector*((keys.D and 1 or 0)-(keys.A and 1 or 0))
+  +Vector3.yAxis*((keys.up and 1 or 0)-(keys.down and 1 or 0))
+ if direction.Magnitude&gt;1 then direction=direction.Unit end
+ local wanted=direction*self.config.FlySpeed
+ local alpha=if self.config.FlySmoothing==0 then 1 else 1-math.exp(-dt/self.config.FlySmoothing)
+ self.velocity=self.velocity:Lerp(wanted,alpha)
+ self.constraint.VectorVelocity=self.velocity
+ if self.constraint.MaxForce~=self.config.FlyMaxForce then self.constraint.MaxForce=self.config.FlyMaxForce end
+end
+function FlyController:destroy() self:stop() end
+return FlyController
+end
+-- END FlyController
+-- BEGIN SpeedController | sha256 10d5413cae934a0f8f977e10b24c6f4c9d47b277aec92d7385f9a91fadc0cb29
+factories["SpeedController"] = function(loadModule)
+--!nonstrict
+local MovementAccess=loadModule("MovementAccess")
+local SpeedController={}
+SpeedController.__index=SpeedController
+function SpeedController.new(config,report)
+ return setmetatable({config=config,report=report,active=false,writes=0},SpeedController)
+end
+function SpeedController:stop()
+ if self.humanoid and self.original~=nil then pcall(function()
+  if self.humanoid.WalkSpeed==self.applied then self.humanoid.WalkSpeed=self.original end
+ end) end
+ self.humanoid=nil;self.original=nil;self.applied=nil;self.active=false
+end
+function SpeedController:sync(entry,flying)
+ if not self.config.Speed or flying or not MovementAccess.allowed(self.config,self.report) or not MovementAccess.ready(entry,self.report.world) then self:stop();return end
+ if self.humanoid~=entry.humanoid then
+  self:stop();self.humanoid=entry.humanoid;self.original=self.humanoid.WalkSpeed
+ end
+ -- Deliberately do not fight a server that overwrites WalkSpeed. Reapply only
+ -- for a new character, a config edit or a state transition.
+ if self.applied~=self.config.WalkSpeed then
+  self.humanoid.WalkSpeed=self.config.WalkSpeed;self.applied=self.config.WalkSpeed;self.writes+=1
+ end
+ self.active=true
+end
+function SpeedController:destroy() self:stop() end
+return SpeedController
+end
+-- END SpeedController
+-- BEGIN KeybindManager | sha256 edc469f921dc2ca52134d1372d111aea32baf0e0621af6d4360ea1ab321fa846
+factories["KeybindManager"] = function(loadModule)
+--!nonstrict
+local Config=loadModule("Config")
+local Cleanup=loadModule("Cleanup")
+local KeybindManager={}
+KeybindManager.__index=KeybindManager
+function KeybindManager.new(config,input,callbacks)
+ local self=setmetatable({config=config,input=input,callbacks=callbacks,keys={},cleanup=Cleanup.new(),destroyed=false},KeybindManager)
+ local ok,problem=pcall(function()
+  self.cleanup:connect(input.InputBegan,function(event,processed) self:_began(event,processed) end)
+  self.cleanup:connect(input.InputEnded,function(event) if event.KeyCode then self.keys[event.KeyCode]=nil end end)
+  self.cleanup:connect(input.WindowFocusReleased,function() self:clear();self:cancelCapture() end)
+  self.cleanup:connect(input.TextBoxFocused,function() self:clear();self:cancelCapture() end)
+ end)
+ if not ok then self:destroy();error(problem,2) end
+ return self
+end
+function KeybindManager:capture(field)
+ if field~="FlyKeybind" and field~="SpeedKeybind" then return false,"Unsupported keybind field" end
+ self:cancelCapture();self:clear();self.capturing=field;self.callbacks.capture(field,true);return true
+end
+function KeybindManager:cancelCapture()
+ local field=self.capturing;self.capturing=nil
+ if field then self.callbacks.capture(field,false) end
+end
+function KeybindManager:clear() table.clear(self.keys) end
+function KeybindManager:_began(event,processed)
+ if self.destroyed or processed or self.input:GetFocusedTextBox() then return end
+ local key=event.KeyCode
+ if key==nil or key==Enum.KeyCode.Unknown then return end
+ if self.capturing then
+  if key==Enum.KeyCode.Escape then self:cancelCapture();return end
+  local field=self.capturing
+  local ok,reason=self.callbacks.change(field,key)
+  if ok then self:cancelCapture() else self.callbacks.notice(reason) end
+  return
+ end
+ self.keys[key]=true
+ if key==self.config.LockKey then self.callbacks.lock()
+ elseif key==self.config.FlyKeybind then self.callbacks.toggle("Fly")
+ elseif key==self.config.SpeedKeybind then self.callbacks.toggle("Speed") end
+end
+function KeybindManager:movement()
+ if self.capturing or self.input:GetFocusedTextBox() then return {} end
+ return {W=self.keys[Enum.KeyCode.W],A=self.keys[Enum.KeyCode.A],S=self.keys[Enum.KeyCode.S],D=self.keys[Enum.KeyCode.D],
+  up=self.keys[self.config.FlyUpKey],down=self.keys[self.config.FlyDownKey]}
+end
+function KeybindManager:destroy()
+ if self.destroyed then return end
+ self.destroyed=true;self:cancelCapture();self:clear();self.cleanup:destroy()
+end
+return KeybindManager
+end
+-- END KeybindManager
+-- BEGIN ESPRenderer | sha256 521b1dd434f7d10817d9866aaf1d48be800222047e56bd689aaeb1545e0e6885
+factories["ESPRenderer"] = function(loadModule)
+--!nonstrict
+-- Native adornments follow character transforms; no per-player render loops.
+local Branding=loadModule("Branding")
+local ESPRenderer={}
+ESPRenderer.__index=ESPRenderer
+function ESPRenderer.new(parent,entry,config)
+ return setmetatable({parent=parent,entry=entry,config=config,created=0,destroyed=false},ESPRenderer)
+end
+function ESPRenderer:_new(className)
+ self.created+=1;return Instance.new(className)
+end
+function ESPRenderer:sync(visible)
+ local entry,config=self.entry,self.config
+ if config.Hitboxes and entry.character then
+  if not self.box then
+   self.box=self:_new("SelectionBox");self.box.Name="SEDWAREVisualHitbox"
+   self.box.Color3=Branding.Colors.Pink;self.box.SurfaceColor3=Branding.Colors.Pink
+   self.box.LineThickness=0.025;self.box.Transparency=0.2;self.box.SurfaceTransparency=0.95;self.box.Parent=self.parent
+  end
+  if self.box.Adornee~=entry.character then self.box.Adornee=entry.character end
+  self.box.Visible=visible
+ elseif self.box then self.box:Destroy();self.box=nil end
+ if config.Names and (entry.head or entry.root) then
+  if not self.billboard then
+   self.billboard=self:_new("BillboardGui");self.billboard.Name="SEDWAREPlayerName"
+   self.billboard.AlwaysOnTop=false;self.billboard.LightInfluence=0;self.billboard.Size=UDim2.fromOffset(132,22)
+   self.billboard.StudsOffsetWorldSpace=Vector3.new(0,2,0);self.billboard.Parent=self.parent
+   self.label=self:_new("TextLabel");self.label.BackgroundTransparency=1;self.label.Size=UDim2.fromScale(1,1)
+   self.label.Text=entry.player.Name;self.label.Font=Enum.Font.GothamMedium;self.label.TextSize=12
+   self.label.TextColor3=Branding.Colors.White;self.label.TextStrokeTransparency=0.5;self.label.Parent=self.billboard
+  end
+  local adornee=entry.head or entry.root
+  if self.billboard.Adornee~=adornee then self.billboard.Adornee=adornee end
+  self.billboard.MaxDistance=config.ESPMaxDistance;self.billboard.Enabled=visible
+ elseif self.billboard then self.billboard:Destroy();self.billboard=nil;self.label=nil end
+end
+function ESPRenderer:hide()
+ if self.box then self.box.Visible=false;self.box.Adornee=nil end
+ if self.billboard then self.billboard.Enabled=false;self.billboard.Adornee=nil end
+end
+function ESPRenderer:destroy()
+ if self.destroyed then return end
+ self.destroyed=true
+ if self.box then self.box:Destroy();self.box=nil end
+ if self.billboard then self.billboard:Destroy();self.billboard=nil;self.label=nil end
+end
+return ESPRenderer
+end
+-- END ESPRenderer
+-- BEGIN ESPManager | sha256 128eba53bd2b030b1cabe697110f57f693ac76df9e288459748e8b19af820492
+factories["ESPManager"] = function(loadModule)
+--!nonstrict
+local ESPRenderer=loadModule("ESPRenderer")
+local ESPManager={}
+ESPManager.__index=ESPManager
+function ESPManager.new(config,report,registry)
+ local self=setmetatable({config=config,report=report,registry=registry,renderers={},destroyed=false,
+  stats={updates=0,created=0,lastSeconds=0,maxSeconds=0,visible=0,considered=0}},ESPManager)
+ if config.ESPUsername~="" then self.selectedUsername=string.lower(config.ESPUsername) end
+ return self
+end
+function ESPManager:applyTarget(username)
+ local entry=self.registry:lookup(username)
+ if not entry or entry.player==self.report.player then self.selectedUsername=nil;self:refresh();return false,"Player Username no encontrado" end
+ self.selectedUsername=entry.username;self:refresh();return true
+end
+function ESPManager:clearTarget() self.selectedUsername=nil;self:refresh() end
+function ESPManager:refresh() self.nextUpdate=nil;self:_trim() end
+function ESPManager:_selected(entry)
+ return entry.player~=self.report.player and (self.config.ESPTargetMode=="All"
+  or (self.selectedUsername~=nil and entry.username==self.selectedUsername))
+end
+function ESPManager:_trim()
+ for player,renderer in self.renderers do
+  local entry=self.registry.entries[player]
+  if not self.config.ESP or not entry or not self:_selected(entry) or (not self.config.Hitboxes and not self.config.Names) then
+   renderer:destroy();self.renderers[player]=nil
+  end
+ end
+end
+function ESPManager:changed(kind,entry)
+ local renderer=self.renderers[entry.player]
+ if renderer and (kind=="CharacterRemoving" or kind=="Died") then renderer:hide() end
+ self:refresh()
+end
+function ESPManager:update(now)
+ if self.destroyed then return end
+ if not self.config.ESP or (not self.config.Hitboxes and not self.config.Names) then self:_trim();return end
+ if self.nextUpdate and now&lt;self.nextUpdate then return end
+ local hz=if self.config.ESPLowPerformanceMode then math.min(self.config.ESPUpdateHz,10) else self.config.ESPUpdateHz
+ self.nextUpdate=now+1/hz
+ local started=os.clock();self.stats.updates+=1;self.stats.visible=0;self.stats.considered=0
+ self:_trim()
+ local camera=self.report.world.CurrentCamera
+ if not camera then for _,renderer in self.renderers do renderer:hide() end;return end
+ if not self.params then
+  assert(RaycastParams and type(RaycastParams.new)=="function","ESP requires RaycastParams")
+  self.params=RaycastParams.new();self.params.FilterType=Enum.RaycastFilterType.Exclude;self.params.IgnoreWater=true
+ end
+ self.params.FilterDescendantsInstances=if self.report.player.Character then {self.report.player.Character} else {}
+ for _,entry in self.registry.list do
+  if self:_selected(entry) then
+   self.stats.considered+=1
+   local ready=entry.character and entry.character:IsDescendantOf(self.report.world)
+    and entry.humanoid and entry.humanoid.Health&gt;0 and entry.root and (entry.head or entry.root)
+   local visible=false
+   if ready then
+    local position=(entry.head or entry.root).Position
+    local delta=position-camera.CFrame.Position
+    if delta.Magnitude&lt;=self.config.ESPMaxDistance then
+     local projected,onScreen=camera:WorldToViewportPoint(position)
+     if onScreen and projected.Z&gt;0 then
+      local hit=self.report.world:Raycast(camera.CFrame.Position,delta,self.params)
+      visible=hit==nil or (hit.Instance and hit.Instance:IsDescendantOf(entry.character))
+     end
+    end
+   end
+   local renderer=self.renderers[entry.player]
+   -- No instances for players that have never become visible.
+   if not renderer and visible then renderer=ESPRenderer.new(self.report.playerGui,entry,self.config);self.renderers[entry.player]=renderer end
+   if renderer then
+    local before=renderer.created
+    if ready then renderer:sync(visible) else renderer:hide() end
+    self.stats.created+=renderer.created-before
+   end
+   if visible then self.stats.visible+=1 end
+  end
+ end
+ self.stats.lastSeconds=os.clock()-started;self.stats.maxSeconds=math.max(self.stats.maxSeconds,self.stats.lastSeconds)
+end
+function ESPManager:destroy()
+ if self.destroyed then return end
+ self.destroyed=true
+ for _,renderer in self.renderers do renderer:destroy() end
+ table.clear(self.renderers)
+end
+return ESPManager
+end
+-- END ESPManager
+-- BEGIN NotificationSystem | sha256 fcd84acff467b3ddc023d903927b4d9b091d828dda183027d322bccb03a1a59c
 factories["NotificationSystem"] = function(loadModule)
 --!nonstrict
 -- Reuse the existing elapsed-time fade without adding tweens or input handlers.
@@ -1830,7 +2403,7 @@ local function finite(value)
 end
 
 function NotificationSystem.new(playerGui, config)
-	local self = setmetatable({destroyed = false, queue = {}}, NotificationSystem)
+	local self = setmetatable({destroyed = false, queue = {},recent={},connections={},config=config}, NotificationSystem)
 	local ok, problem = pcall(function()
 		self.overlay = Overlay.new(playerGui, {ShowDot = false, DotOutline = false,
 			ShowNotifications = not config or config.ShowNotifications ~= false, NotificationDuration = 2})
@@ -1856,7 +2429,9 @@ function NotificationSystem.new(playerGui, config)
 			for key, value in pairs(properties) do instance[key] = value end
 			instance.Parent = parent
 			return instance
-		end, UDim2.fromOffset(15, 15), UDim2.fromOffset(23, 26), 7)
+		end, UDim2.fromOffset(15, 15), UDim2.fromOffset(23, 26), 7,config,function(signal,callback)
+   local connection=signal:Connect(callback);table.insert(self.connections,connection);return connection
+  end)
 		self.title.TextColor3 = colors.White
 		self.title.TextSize = 13
 		self.body.TextColor3 = colors.Pink
@@ -1883,9 +2458,29 @@ end
 function NotificationSystem:notify(subtitle, now, duration)
 	if self.destroyed or not finite(now) then return false end
 	subtitle = tostring(subtitle or "")
-	local welcome = subtitle == "Cam Lock Loaded"
+	local welcome = subtitle == "Successfully Loaded"
 	duration = duration or (welcome and 3 or 2)
 	if not finite(duration) or duration &lt;= 0 then return false end
+	-- Search outcomes never enter the notification pipeline. Events are deduped
+	-- against active/pending messages and have a bounded recent-message cache.
+ if subtitle:find("No valid target",1,true) then return false end
+ local state=if subtitle=="Lock Enabled" then "ON" elseif subtitle=="Lock Disabled" then "OFF" else nil
+ if state and self.lockState~=state then
+  self.lockState=state;self.recent[subtitle]=nil
+  if state=="ON" and self.current and self.current.subtitle=="Lock Disabled" then
+   self.current=nil;self.overlay.noticeStart=nil;table.clear(self.queue)
+  end
+ end
+ if self.current and self.current.subtitle==subtitle then return false end
+ for _,pending in self.queue do if pending.subtitle==subtitle then return false end end
+ local cooldown=self.config.NotificationCooldown or 3
+ if self.recent[subtitle] and now-self.recent[subtitle]&lt;cooldown then return false end
+ local count=0
+ for message,time in self.recent do
+  if now-time&gt;=cooldown then self.recent[message]=nil else count+=1 end
+ end
+ if count&gt;=32 then table.clear(self.recent) end
+ self.recent[subtitle]=now
 	if self.overlay.config.ShowNotifications == false then
 		self.current = nil
 		table.clear(self.queue)
@@ -1941,261 +2536,362 @@ function NotificationSystem:destroy()
 	self.destroyed = true
 	self.current = nil
 	table.clear(self.queue)
+	table.clear(self.recent)
+ for _,connection in self.connections do connection:Disconnect() end;table.clear(self.connections)
 	if self.overlay then self.overlay:destroy() end
 end
+function NotificationSystem:setLogo(asset) Branding.setLogo(self.logo,asset) end
 
 return NotificationSystem
 end
 -- END NotificationSystem
--- BEGIN UI | sha256 a2b3a7f60aabb32b9abff409a9e58fc383b2adde2b8691f7ace7ad02bf117f6c
+-- BEGIN UI | sha256 c6eb7b34ad64427d43da440c457f1b3a031afd26d9529bb95ca1dd529601e895
 factories["UI"] = function(loadModule)
 --!nonstrict
-local Branding = loadModule("Branding")
-local UserInputService = if game then game:GetService("UserInputService") else nil
-local World = if game then game:GetService("Workspace") else nil
-local UI = {}
-UI.__index = UI
-local WIDTH, HEIGHT = 310, 324
-local PARTS = {"Head", "UpperTorso", "HumanoidRootPart"}
-local NUMBERS = {
-	{"CamPrediction", "Cam Prediction", "%.2f"},
-	{"PredictionX", "Prediction X", "%.4f"},
-	{"PredictionY", "Prediction Y", "%.4f"},
-	{"Smoothness", "Smoothness", "%.3f"},
-	{"Radius", "Radius", "%g"},
-}
-
-local function finite(value)
-	return type(value) == "number" and value == value and math.abs(value) &lt; math.huge
+local Config=loadModule("Config")
+local Branding=loadModule("Branding")
+local UIAnimations=loadModule("UIAnimations")
+local UI={}
+UI.__index=UI
+local WIDTH,HEIGHT,HEADER,ROW=360,432,56,34
+local function finite(n) return type(n)=="number" and n==n and math.abs(n)&lt;math.huge end
+local function point(input) local p=input and input.Position;if p and finite(p.X) and finite(p.Y) then return p.X,p.Y end end
+local function contains(object,x,y)
+ if not object or not x or not object.Visible then return false end
+ local p,s=object.AbsolutePosition,object.AbsoluteSize
+ return x&gt;=p.X and x&lt;=p.X+s.X and y&gt;=p.Y and y&lt;=p.Y+s.Y
 end
-local function point(input)
-	local position = input and input.Position
-	if position and finite(position.X) and finite(position.Y) then return position.X, position.Y end
-	return nil
+function UI:_create(class,props,parent)
+ local item=Instance.new(class);table.insert(self.owned,item)
+ for key,value in props do item[key]=value end
+ item.Parent=parent;return item
 end
-local function contains(object, x, y)
-	if not object or not x then return false end
-	local position, size = object.AbsolutePosition, object.AbsoluteSize
-	return x &gt;= position.X and x &lt;= position.X + size.X and y &gt;= position.Y and y &lt;= position.Y + size.Y
+function UI:_connect(signal,callback)
+ local connection=signal:Connect(callback);table.insert(self.connections,connection);return connection
 end
-
-function UI:_create(className, properties, parent)
-	local instance = Instance.new(className)
-	table.insert(self.owned, instance)
-	for key, value in pairs(properties) do instance[key] = value end
-	instance.Parent = parent
-	return instance
+function UI:_label(parent,name,text,position,size,fontSize,color)
+ return self:_create("TextLabel",{Name=name,Active=false,BackgroundTransparency=1,Text=text,
+  Font=Enum.Font.Gotham,TextSize=fontSize or 12,TextColor3=color or Branding.Colors.White,
+  TextXAlignment=Enum.TextXAlignment.Left,Position=position,Size=size,ZIndex=5},parent)
 end
-function UI:_connect(signal, callback)
-	local connection = signal:Connect(callback)
-	table.insert(self.connections, connection)
-	return connection
+function UI:_button(parent,name,text,position,size)
+ local button=self:_create("TextButton",{Name=name,Active=true,AutoButtonColor=false,BackgroundColor3=Branding.Colors.Input,
+  BorderSizePixel=0,Text=text,Font=Enum.Font.GothamMedium,TextSize=12,TextColor3=Branding.Colors.White,
+  Position=position,Size=size,ZIndex=6},parent)
+ self:_create("UICorner",{CornerRadius=UDim.new(0,5)},button)
+ self:_connect(button.MouseEnter,function() self.animations:play(button,0.10,{BackgroundColor3=Branding.Colors.Surface}) end)
+ self:_connect(button.MouseLeave,function()
+  local on=self.values[name]==true
+  self.animations:play(button,0.10,{BackgroundColor3=if on then Branding.Colors.Neon else Branding.Colors.Input})
+ end)
+ return button
 end
-function UI:_label(parent, name, text, position, size, textSize, color)
-	return self:_create("TextLabel", {
-		Name = name, Active = false, BackgroundTransparency = 1, Text = text,
-		TextColor3 = color or Branding.Colors.White, Font = Enum.Font.Gotham,
-		TextSize = textSize or 12, TextXAlignment = Enum.TextXAlignment.Left,
-		TextYAlignment = Enum.TextYAlignment.Center, Position = position, Size = size, ZIndex = 3,
-	}, parent)
+function UI:_notice(message) if self.onNotice then self.onNotice(tostring(message)) end end
+function UI:_action(name,value) if self.onAction then return self.onAction(name,value) end end
+function UI:_change(field,value)
+ if self.destroyed then return false end
+ local ok,accepted,reason=pcall(self.onChange,field,value)
+ if not ok then reason=accepted;accepted=false end
+ if accepted then self:setValue(field,value);return true end
+ self:setValue(field,self.values[field]);self:_notice(reason or "Invalid value");return false
 end
-function UI:_control(className, field, parent)
-	local control = self:_create(className, {
-		Name = field, Active = true, BackgroundColor3 = Branding.Colors.Input,
-		BorderSizePixel = 0, Position = UDim2.fromOffset(143, 3), Size = UDim2.fromOffset(133, 25),
-		Text = "", TextColor3 = Branding.Colors.White, Font = Enum.Font.Gotham,
-		TextSize = 11, ZIndex = 4,
-	}, parent)
-	self:_create("UIStroke", {Color = Branding.Colors.Border, Thickness = 1,
-		ApplyStrokeMode = Enum.ApplyStrokeMode.Border}, control)
-	self:_create("UICorner", {CornerRadius = UDim.new(0, 3)}, control)
-	self.controls[field] = control
-	return control
+function UI:setValue(field,value)
+ if self.destroyed or not self.controls[field] then return false end
+ local changed=self.values[field]~=value
+ self.values[field]=value
+ local control,descriptor=self.controls[field],Config.fields[field]
+ local text
+ if descriptor.kind=="toggle" then
+  text=if value then "ON" else "OFF"
+  local properties={BackgroundColor3=if value then Branding.Colors.Neon else Branding.Colors.Input,
+   TextColor3=if value then Branding.Colors.White else Branding.Colors.Muted}
+  if self.building then for key,property in properties do control[key]=property end
+  elseif changed then self.animations:play(control,0.15,properties) end
+ elseif descriptor.kind=="choice" then text=tostring(value).."  ▾"
+ elseif descriptor.kind=="keybind" then text=Config.keyName(value)
+ elseif descriptor.kind=="number" then text=string.format(if descriptor.decimals==0 then "%g" else "%."..tostring(descriptor.decimals).."f",value)
+ else text=tostring(value) end
+ if control.Text~=text then control.Text=text end
+ if field=="ESPTargetMode" and not self.building then self:_layoutMisc() end
+ return true
 end
-function UI:_row(index, field, title)
-	local row = self:_create("Frame", {
-		Name = field .. "Row", Active = false, BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(16, 82 + (index - 1) * 32), Size = UDim2.fromOffset(278, 31), ZIndex = 3,
-	}, self.panel)
-	self:_label(row, "Label", title, UDim2.fromOffset(0, 0), UDim2.fromOffset(140, 31))
-	return row
+function UI:setCapture(field,active)
+ if self.destroyed then return end
+ self.capturing=if active then field else nil
+ self.controls[field].Text=if active then "Press a key" else Config.keyName(self.values[field])
+ self.animations:play(self.controls[field],0.15,{TextColor3=if active then Branding.Colors.Pink else Branding.Colors.White})
 end
-function UI:_notice(reason)
-	if type(self.onNotice) == "function" then pcall(self.onNotice, tostring(reason or "Invalid value")) end
+function UI:resetDrag() self.drag=nil end
+function UI:_startDrag(input)
+ if self.destroyed then return end
+ if input.UserInputType~=Enum.UserInputType.MouseButton1 and input.UserInputType~=Enum.UserInputType.Touch then return end
+ local x,y=point(input)
+ if not contains(self.header,x,y) or contains(self.minimizeButton,x,y) then return end
+ if self.drag and self.drag.input==input then return end
+ self:closeDropdown(true)
+ self.drag={input=input,touch=input.UserInputType==Enum.UserInputType.Touch,x=x,y=y,position=self.panel.Position}
 end
-function UI:_change(field, value)
-	if self.destroyed then return false end
-	local ok, accepted, reason = pcall(self.onChange, field, value)
-	if not ok then reason, accepted = accepted, false end
-	if accepted == true then
-		self:setValue(field, value)
-		return true
-	end
-	self:setValue(field, self.values[field])
-	self:_notice(reason)
-	return false
+function UI:_fit(force)
+ local camera=self.world.CurrentCamera;local size=camera and camera.ViewportSize or self.gui.AbsoluteSize
+ if not size or not finite(size.X) or not finite(size.Y) or size.X&lt;=0 or size.Y&lt;=0 then return end
+ local desiredHeight=if self.minimized then HEADER else HEIGHT
+ local scale=math.max(0.05,math.min(1,(size.X-16)/WIDTH,(size.Y-16)/desiredHeight))
+ local current=self.panel.Position
+ local x=math.clamp(current.X.Offset,8,math.max(8,size.X-WIDTH*scale-8))
+ local y=math.clamp(current.Y.Offset,8,math.max(8,size.Y-desiredHeight*scale-8))
+ if self.scale.Scale~=scale then self.scale.Scale=scale end
+ if current.X.Offset~=x or current.Y.Offset~=y then self.panel.Position=UDim2.fromOffset(x,y) end
+ local resized=not self.viewport or self.viewport.X~=size.X or self.viewport.Y~=size.Y
+ self.viewport=size
+ if resized and self.popupField then self:_positionDropdown(false) end
 end
-function UI:setValue(field, value)
-	if self.destroyed or not self.controls[field] then return false end
-	self.values[field] = value
-	local control = self.controls[field]
-	if field == "Enabled" then
-		control.Text = value == true and "ON" or "OFF"
-		control.BackgroundColor3 = value == true and Branding.Colors.Neon or Branding.Colors.Input
-		control.TextColor3 = value == true and Branding.Colors.White or Branding.Colors.Muted
-	elseif field == "HitPart" then
-		control.Text = tostring(value) .. "  ▾"
-	else
-		control.Text = finite(value) and string.format(self.formats[field], value) or ""
-	end
-	return true
+function UI:step(now)
+ if self.destroyed then return end
+ self:_fit()
+ if self.popupCloseAt and os.clock()&gt;=self.popupCloseAt then self.dropdown.Visible=false;self.popupCloseAt=nil end
 end
-function UI:closeDropdown()
-	if not self.destroyed and self.dropdown then self.dropdown.Visible = false end
+function UI:setTab(tab)
+ if self.destroyed or not self.pages[tab] then return false end
+ if self.shownTab==tab then return true end
+ self:closeDropdown(true);self:_action("CancelCapture");self.tab=tab
+ self.shownTab=tab
+ for name,page in self.pages do
+  page.Visible=name==tab and not self.minimized
+  if page.Visible then page.GroupTransparency=1;self.animations:play(page,0.18,{GroupTransparency=0}) end
+  self.tabButtons[name].TextColor3=if name==tab then Branding.Colors.Pink else Branding.Colors.Muted
+ end
+ return true
 end
-
-function UI:_fit()
-	if self.destroyed then return end
-	local camera = World and World.CurrentCamera
-	local viewport = camera and camera.ViewportSize or self.gui.AbsoluteSize
-	if not viewport or not finite(viewport.X) or not finite(viewport.Y) or viewport.X &lt;= 0 or viewport.Y &lt;= 0 then return end
-	local scale = math.max(0.01, math.min(1, (viewport.X - 16) / WIDTH, (viewport.Y - 16) / HEIGHT))
-	self.scale.Scale = scale
-	local position = self.panel.Position
-	local marginX, marginY = math.min(8, math.max(0, viewport.X - WIDTH * scale)), math.min(8, math.max(0, viewport.Y - HEIGHT * scale))
-	self.panel.Position = UDim2.fromOffset(
-		math.clamp(position.X.Offset, marginX, math.max(marginX, viewport.X - WIDTH * scale - marginX)),
-		math.clamp(position.Y.Offset, marginY, math.max(marginY, viewport.Y - HEIGHT * scale - marginY))
-	)
+function UI:setMinimized(value)
+ if self.destroyed or value==self.minimized then return end
+ self.minimized=value;self:resetDrag();self:closeDropdown(true);self:_action("CancelCapture")
+ self.minimizeButton.Text=if value then "+" else "−"
+ self.tabs.Visible=not value
+ for name,page in self.pages do page.Visible=not value and name==self.tab end
+ self.animations:play(self.panel,0.22,{Size=UDim2.fromOffset(WIDTH,if value then HEADER else HEIGHT)})
+ if not value then
+  local page=self.pages[self.tab];page.GroupTransparency=1;self.animations:play(page,0.18,{GroupTransparency=0})
+ end
+ self:_fit(true)
 end
-function UI:step(_now)
-	self:_fit()
+function UI:closeDropdown(immediate)
+ self.popupField=nil
+ for _,button in self.popupButtons do button.Active=false end
+ if not self.dropdown or not self.dropdown.Visible then return end
+ if immediate then self.animations:cancel(self.dropdown);self.dropdown.Visible=false;self.popupCloseAt=nil
+ else
+  self.animations:play(self.dropdown,0.15,{Size=UDim2.fromOffset(self.dropdown.Size.X.Offset,0)})
+  self.popupCloseAt=os.clock()+0.15
+ end
 end
-function UI:_bindInput()
-	self:_connect(self.header.InputBegan, function(input)
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-		local x, y = point(input)
-		if not x then return end
-		self:closeDropdown()
-		self.drag = {input = input, touch = input.UserInputType == Enum.UserInputType.Touch,
-			x = x, y = y, position = self.panel.Position}
-	end)
-	self:_connect(UserInputService.InputChanged, function(input)
-		local drag = self.drag
-		if not drag then return end
-		if drag.touch then
-			if input ~= drag.input then return end
-		elseif input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-		local x, y = point(input)
-		if not x then return end
-		self.panel.Position = UDim2.fromOffset(drag.position.X.Offset + x - drag.x, drag.position.Y.Offset + y - drag.y)
-		self:_fit()
-	end)
-	self:_connect(UserInputService.InputEnded, function(input)
-		if self.drag and (input == self.drag.input or (not self.drag.touch and input.UserInputType == Enum.UserInputType.MouseButton1)) then self.drag = nil end
-	end)
-	self:_connect(UserInputService.WindowFocusReleased, function() self.drag = nil; self:closeDropdown() end)
-	self:_connect(UserInputService.InputBegan, function(input)
-		if not self.dropdown.Visible then return end
-		if input.KeyCode == Enum.KeyCode.Escape then self:closeDropdown(); return end
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-		local x, y = point(input)
-		if x and not contains(self.dropdown, x, y) and not contains(self.controls.HitPart, x, y) then self:closeDropdown() end
-	end)
+function UI:_openDropdown(field)
+ if self.popupField==field then self:closeDropdown();return end
+ self:closeDropdown(true);self:_action("CancelCapture")
+ self.popupField=field;self.popupOptions=Config.fields[field].options
+ self.popupCloseAt=nil
+ self:_positionDropdown(true)
 end
-
-function UI.new(playerGui, config, onChange, onNotice)
-	assert(playerGui, "SEDWARE Cam Lock requires PlayerGui")
-	assert(type(config) == "table" and type(onChange) == "function", "SEDWARE Cam Lock UI requires validated config and onChange")
-	local self = setmetatable({config = config, onChange = onChange, onNotice = onNotice,
-		values = {}, controls = {}, formats = {}, hitPartOptions = {}, owned = {}, connections = {}, destroyed = false}, UI)
-	local ok, problem = xpcall(function()
-		local colors = Branding.Colors
-		self.gui = self:_create("ScreenGui", {
-			Name = "SedwareCamLock_UI", ResetOnSpawn = false, IgnoreGuiInset = true,
-			ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 41,
-		}, playerGui)
-		self.panel = self:_create("Frame", {
-			Name = "CamLockPanel", Active = true, BackgroundColor3 = colors.Background, BorderSizePixel = 0,
-			Position = UDim2.fromOffset(24, 110), Size = UDim2.fromOffset(WIDTH, HEIGHT), ZIndex = 2,
-		}, self.gui)
-		self.scale = self:_create("UIScale", {Scale = 1}, self.panel)
-		self:_create("UIStroke", {Color = colors.Border, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}, self.panel)
-		self:_create("UICorner", {CornerRadius = UDim.new(0, 4)}, self.panel)
-		self.header = self:_create("Frame", {
-			Name = "Header", Active = true, BackgroundColor3 = colors.Surface, BorderSizePixel = 0,
-			Position = UDim2.fromOffset(1, 1), Size = UDim2.fromOffset(WIDTH - 2, 49), ZIndex = 3,
-		}, self.panel)
-		self.logo = Branding.addLogo(self.header, function(...) return self:_create(...) end)
-		self.title = self:_label(self.header, "Title", Branding.Title, UDim2.fromOffset(51, 6), UDim2.fromOffset(194, 22), 17)
-		self.title.Font = Enum.Font.GothamBold
-		self.subtitle = self:_label(self.header, "Subtitle", Branding.Subtitle, UDim2.fromOffset(52, 29), UDim2.fromOffset(170, 14), 9, colors.Pink)
-		self.version = self:_label(self.header, "Version", Branding.Version, UDim2.fromOffset(270, 15), UDim2.fromOffset(26, 17), 10, colors.Muted)
-		self:_create("Frame", {Name = "PinkAccent", Active = false, BackgroundColor3 = colors.Neon, BorderSizePixel = 0,
-			Position = UDim2.fromOffset(0, 50), Size = UDim2.fromOffset(WIDTH, 2), ZIndex = 3}, self.panel)
-		self.mainLabel = self:_label(self.panel, "MainLabel", "MAIN", UDim2.fromOffset(16, 57), UDim2.fromOffset(278, 18), 10, colors.Pink)
-		self.mainLabel.Font = Enum.Font.GothamBold
-		local enable = self:_control("TextButton", "Enabled", self:_row(1, "Enabled", "Enable"))
-		enable.AutoButtonColor = false
-		self:_connect(enable.Activated, function() self:_change("Enabled", self.values.Enabled ~= true) end)
-		local partRow = self:_row(2, "HitPart", "Hit Part")
-		local part = self:_control("TextButton", "HitPart", partRow)
-		part.AutoButtonColor = false
-		self.dropdown = self:_create("Frame", {
-			Name = "HitPartOptions", Active = true, BackgroundColor3 = colors.Surface, BorderSizePixel = 0,
-			Position = UDim2.fromOffset(143, 31), Size = UDim2.fromOffset(133, 87), Visible = false, ZIndex = 20,
-		}, partRow)
-		self:_create("UIStroke", {Color = colors.Pink, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border}, self.dropdown)
-		for index, value in ipairs(PARTS) do
-			local choice = self:_create("TextButton", {
-				Name = value, Active = true, AutoButtonColor = true, BackgroundColor3 = colors.Surface,
-				BorderSizePixel = 0, Text = value, TextColor3 = colors.White, Font = Enum.Font.Gotham,
-				TextSize = 10, Position = UDim2.fromOffset(2, 2 + (index - 1) * 28), Size = UDim2.fromOffset(129, 27), ZIndex = 21,
-			}, self.dropdown)
-			self.hitPartOptions[value] = choice
-			self:_connect(choice.Activated, function() self:closeDropdown(); self:_change("HitPart", value) end)
-		end
-		self:_connect(part.Activated, function() self.dropdown.Visible = not self.dropdown.Visible end)
-		for index, entry in ipairs(NUMBERS) do
-			local field, title, format = entry[1], entry[2], entry[3]
-			self.formats[field] = format
-			local input = self:_control("TextBox", field, self:_row(index + 2, field, title))
-			input.ClearTextOnFocus = false
-			self:_connect(input.FocusLost, function()
-				local value = tonumber(input.Text)
-				if not finite(value) then
-					self:setValue(field, self.values[field]); self:_notice("Enter a finite number")
-				else self:_change(field, value) end
-			end)
-		end
-		for field in pairs(self.controls) do self:setValue(field, config[field]) end
-		self:_bindInput()
-		self:_fit()
-	end, function(err)
-		return if debug and type(debug.traceback) == "function" then debug.traceback(tostring(err), 2) else tostring(err)
-	end)
-	if not ok then self:destroy(); error("SEDWARE Cam Lock UI: " .. tostring(problem), 2) end
-	return self
+function UI:_positionDropdown(animate)
+ local field=self.popupField;if not field then return end
+ local button=self.controls[field];local p,s=button.AbsolutePosition,button.AbsoluteSize
+ local view=self.viewport or self.world.CurrentCamera.ViewportSize
+ local scale=self.scale.Scale;local width=math.min(view.X-16,math.max(130,s.X))
+ local height=30*#self.popupOptions*scale
+ local x=math.clamp(p.X,8,math.max(8,view.X-width-8))
+ local y=p.Y+s.Y+4
+ if y+height&gt;view.Y-8 then y=math.max(8,p.Y-height-4) end
+ self.dropdown.Position=UDim2.fromOffset(x,y)
+ self.animations:cancel(self.dropdown)
+ self.dropdown.Size=UDim2.fromOffset(width,if animate then 0 else math.min(height,view.Y-16))
+ self.dropdown.CanvasSize=UDim2.fromOffset(0,height);self.dropdown.Visible=true
+ for index,choice in self.popupButtons do
+  local value=self.popupOptions[index];choice.Visible=value~=nil;choice.Active=value~=nil
+  if value then
+   choice.Text=value;choice.Position=UDim2.fromOffset(3,(index-1)*30*scale+2)
+   choice.Size=UDim2.fromOffset(width-6,30*scale-3);choice.TextSize=math.max(10,11*scale)
+  end
+ end
+ if animate then self.animations:play(self.dropdown,0.15,{Size=UDim2.fromOffset(width,math.min(height,view.Y-16))}) end
 end
-
+function UI:_row(parent,descriptor)
+ local row=self:_create("Frame",{Name=descriptor.key.."Row",Active=false,BackgroundTransparency=1,
+  Size=UDim2.fromOffset(WIDTH-32,ROW),Position=UDim2.fromOffset(0,0),ZIndex=4},parent)
+ self.rows[descriptor.key]=row
+ self:_label(row,"Label",descriptor.label,UDim2.fromOffset(0,0),UDim2.fromOffset(162,ROW),12)
+ local control
+ if descriptor.kind=="number" or descriptor.kind=="text" then
+  control=self:_create("TextBox",{Name=descriptor.key,Active=true,BackgroundColor3=Branding.Colors.Input,
+   BorderSizePixel=0,ClearTextOnFocus=false,Text="",PlaceholderText=if descriptor.kind=="text" then "Exact username" else "",
+   Font=Enum.Font.Gotham,TextSize=12,TextColor3=Branding.Colors.White,PlaceholderColor3=Branding.Colors.Muted,
+   Position=UDim2.fromOffset(164,3),Size=UDim2.fromOffset(160,27),ZIndex=6},row)
+  self:_create("UICorner",{CornerRadius=UDim.new(0,5)},control)
+  self:_connect(control.FocusLost,function()
+   local value=if descriptor.kind=="text" then control.Text:gsub("^%s*(.-)%s*$","%1") else tonumber(control.Text)
+   if descriptor.kind=="number" and not finite(value) then self:setValue(descriptor.key,self.values[descriptor.key]);self:_notice("Enter a finite number")
+   else self:_change(descriptor.key,value) end
+  end)
+ else
+  control=self:_button(row,descriptor.key,"",UDim2.fromOffset(164,3),UDim2.fromOffset(160,27))
+  self:_connect(control.Activated,function()
+   if self.minimized or self.tab~=descriptor.tab then return end
+   if descriptor.kind=="toggle" then self:_change(descriptor.key,not self.values[descriptor.key])
+   elseif descriptor.kind=="choice" then self:_openDropdown(descriptor.key)
+   elseif descriptor.kind=="keybind" then self:_action("CaptureKey",descriptor.key) end
+  end)
+ end
+ self.controls[descriptor.key]=control
+ return row
+end
+function UI:_layoutMisc()
+ if not self.miscScroll then return end
+ local y=26
+ for _,descriptor in Config.controls do
+  if descriptor.tab=="MISC" and descriptor.section=="MOVEMENT" then self.rows[descriptor.key].Position=UDim2.fromOffset(0,y);y+=ROW end
+ end
+ self.espLabel.Position=UDim2.fromOffset(0,y+10);y+=38
+ for _,descriptor in Config.controls do
+  if descriptor.section=="ESP" then
+   local visible=descriptor.key~="ESPUsername" or self.values.ESPTargetMode=="Specific Player"
+   self.rows[descriptor.key].Visible=visible
+   if visible then self.rows[descriptor.key].Position=UDim2.fromOffset(0,y);y+=ROW end
+  end
+ end
+ self.actionsRow.Visible=self.values.ESPTargetMode=="Specific Player"
+ if self.actionsRow.Visible then self.actionsRow.Position=UDim2.fromOffset(0,y+5);y+=38 end
+ self.miscScroll.CanvasSize=UDim2.fromOffset(0,y+12)
+end
+function UI:updateFOV(reference,radius)
+ if not self.config.ShowFOV or not reference then
+  if self.fov then self.fov:Destroy();self.fov=nil end;return
+ end
+ if not self.fov then
+  self.fov=self:_create("Frame",{Name="SelectionRadius",Active=false,AnchorPoint=Vector2.new(0.5,0.5),
+   BackgroundTransparency=1,Size=UDim2.fromOffset(2*radius,2*radius),ZIndex=1},self.gui)
+  self:_create("UICorner",{CornerRadius=UDim.new(0.5,0)},self.fov)
+  self:_create("UIStroke",{Color=Branding.Colors.Pink,Thickness=1,Transparency=0.55},self.fov)
+ end
+ self.fov.Position=UDim2.fromOffset(reference.X,reference.Y);self.fov.Size=UDim2.fromOffset(2*radius,2*radius)
+end
+function UI.new(playerGui,config,onChange,onNotice,onAction,player)
+ local self=setmetatable({config=config,onChange=onChange,onNotice=onNotice,onAction=onAction,
+  controls={},values={},rows={},pages={},tabButtons={},popupButtons={},hitPartOptions={},owned={},connections={},
+  tab="MAIN",minimized=false,destroyed=false,building=true,animations=UIAnimations.new(),
+  input=game:GetService("UserInputService"),world=game:GetService("Workspace")},UI)
+ local ok,problem=xpcall(function()
+  local C=Branding.Colors
+  self.gui=self:_create("ScreenGui",{Name="SedwareCamLock_UI",ResetOnSpawn=false,IgnoreGuiInset=true,
+   DisplayOrder=41,ZIndexBehavior=Enum.ZIndexBehavior.Global},playerGui)
+  self.panel=self:_create("Frame",{Name="PinkEditionPanel",Active=true,BackgroundColor3=C.Background,BorderSizePixel=0,
+   Position=UDim2.fromOffset(24,110),Size=UDim2.fromOffset(WIDTH,HEIGHT),ClipsDescendants=true,ZIndex=2},self.gui)
+  self.scale=self:_create("UIScale",{Scale=1},self.panel)
+  self:_create("UICorner",{CornerRadius=UDim.new(0,9)},self.panel)
+  self:_create("UIStroke",{Color=C.Border,Thickness=1},self.panel)
+  self.header=self:_create("Frame",{Name="Header",Active=true,BackgroundColor3=C.Surface,BorderSizePixel=0,
+   Size=UDim2.fromOffset(WIDTH,HEADER),ZIndex=3},self.panel)
+  self.logo=Branding.addLogo(self.header,function(...) return self:_create(...) end,
+   UDim2.fromOffset(15,13),UDim2.fromOffset(30,30),5,config,function(...) return self:_connect(...) end)
+  self.title=self:_label(self.header,"Title","SEDWARE",UDim2.fromOffset(56,9),UDim2.fromOffset(218,22),17)
+  self.title.Font=Enum.Font.GothamBold
+  self.subtitle=self:_label(self.header,"Subtitle",Branding.Subtitle,UDim2.fromOffset(57,32),UDim2.fromOffset(255,14),9,C.Pink)
+  self.version=self:_label(self.header,"Version","v2",UDim2.fromOffset(276,15),UDim2.fromOffset(22,17),10,C.Muted)
+  self.minimizeButton=self:_button(self.header,"Minimize","−",UDim2.fromOffset(317,12),UDim2.fromOffset(29,29))
+  self:_connect(self.minimizeButton.Activated,function() self:setMinimized(not self.minimized) end)
+  self.tabs=self:_create("Frame",{Name="Tabs",Active=false,BackgroundTransparency=1,
+   Position=UDim2.fromOffset(16,66),Size=UDim2.fromOffset(WIDTH-32,28),ZIndex=4},self.panel)
+  for index,name in {"MAIN","MISC"} do
+   local tab=self:_button(self.tabs,name,name,UDim2.fromOffset((index-1)*164,0),UDim2.fromOffset(160,28))
+   self.tabButtons[name]=tab;self:_connect(tab.Activated,function() self:setTab(name) end)
+   self.pages[name]=self:_create("CanvasGroup",{Name=name.."Page",Active=false,BackgroundTransparency=1,
+    Position=UDim2.fromOffset(16,106),Size=UDim2.fromOffset(WIDTH-32,HEIGHT-122),Visible=name=="MAIN",ZIndex=4},self.panel)
+  end
+  self.mainLabel=self:_label(self.pages.MAIN,"MainLabel","CAM LOCK",UDim2.fromOffset(0,0),UDim2.fromOffset(300,22),10,C.Pink)
+  self.miscScroll=self:_create("ScrollingFrame",{Name="MiscScroll",Active=true,BackgroundTransparency=1,BorderSizePixel=0,
+   Size=UDim2.fromScale(1,1),CanvasSize=UDim2.fromOffset(0,500),ScrollBarThickness=3,ScrollBarImageColor3=C.Pink,
+   ScrollingDirection=Enum.ScrollingDirection.Y,ClipsDescendants=true,ZIndex=4},self.pages.MISC)
+  self.movementLabel=self:_label(self.miscScroll,"MovementLabel","MOVEMENT",UDim2.fromOffset(0,0),UDim2.fromOffset(300,22),10,C.Pink)
+  self.espLabel=self:_label(self.miscScroll,"ESPLabel","ESP",UDim2.fromOffset(0,245),UDim2.fromOffset(300,22),10,C.Pink)
+  local mainIndex=0
+  for _,descriptor in Config.controls do
+   local row=self:_row(if descriptor.tab=="MAIN" then self.pages.MAIN else self.miscScroll,descriptor)
+   if descriptor.tab=="MAIN" then row.Position=UDim2.fromOffset(0,26+mainIndex*ROW);mainIndex+=1 end
+   self:setValue(descriptor.key,config[descriptor.key])
+  end
+  self.actionsRow=self:_create("Frame",{Name="TargetActions",Active=false,BackgroundTransparency=1,
+   Size=UDim2.fromOffset(WIDTH-32,34),Position=UDim2.fromOffset(0,480),ZIndex=4},self.miscScroll)
+  self.applyButton=self:_button(self.actionsRow,"ApplyTarget","Apply Target",UDim2.fromOffset(0,3),UDim2.fromOffset(160,28))
+  self.clearButton=self:_button(self.actionsRow,"ClearTarget","Clear Target",UDim2.fromOffset(164,3),UDim2.fromOffset(160,28))
+  self:_connect(self.applyButton.Activated,function()
+   if self.minimized or self.tab~="MISC" then return end
+   if self:_change("ESPUsername",self.controls.ESPUsername.Text:gsub("^%s*(.-)%s*$","%1")) then self:_action("ApplyTarget") end
+  end)
+  self:_connect(self.clearButton.Activated,function()
+   if not self.minimized and self.tab=="MISC" and self.actionsRow.Visible then self:_action("ClearTarget") end
+  end)
+  self.building=false;self:_layoutMisc()
+  self.popupLayer=self:_create("Frame",{Name="PopupLayer",Active=false,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
+   ClipsDescendants=false,ZIndex=100},self.gui)
+  self.dropdown=self:_create("ScrollingFrame",{Name="Dropdown",Active=false,BackgroundColor3=C.Surface,BorderSizePixel=0,
+   Size=UDim2.fromOffset(160,0),Position=UDim2.fromOffset(0,0),CanvasSize=UDim2.fromOffset(0,90),Visible=false,
+   ScrollBarThickness=2,ClipsDescendants=true,ZIndex=101},self.popupLayer)
+  self:_create("UICorner",{CornerRadius=UDim.new(0,5)},self.dropdown)
+  self:_create("UIStroke",{Color=C.Pink,Thickness=1,Transparency=0.4},self.dropdown)
+  for index,value in Config.HitParts do
+   local button=self:_button(self.dropdown,"Option"..index,value,UDim2.fromOffset(3,(index-1)*30),UDim2.fromOffset(154,28))
+   button.ZIndex=102;self.popupButtons[index]=button;self.hitPartOptions[value]=button
+   self:_connect(button.Activated,function()
+    local field=self.popupField;local choice=field and self.popupOptions[index]
+    if field and choice then self:closeDropdown();self:_change(field,choice) end
+   end)
+  end
+  self:_connect(self.header.InputBegan,function(event) self:_startDrag(event) end)
+  self:_connect(self.input.InputBegan,function(event)
+   if self.dropdown.Visible then
+    if event.KeyCode==Enum.KeyCode.Escape then self:closeDropdown()
+    else local x,y=point(event)
+     if (event.UserInputType==Enum.UserInputType.MouseButton1 or event.UserInputType==Enum.UserInputType.Touch)
+      and x and not contains(self.dropdown,x,y) and not contains(self.popupField and self.controls[self.popupField],x,y) then self:closeDropdown() end
+    end
+   end
+   self:_startDrag(event)
+  end)
+  self:_connect(self.input.InputChanged,function(event)
+   local drag=self.drag;if not drag then return end
+   if drag.touch and event~=drag.input then return end
+   if not drag.touch and event.UserInputType~=Enum.UserInputType.MouseMovement then return end
+   local x,y=point(event);if not x then return end
+   self.panel.Position=UDim2.fromOffset(drag.position.X.Offset+x-drag.x,drag.position.Y.Offset+y-drag.y);self:_fit()
+  end)
+  self:_connect(self.input.InputEnded,function(event)
+   if self.drag and (event==self.drag.input or (not self.drag.touch and event.UserInputType==Enum.UserInputType.MouseButton1)) then self:resetDrag() end
+  end)
+  self:_connect(self.input.WindowFocusReleased,function() self:resetDrag();self:closeDropdown(true) end)
+  if player then
+   local function reset() self:resetDrag();self:closeDropdown(true);self:_action("CancelCapture") end
+   self:_connect(player.CharacterRemoving,reset);self:_connect(player.CharacterAdded,reset)
+  end
+  self:_connect(self.gui.AncestryChanged,function() self:resetDrag();self:closeDropdown(true) end)
+  self:setTab("MAIN");self:_fit(true)
+ end,debug.traceback)
+ if not ok then self:destroy();error("SEDWARE V2 UI: "..tostring(problem),2) end
+ return self
+end
+function UI:setLogo(asset) Branding.setLogo(self.logo,asset) end
 function UI:destroy()
-	if self.destroyed then return end
-	self.destroyed, self.drag = true, nil
-	for _, connection in ipairs(self.connections) do pcall(function() connection:Disconnect() end) end
-	table.clear(self.connections)
-	for index = #self.owned, 1, -1 do pcall(function() self.owned[index]:Destroy() end) end
-	table.clear(self.owned)
+ if self.destroyed then return end
+ self.destroyed=true;self.drag=nil;self.animations:destroy()
+ for _,connection in self.connections do pcall(function() connection:Disconnect() end) end;table.clear(self.connections)
+ for index=#self.owned,1,-1 do pcall(function() self.owned[index]:Destroy() end) end;table.clear(self.owned)
 end
-
 return UI
 end
 -- END UI
--- BEGIN TargetSelector | sha256 057aa0604e36c90c848c3c8a957b9a71b45aed0039d1b5e4136a1a0f1600a289
+-- BEGIN TargetSelector | sha256 0eee0724ce49cf7c3d0772849d0af9375a5a35e8130b58ba802a8136d6aab6da
 factories["TargetSelector"] = function(loadModule)
 --!nonstrict
 -- Reuse the existing deterministic screen-distance selector. Character and
 -- visibility checks happen on acquisition; a valid locked player is retained.
 local Selection=loadModule("Selection")
+local ModeDetector=loadModule("ModeDetector")
 local TargetSelector={}
 TargetSelector.__index=TargetSelector
 local function finite(n) return type(n)=="number" and n==n and math.abs(n)&lt;math.huge end
@@ -2204,11 +2900,29 @@ local function vector(v)
  return ok and result
 end
 function TargetSelector.new(config,report)
- local self=setmetatable({config=config,world=report.world,player=report.player,services=report.services},TargetSelector)
+ local self=setmetatable({config=config,world=report.world,player=report.player,services=report.services,
+  registry=report.registry,modeDetector=ModeDetector.new()},TargetSelector)
  if config.VisibilityCheck then
   self.rayParams=RaycastParams.new();self.rayParams.FilterType=Enum.RaycastFilterType.Exclude;self.rayParams.IgnoreWater=true
  end
  return self
+end
+function TargetSelector:reference(now)
+ local camera=self.world.CurrentCamera;if not camera then return nil end
+ local character=self.player.Character
+ local head=character and character:FindFirstChild("Head")
+ local position=camera.CFrame.Position
+ local mode=self.modeDetector:update(now or self.world:GetServerTimeNow(),{
+  forcedFirstPerson=self.player.CameraMode==Enum.CameraMode.LockFirstPerson,
+  subjectIsLocal=camera.CameraSubject and character and camera.CameraSubject:IsDescendantOf(character)==true,
+  headDistance=head and (position-head.Position).Magnitude,
+  focusDistance=camera.Focus and (position-camera.Focus.Position).Magnitude,
+ })
+ local input=self.services.UserInputService
+ if mode=="FirstPerson" or input.MouseBehavior==Enum.MouseBehavior.LockCenter then
+  return Selection.reference("FirstPerson",camera.ViewportSize)
+ end
+ return Selection.reference("ThirdPerson",camera.ViewportSize,input:GetMouseLocation())
 end
 function TargetSelector:origin()
  local camera=self.world.CurrentCamera
@@ -2249,13 +2963,18 @@ function TargetSelector:visible(data)
  return hit==nil or (hit.Instance and hit.Instance:IsDescendantOf(data.character))
 end
 function TargetSelector:acquire(player)
+ self.acquisitionCount=(self.acquisitionCount or 0)+1
  local camera=self.world.CurrentCamera
  local size=camera and camera.ViewportSize
  if not size or not finite(size.X) or not finite(size.Y) or size.X&lt;=0 or size.Y&lt;=0 then return nil,"camera viewport unavailable" end
- -- Center reference is consistent in both first and third person.
- local reference=Selection.reference("FirstPerson",size,nil,nil)
+ local reference=self:reference()
+ if not reference then return nil,"selection reference unavailable" end
  local candidates,diagnostics={}, {reference=reference,evaluated=0,valid=0,reasons={}}
- for _,candidate in if player then {player} else self.services.Players:GetPlayers() do
+ local players={}
+ if player then players={player}
+ elseif self.registry then for _,entry in self.registry.list do table.insert(players,entry.player) end
+ else players=self.services.Players:GetPlayers() end
+ for _,candidate in players do
   if candidate~=self.player then
    diagnostics.evaluated+=1
    local data,reason=self:resolve(candidate)
@@ -2473,7 +3192,7 @@ end
 return CameraController
 end
 -- END CameraController
--- BEGIN PredictionEngine | sha256 3fbf246a7753c185c28d39f8aaf21713bf1b6b8b88d170a4b4488c12b006c33d
+-- BEGIN PredictionEngine | sha256 61f20178e8ebbdcaaa1c317a04671019f140988f2c91e19c346e0f99bf86bef9
 factories["PredictionEngine"] = function(loadModule)
 --!nonstrict
 -- Preserve the existing bounded Memory Tracking, reversal/teleport recovery,
@@ -2511,11 +3230,8 @@ end
 function PredictionEngine:predict(origin,now)
  local output=self.prediction:predict(origin,now)
  if output then
-  output.camPrediction=self.config.CamPrediction
-  output.camGain=self.config.CamPrediction/Config.referenceCamPrediction
   output.hitPart=self.config.HitPart
   output.predictionUnits="seconds"
-  output.camPredictionUnits="dimensionless"
  end
  return output
 end
@@ -2580,7 +3296,7 @@ end
 return Cleanup
 end
 -- END Cleanup
--- BEGIN Session | sha256 3367a9d7262b99b0b5ce7ff59921b529a2434aec9e104b86b8d72ccfd29174d7
+-- BEGIN Session | sha256 6a4d9825593dd57903c439fda76bd7343fa5681d15e8972f1d06ec8056c7f5a0
 factories["Session"] = function(loadModule)
 --!nonstrict
 local Config=loadModule("Config")
@@ -2590,6 +3306,12 @@ local TargetSelector=loadModule("TargetSelector")
 local PredictionEngine=loadModule("PredictionEngine")
 local CameraController=loadModule("CameraController")
 local Cleanup=loadModule("Cleanup")
+local PlayerRegistry=loadModule("PlayerRegistry")
+local KeybindManager=loadModule("KeybindManager")
+local MovementAccess=loadModule("MovementAccess")
+local FlyController=loadModule("FlyController")
+local SpeedController=loadModule("SpeedController")
+local ESPManager=loadModule("ESPManager")
 local Runtime=loadModule("Runtime")
 local Overlay=loadModule("Overlay")
 local Session={}
@@ -2627,8 +3349,8 @@ function Session:LockTarget(player)
  local data,reason=self.selector:acquire(player)
  self.lastSelection=self.selector.lastSelection
  if not data then
-  if not self.nextNoTargetNotice or now&gt;=self.nextNoTargetNotice then
-   self.nextNoTargetNotice=now+2;self:_notify(reason)
+  if self.config.DebugMode and (not self.nextAcquisitionDebug or now&gt;=self.nextAcquisitionDebug) then
+   self.nextAcquisitionDebug=now+1;Runtime.trace(self.report,"Acquisition","SEARCHING",reason)
   end
   return false,reason
  end
@@ -2659,6 +3381,12 @@ function Session:configure(field,value)
  if self.destroyed then return false,"Session is unloaded" end
  local updated,message=Config.update(self.config,field,value)
  if not updated then return false,message end
+ if (field=="Fly" or field=="Speed") and value==true and not MovementAccess.allowed(updated,self.report) then
+  return false,"Movimiento disponible solo en experiencias propias o autorizadas"
+ end
+ if field=="Fly" and value==true then
+  local started,reason=self.fly:start(self.registry.entries[self.player]);if not started then return false,reason end
+ end
  local priorEnabled=self.config.Enabled
  local priorPart=self.config.HitPart
  local accepted,problem=self.prediction:updateConfig(updated)
@@ -2666,6 +3394,16 @@ function Session:configure(field,value)
  for name,child in updated do self.config[name]=child end
  self.controller:setConfig(self.config)
  if self.ui then self.ui:setValue(field,self.config[field]) end
+ if field=="Fly" and not value then self.fly:stop() end
+ if field=="Speed" or field=="WalkSpeed" or field=="Fly" then self.speed:sync(self.registry.entries[self.player],self.config.Fly) end
+ if field=="ESP" or field=="Hitboxes" or field=="Names" or field=="ESPTargetMode" or field=="ESPMaxDistance"
+  or field=="ESPUpdateHz" or field=="ESPLowPerformanceMode" then
+  if self.esp.destroyed then self.esp=ESPManager.new(self.config,self.report,self.registry) end
+  self.esp:refresh();local updatedESP,espError=self:_espUpdate(self:_clock())
+  if not updatedESP then return false,"ESP API: "..tostring(espError) end
+ end
+ if field=="LogoAssetId" then self.ui:setLogo(value);self.notifications:setLogo(value) end
+ if field=="ShowNotifications" then self.notifications.overlay.config.ShowNotifications=value end
  self.predictionOutput=nil
  if priorPart~=self.config.HitPart then
   self.controller:reset();self.nextObservation=nil
@@ -2683,6 +3421,51 @@ function Session:configure(field,value)
 end
 function Session:SetEnabled(value) return self:configure("Enabled",value) end
 function Session:SetHitPart(value) return self:configure("HitPart",value) end
+function Session:ApplyESPTarget()
+ local accepted,reason=self.esp:applyTarget(self.config.ESPUsername)
+ if accepted then self:configure("ESPTargetMode","Specific Player");return true end
+ self:_notify(reason);return false,reason
+end
+function Session:ClearESPTarget()
+ self:configure("ESPUsername","");self.esp:clearTarget();return true
+end
+function Session:_action(name,value)
+ if name=="CaptureKey" then return self.keybinds and self.keybinds:capture(value)
+ elseif name=="CancelCapture" then if self.keybinds then self.keybinds:cancelCapture() end
+ elseif name=="ApplyTarget" then return self:ApplyESPTarget()
+ elseif name=="ClearTarget" then return self:ClearESPTarget() end
+end
+function Session:_registryChanged(kind,entry)
+ if self.destroyed then return end
+ if self.esp then self.esp:changed(kind,entry) end
+ if entry.player==self.player and (kind=="Died" or kind=="CharacterRemoving") then
+  if self.fly then self.fly:stop() end;if self.speed then self.speed:stop() end
+  if self.keybinds then self.keybinds:clear();self.keybinds:cancelCapture() end
+  if self.ui then self.ui:resetDrag();self.ui:closeDropdown(true) end
+ end
+end
+function Session:_movement(dt)
+ if not self.config.Fly and not self.config.Speed and not self.fly.active and not self.speed.active then return end
+ local entry=self.registry.entries[self.player]
+ local ok,reason=pcall(function() self.fly:update(entry,self.world.CurrentCamera,dt,self.keybinds:movement()) end)
+ if not ok then
+  self.fly:stop();self.config.Fly=false;self.ui:setValue("Fly",false)
+  Runtime.trace(self.report,"Fly","FAIL",reason);self:_notify("Fly unavailable | "..tostring(reason))
+ end
+ local speedOK,speedError=pcall(function() self.speed:sync(entry,self.config.Fly) end)
+ if not speedOK then
+  self.speed:stop();self.config.Speed=false;self.ui:setValue("Speed",false)
+  Runtime.trace(self.report,"Speed","FAIL",speedError);self:_notify("Speed unavailable | "..tostring(speedError))
+ end
+end
+function Session:_espUpdate(now)
+ local ok,reason=pcall(function() self.esp:update(now) end)
+ if not ok then
+  self.esp:destroy();self.config.ESP=false;self.ui:setValue("ESP",false)
+  Runtime.trace(self.report,"ESP","FAIL",reason);self:_notify("ESP unavailable | "..tostring(reason))
+ end
+ return ok,reason
+end
 function Session:_ping(now)
  if self.nextPing and now&lt;self.nextPing then return end
  self.nextPing=now+1/self.config.PingHz
@@ -2702,10 +3485,7 @@ function Session:_cameraDiagnostic(now)
   "yaw=%.3f pitch=%.3f roll=%.6f targetAngle=%.3f deltaTime=%.6f angularError=%.3f",
   data.yaw,data.pitch,data.roll,data.targetAngle,data.deltaTime,data.angularError))
 end
-function Session:_step(dt)
- if self.destroyed then return end
- local now=self:_clock()
- self.ui:step();self.notifications:step(now)
+function Session:_track(dt,now)
  if not self.config.Enabled then return end
  local camera=self.world.CurrentCamera
  local size=camera and camera.ViewportSize
@@ -2735,10 +3515,26 @@ function Session:_step(dt)
  if self.pauseReason then Runtime.trace(self.report,"CamTracking","RESUMED","Predicted Hit Part tracking resumed") end
  self.pauseReason=nil
 end
+function Session:_step(dt)
+ if self.destroyed then return end
+ local now=self:_clock()
+ self.ui:step(now);self.notifications:step(now)
+ self:_track(dt,now);self:_movement(dt);self:_espUpdate(now)
+ if self.config.ShowFOV then self.ui:updateFOV(self.selector:reference(now),self.config.Radius) else self.ui:updateFOV(nil,0) end
+ if self.config.DebugMode and (not self.nextESPDebug or now&gt;=self.nextESPDebug) then
+  self.nextESPDebug=now+1
+  local stats=self.esp.stats
+  Runtime.trace(self.report,"ESP","PERFORMANCE",string.format("updateMs=%.4f maxMs=%.4f visible=%d considered=%d created=%d",
+   stats.lastSeconds*1000,stats.maxSeconds*1000,stats.visible,stats.considered,stats.created))
+ end
+end
 function Session:destroy()
  if self.destroyed then return end
  self.destroyed=true;self.config.Enabled=false;self.locked=nil;self.predictionOutput=nil
  self.targetCleanup:destroy();self.cleanup:destroy()
+ if self.keybinds then self.keybinds:destroy() end
+ if self.fly then self.fly:destroy() end;if self.speed then self.speed:destroy() end
+ if self.esp then self.esp:destroy() end;if self.registry then self.registry:destroy() end
  if self.controller then self.controller:destroy() end
  if self.ui then self.ui:destroy() end
  if self.notifications then self.notifications:destroy() end
@@ -2772,11 +3568,16 @@ function Session.init(options,report)
   bindName="SEDWARE_CAM_LOCK_"..tostring(previous+1)},Session)
  local stage="Prediction"
  local initialized,problem=xpcall(function()
+  stage="Registry"
+  self.registry=PlayerRegistry.new(self.services.Players,function(kind,entry) self:_registryChanged(kind,entry) end)
+  report.registry=self.registry
   self.prediction=PredictionEngine.new(config);self.controller=CameraController.new(config);self.selector=TargetSelector.new(config,report)
+  self.fly=FlyController.new(config,report);self.speed=SpeedController.new(config,report);self.esp=ESPManager.new(config,report,self.registry)
+  if config.Fly or config.Speed then assert(MovementAccess.allowed(config,report),"Movement configuration requires an authorized experience") end
   stage="Graphics"
   self.notifications=NotificationSystem.new(report.playerGui,config)
   self.ui=UI.new(report.playerGui,config,function(field,value) return self:configure(field,value) end,
-   function(reason) self:_notify("Invalid value | "..tostring(reason)) end)
+   function(reason) self:_notify("Invalid value | "..tostring(reason)) end,function(name,value) return self:_action(name,value) end,self.player)
   self.gui=self.ui.gui
   assert(self.gui.Parent==report.playerGui and self.notifications.gui.Parent==report.playerGui,"Cam Lock interface failed to attach")
   self.cleanup:connect(self.gui.Destroying,function() self:destroy() end)
@@ -2784,17 +3585,22 @@ function Session.init(options,report)
   if typeof(script)=="Instance" and script.Destroying then self.cleanup:connect(script.Destroying,function() self:destroy() end) end
   self.owner=Instance.new("BindableEvent");self.owner.Name=OWNER;self.owner:SetAttribute("Generation",previous+1)
   self.cleanup:connect(self.owner.Event,function() self:destroy() end)
-  Runtime.trace(report,"CamGraphics","READY","Compact seven-control interface and Sedware S fallback created")
+  Runtime.trace(report,"CamGraphics","READY","Pink Edition MAIN/MISC, popup layer and prepared original-logo asset created")
+  if not self.ui.animations.service then Runtime.trace(report,"UIAnimations","UNAVAILABLE","TweenService missing; GUI state applies immediately") end
   stage="Input"
-  self.cleanup:connect(self.services.UserInputService.InputBegan,function(input,processed)
-   if self.destroyed or processed or not self.config.Enabled or self.services.UserInputService:GetFocusedTextBox() then return end
-   if input.KeyCode==self.config.LockKey then
+  self.keybinds=KeybindManager.new(config,self.services.UserInputService,{
+   capture=function(field,active) self.ui:setCapture(field,active) end,
+   change=function(field,value) return self:configure(field,value) end,
+   notice=function(reason) self:_notify("Invalid key | "..tostring(reason)) end,
+   toggle=function(field) local changed,reason=self:configure(field,not self.config[field]);if not changed then self:_notify(reason) end end,
+   lock=function()
+    if self.destroyed or not self.config.Enabled then return end
     local handled,errorMessage=xpcall(function()
      if self.locked then self.manualReleased=true;self:UnlockTarget("Target Lost") else self:LockTarget() end
     end,Runtime.traceback)
     if not handled then self:destroy();Session.notifyFailure(report,errorMessage) end
-   end
-  end,"CamLock.InputBegan")
+   end,
+  })
   self.cleanup:connect(self.services.Players.PlayerRemoving,function(player) if self.locked and self.locked.player==player then self:UnlockTarget("Target Lost") end end)
   stage="Render"
   self.cleanup:add(function() run:UnbindFromRenderStep(self.bindName) end)
@@ -2804,7 +3610,7 @@ function Session.init(options,report)
    elseif not self.firstRendered then self.firstRendered=true;Runtime.trace(report,"CamRender","READY","First ordered RenderStepped update completed") end
   end)
   Runtime.trace(report,"CamRender","BOUND","Camera+1 RenderStepped binding registered; awaiting first frame")
-  if config.WelcomeNotification then self:_notify("Cam Lock Loaded",config.WelcomeDuration) end
+  if config.WelcomeNotification then self:_notify("Successfully Loaded",config.WelcomeDuration) end
  end,Runtime.traceback)
  if not initialized then report.failurePhase=stage;self:destroy();error(problem,2) end
  local committed,commitError=xpcall(function()
@@ -2822,7 +3628,7 @@ end
 return Session
 end
 -- END Session
--- BEGIN Bootstrap | sha256 0bf1be64f7a31c51ba0f8b595a8530a2a36fcdadd0a64211e046a914e68cb4f7
+-- BEGIN Bootstrap | sha256 1b9e3e977ff9879055293502e11d5bd7edc2c18c50ceb89fc97df402c710f678
 factories["Bootstrap"] = function(loadModule)
 --!nonstrict
 local Runtime=loadModule("Runtime")
@@ -2877,7 +3683,7 @@ function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
   if current then current:destroy();return true end
   return false
  end
- for _,name in {"GetLockedTarget","GetPrediction","GetPredictedPosition","LockTarget","UnlockTarget","configure","SetEnabled","SetHitPart"} do
+ for _,name in {"GetLockedTarget","GetPrediction","GetPredictedPosition","LockTarget","UnlockTarget","configure","SetEnabled","SetHitPart","ApplyESPTarget","ClearESPTarget"} do
   API[name]=function(...)
    if not API.session then return nil,"Not initialized" end
    return API.session[name](API.session,...)
@@ -2889,7 +3695,7 @@ return Bootstrap
 end
 -- END Bootstrap
 local built,API=xpcall(function()
- return loadModule("Bootstrap").new(Config,loadModule,{"Settings", "Latency", "Ballistics", "MemoryTracker", "PinkConfig", "PinkPrediction", "Selection", "Runtime", "Overlay", "Config", "Branding", "NotificationSystem", "UI", "TargetSelector", "CameraController", "PredictionEngine", "Cleanup", "Session", "Bootstrap"},headerError)
+ return loadModule("Bootstrap").new(Config,loadModule,{"Settings", "Latency", "Ballistics", "MemoryTracker", "PinkConfig", "PinkPrediction", "Selection", "ModeDetector", "Runtime", "Overlay", "Config", "Branding", "UIAnimations", "PlayerRegistry", "MovementAccess", "FlyController", "SpeedController", "KeybindManager", "ESPRenderer", "ESPManager", "NotificationSystem", "UI", "TargetSelector", "CameraController", "PredictionEngine", "Cleanup", "Session", "Bootstrap"},headerError)
 end,bootTraceback)
 if not built then
  bootLog("CamModules","FAIL",API)
@@ -2916,12 +3722,42 @@ return API
       </Item>
     </Item>
   </Item>
-  <Item class="Players" referent="CAM8">
+  <Item class="ServerScriptService" referent="CAM8">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Script" referent="CAM9">
+      <Properties>
+        <string name="Name">SEDWAREOwnedExperienceGrant</string>
+        <ProtectedString name="Source">--!nonstrict
+-- Only packaged in THIS owned Studio test/demo experience. No game remotes.
+local players=game:GetService("Players")
+local storage=game:GetService("ReplicatedStorage")
+workspace:SetAttribute("SEDWAREMovementAuthorized",true)
+local function grant(player) player:SetAttribute("SEDWAREMovementAuthorized",true) end
+players.PlayerAdded:Connect(grant)
+for _,player in players:GetPlayers() do grant(player) end
+local reset=Instance.new("RemoteEvent");reset.Name="SEDWAREV2TestRespawn";reset.Parent=storage
+local last={}
+reset.OnServerEvent:Connect(function(player)
+ if player:GetAttribute("SEDWAREMovementAuthorized")~=true then return end
+ local now=os.clock()
+ if last[player] and now-last[player]&lt;1 then return end
+ last[player]=now
+ local ok,problem=pcall(function() player:LoadCharacterAsync() end)
+ if not ok then warn("[SEDWARE][NativeV2][RespawnFailure] "..tostring(problem)) end
+end)
+players.PlayerRemoving:Connect(function(player) last[player]=nil end)
+</ProtectedString>
+      </Properties>
+    </Item>
+  </Item>
+  <Item class="Players" referent="CAM10">
     <Properties>
       <string name="Name">Players</string>
     </Properties>
   </Item>
-  <Item class="Lighting" referent="CAM9">
+  <Item class="Lighting" referent="CAM11">
     <Properties>
       <string name="Name">Lighting</string>
     </Properties>

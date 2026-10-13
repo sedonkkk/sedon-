@@ -1,5 +1,7 @@
 # SEDWARE: corrección de Camera Roll
 
+Nota V2: el controlador descrito aquí permanece sin cambios. La interfaz y sus pruebas actuales están en [Pink Edition V2](SEDWARE_V2.md); CamPrediction se retiró y Radius ahora es 180. Las cifras de esta página corresponden a la corrección v1.
+
 Se modifican CameraController y su diagnóstico interno; GUI, branding, notificaciones, selección, predicción y los siete valores iniciales se conservan. El archivo autónomo y los lugares de Studio se regeneran a partir de los módulos originales.
 
 ## Causa y evidencia

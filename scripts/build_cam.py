@@ -13,9 +13,10 @@ MODULES = {
     'MemoryTracker': ROOT / 'src/shared/MotionHistory.luau',
     'PinkConfig': ROOT / 'src/pink/Config.luau',
     'PinkPrediction': ROOT / 'src/pink/Prediction.luau',
-    **{name: ROOT / f'src/pink/{name}.luau' for name in ('Selection', 'Runtime', 'Overlay')},
+    **{name: ROOT / f'src/pink/{name}.luau' for name in ('Selection', 'ModeDetector', 'Runtime', 'Overlay')},
     **{name: ROOT / f'src/cam/{name}.luau' for name in
-       ('Config', 'Branding', 'NotificationSystem', 'UI', 'TargetSelector',
+       ('Config', 'Branding', 'UIAnimations', 'PlayerRegistry', 'MovementAccess', 'FlyController',
+        'SpeedController', 'KeybindManager', 'ESPRenderer', 'ESPManager', 'NotificationSystem', 'UI', 'TargetSelector',
         'CameraController', 'PredictionEngine', 'Cleanup', 'Session', 'Bootstrap')},
 }
 BY_PATH = {path.resolve(): name for name, path in MODULES.items()}
@@ -30,8 +31,8 @@ def source_bundle(check=False):
     manifest = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in MODULES.items()}
     lines = [
         '--!nonstrict',
-        '-- SEDWARE CAM LOCK v1 | zero-roll yaw/pitch correction; edit Config below.',
-        '-- Prediction X/Y are seconds. CamPrediction is a gain: value / 13.80.',
+        '-- SEDWARE CAM LOCK V2 — PINK EDITION | edit Config below.',
+        '-- Prediction X/Y are direct horizons in seconds. Movement requires authorization.',
         '-- Enabled=false opens the GUI without controlling the camera.',
         '-- Public client APIs only. No remote weapon integration or bypass.',
         'local function bootTraceback(problem)',
@@ -44,7 +45,7 @@ def source_bundle(check=False):
         ' local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn',
         ' if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end',
         'end',
-        'bootLog("CamExecution","START","SEDWARE CAM LOCK v1 payload began execution")',
+        'bootLog("CamExecution","START","SEDWARE CAM LOCK V2 — PINK EDITION payload began execution")',
         'local Config',
         'local configBuilt,headerError=xpcall(function() Config = '+match.group(2)+' end,bootTraceback)',
         'if configBuilt then headerError=nil else bootLog("CamConfiguration","FAIL",headerError) end',
@@ -148,12 +149,19 @@ def studio_place(source_path, check=False):
     scripts, _ = item(starter, 'StarterPlayerScripts', 'StarterPlayerScripts')
     _, props = item(scripts, 'LocalScript', 'SedwareCamLock')
     ET.SubElement(props, 'ProtectedString', name='Source').text = source_path.read_text(encoding='utf-8')
+    grant = ROOT/'tests/studio/CamV2Grant.server.luau'
+    expected_sources = [source_path.read_text(encoding='utf-8')]
+    if grant.exists():
+        servers, _ = item(document, 'ServerScriptService', 'ServerScriptService')
+        _, grant_props = item(servers, 'Script', 'SEDWAREOwnedExperienceGrant')
+        ET.SubElement(grant_props, 'ProtectedString', name='Source').text = grant.read_text(encoding='utf-8')
+        expected_sources.append(grant.read_text(encoding='utf-8'))
     item(document, 'Players', 'Players'); item(document, 'Lighting', 'Lighting')
     ET.indent(document, space='  ')
     build_path = ROOT / 'build/SedwareCamLock.rbxlx'
     ET.ElementTree(document).write(build_path, encoding='utf-8', xml_declaration=True)
     embedded = ET.parse(build_path).findall('.//ProtectedString[@name="Source"]')
-    assert len(embedded) == 1 and embedded[0].text == source_path.read_text(encoding='utf-8')
+    assert sorted(node.text for node in embedded) == sorted(expected_sources)
     output = ROOT / 'studio/SedwareCamLock.rbxlx'
     if check:
         if not output.exists() or output.read_bytes() != build_path.read_bytes():
@@ -178,13 +186,29 @@ def studio_place(source_path, check=False):
         regression_delivery = ROOT/'studio/SedwareCamRollTest.rbxlx'
         embedded = ET.parse(regression_build).findall('.//ProtectedString[@name="Source"]')
         assert sorted(node.text for node in embedded) == sorted([
-            source_path.read_text(encoding='utf-8'), regression.read_text(encoding='utf-8')])
+            *expected_sources, regression.read_text(encoding='utf-8')])
         if check:
             if not regression_delivery.exists() or regression_delivery.read_bytes() != regression_build.read_bytes():
                 raise RuntimeError('Native Cam roll place differs: run scripts/build_cam.py')
         else:
             regression_delivery.write_bytes(regression_build.read_bytes())
         print(f'Packaged native roll regression place: {regression_delivery} (not executed in this Linux environment)')
+        v2_runner = ROOT/'tests/studio/CamV2Regression.client.luau'
+        if v2_runner.exists():
+            starter_script.find('Properties/string[@name="Name"]').text = 'CamV2Regression'
+            starter_script.find('Properties/ProtectedString[@name="Source"]').text = v2_runner.read_text(encoding='utf-8')
+            ET.indent(document, space='  ')
+            v2_build = ROOT/'build/SedwareCamV2Test.rbxlx'
+            ET.ElementTree(document).write(v2_build, encoding='utf-8', xml_declaration=True)
+            v2_delivery = ROOT/'studio/SedwareCamV2Test.rbxlx'
+            embedded = ET.parse(v2_build).findall('.//ProtectedString[@name="Source"]')
+            assert sorted(node.text for node in embedded) == sorted([*expected_sources, v2_runner.read_text(encoding='utf-8')])
+            if check:
+                if not v2_delivery.exists() or v2_delivery.read_bytes() != v2_build.read_bytes():
+                    raise RuntimeError('V2 native place differs: run scripts/build_cam.py')
+            else:
+                v2_delivery.write_bytes(v2_build.read_bytes())
+            print(f'Packaged native V2 regression place: {v2_delivery} (native results pending)')
 
 
 if __name__ == '__main__':

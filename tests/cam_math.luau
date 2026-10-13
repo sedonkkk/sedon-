@@ -37,15 +37,15 @@ local function moving(overrides)
  return engine
 end
 
-test("standalone header and independent defaults match seven live controls",function()
+test("standalone header and independent defaults match V2 controls",function()
  local a,b=Config.defaults(),Config.defaults()
  check(not a.Enabled and a.HitPart=="UpperTorso")
- near(a.CamPrediction,13.80);near(a.PredictionX,0.1205);near(a.PredictionY,0.08)
- near(a.Smoothness,0.405);near(a.Radius,50)
+ check(a.CamPrediction==nil);near(a.PredictionX,0.1205);near(a.PredictionY,0.08)
+ near(a.Smoothness,0.405);near(a.Radius,180)
  near(a.PredictionSmoothing,0);near(a.VelocitySmoothing,0.06)
  check(a.MemoryTracking and a.VelocityPrediction and a.PingCompensation)
  check(a.FallbackR6 and a.RespectScriptableCamera)
- check(#Config.controls==7)
+ check(#Config.controls==17)
  for _,control in Config.controls do
   check(Config.fields[control.key]==control and a[control.key]~=nil)
  end
@@ -86,36 +86,29 @@ test("malformed finite bounds keys and calibration objects are rejected",functio
  check(Config.validate(configuration()))
 end)
 
-test("default dimensionless gain preserves existing distinct axis seconds",function()
+test("direct X/Z and Y seconds have no hidden gain",function()
  local output=moving():predict(zero,0.1)
- check(output~=nil)
- near(output.camGain,1);near(output.camPrediction,13.8)
+ check(output~=nil and output.camGain==nil and output.camPrediction==nil)
  near(output.predictionX,0.1205);near(output.predictionY,0.08)
- check(output.camPredictionUnits=="dimensionless" and output.predictionUnits=="seconds")
+ check(output.predictionUnits=="seconds")
  vectorNear(output.rawPosition,V.new(1+10*0.1205,2+20*0.08,3+30*0.1205))
- vectorNear(output.position,output.rawPosition)
  check(output.physicsVerified==false and output.flightSeconds==0)
 end)
 
-test("Cam Prediction scales both axes and zero suppresses future horizons",function()
- for _,gain in {0,0.5,1,2} do
-  local engine=moving({CamPrediction=13.8*gain,PredictionX=0.1,PredictionY=0.04})
-  local output=engine:predict(zero,0.1)
-  near(output.camGain,gain)
-  near(output.predictionX,0.1*gain);near(output.predictionY,0.04*gain)
-  vectorNear(output.rawPosition,V.new(1+10*0.1*gain,2+20*0.04*gain,3+30*0.1*gain))
+test("zero manual horizons retain only actual observation age",function()
+ for _,values in {{0,0},{0.1,0.04},{0.2,0.03}} do
+  local output=moving({PredictionX=values[1],PredictionY=values[2]}):predict(zero,0.15)
+  near(output.predictionX,values[1]);near(output.predictionY,values[2]);near(output.ageSeconds,0.05)
+  vectorNear(output.rawPosition,V.new(1+10*(values[1]+0.05),2+20*(values[2]+0.05),3+30*(values[1]+0.05)))
  end
- local zeroLead=moving({CamPrediction=0,CloseOffset=0.1,MinPredictionX=0.1,MinPredictionY=0.05})
- local output=zeroLead:predict(zero,0.15)
- near(output.predictionX,0);near(output.predictionY,0);near(output.ageSeconds,0.05)
- vectorNear(output.rawPosition,V.new(1.5,3,4.5))
+ check(Config.new({CamPrediction=13.8})==nil,"removed multiplier was still accepted")
 end)
 
 test("axis edits are independent and adjusted horizons remain bounded",function()
  local engine=moving({PredictionX=0.2,PredictionY=0.03})
  local output=engine:predict(zero,0.1)
  vectorNear(output.rawPosition,V.new(3,2.6,9))
- engine=moving({CamPrediction=69,PredictionX=0.6,PredictionY=0.6,CloseOffset=0.2})
+ engine=moving({PredictionX=0.6,PredictionY=0.6,CloseOffset=0.2})
  output=engine:predict(zero,0.1)
  near(output.predictionX,0.35);near(output.predictionY,0.35)
  vectorNear(output.rawPosition,V.new(4.5,9,13.5))
@@ -175,15 +168,15 @@ test("numeric control updates preserve motion and ping and apply on next predict
  local history,latest,latency=engine.history,engine.history:latest(),engine.latency
  local velocity=history.velocity
  local config=configuration(engine.config)
- for _,edit in {{"CamPrediction",27.6},{"PredictionX",0.1},{"PredictionY",0.04},{"Smoothness",0.9},{"Radius",120}} do
+ for _,edit in {{"FlySpeed",80},{"PredictionX",0.1},{"PredictionY",0.04},{"Smoothness",0.9},{"Radius",120}} do
   check(Config.updateField(config,edit[1],edit[2]))
   check(engine:updateConfig(config))
   check(engine.history==history and engine.history:latest()==latest and engine.latency==latency)
   vectorNear(engine.history.velocity,velocity)
  end
  local output=engine:predict(zero,0.1)
- near(output.predictionX,0.2);near(output.predictionY,0.08);near(output.rawPingMs,62)
- vectorNear(output.position,V.new(1+velocity.X*0.2,2+velocity.Y*0.08,3+velocity.Z*0.2))
+ near(output.predictionX,0.1);near(output.predictionY,0.04);near(output.rawPingMs,62)
+ vectorNear(output.position,V.new(1+velocity.X*0.1,2+velocity.Y*0.04,3+velocity.Z*0.1))
  local beforeX=config.PredictionX
  check(not Config.updateField(config,"PredictionX",0/0))
  near(config.PredictionX,beforeX)
@@ -212,27 +205,25 @@ test("changing Hit Part resets the position stream while preserving usable ping"
  vectorNear(output.position,V.new(5,7,9))
 end)
 
-test("Auto samples RTT before camera and scales the total curve without doubled ping",function()
- for _,gain in {0,0.5,1,2} do
-  local engine=moving({AutoPrediction=true,CamPrediction=13.8*gain})
-  check(engine:samplePing(0.062,0))
+test("Auto consumes the direct total curve without adding ping twice",function()
+ for _,point in {{55,0.113,0.075},{62,0.120,0.080},{70,0.128,0.085}} do
+  local engine=moving({AutoPrediction=true})
+  check(engine:samplePing(point[1]/1000,0))
   local output=engine:predict(zero,0.15)
   check(output.status=="Auto")
-  near(output.predictionX,0.120*gain);near(output.predictionY,0.080*gain)
-  near(output.rawPingMs,62);near(output.smoothedPingMs,62);near(output.ageSeconds,0.05)
-  vectorNear(output.position,V.new(1+10*(0.120*gain+0.05),2+20*(0.080*gain+0.05),3+30*(0.120*gain+0.05)))
+  near(output.predictionX,point[2]);near(output.predictionY,point[3]);near(output.rawPingMs,point[1])
+  vectorNear(output.position,V.new(1+10*(point[2]+0.05),2+20*(point[3]+0.05),3+30*(point[2]+0.05)))
  end
- local midpoint=moving({AutoPrediction=true,CamPrediction=6.9})
- check(midpoint:samplePing(0.0585,0))
- near(midpoint:predict(zero,0.1).predictionX,0.1165/2)
- near(midpoint:predict(zero,0.1).predictionY,0.0775/2)
+ local midpoint=moving({AutoPrediction=true});check(midpoint:samplePing(0.0585,0))
+ near(midpoint:predict(zero,0.1).predictionX,0.1165)
+ near(midpoint:predict(zero,0.1).predictionY,0.0775)
 end)
 
-test("Auto missing ping uses scaled manual fallback and reset clears all state",function()
- local engine=moving({AutoPrediction=true,CamPrediction=6.9})
+test("Auto missing ping uses manual fallback and reset clears all state",function()
+ local engine=moving({AutoPrediction=true})
  local output=engine:predict(zero,0.1)
  check(output.status=="AutoFallback")
- near(output.predictionX,0.1205/2);near(output.predictionY,0.08/2)
+ near(output.predictionX,0.1205);near(output.predictionY,0.08)
  check(engine:samplePing(0.07,0))
  check(engine:predict(zero,0.1).status=="Auto")
  check(engine:samplePing(nil,0.1))

@@ -20,7 +20,7 @@ def main():
     runner = find_tool('luau', 'LUAU')
     subprocess.run([sys.executable, 'scripts/build_cam.py', '--check'], cwd=ROOT, check=True)
     sources = sorted((ROOT/'src/cam').glob('*.luau')) + sorted((ROOT/'tests').glob('cam*.luau'))
-    sources += [ROOT/'tests/CamMock.luau', ROOT/'SedwareCamLock.lua']
+    sources += [ROOT/'tests/CamMock.luau', ROOT/'tests/CamV2Mock.luau', ROOT/'SedwareCamLock.lua']
     sources += sorted((ROOT/'tests/studio').glob('Cam*.luau'))
     if (ROOT/'CamLoader.lua').exists():
         sources.append(ROOT/'CamLoader.lua')
@@ -41,7 +41,8 @@ def main():
         'local function reloadBundle(env)\n'
         ' local chunk=assert(loadstring(source,"SedwareCamLock.bundleTest"))\n'
         ' setfenv(chunk,env)\n return chunk()\nend\n'
-        'require("./cam_gui_body")(reloadBundle)\n'+loader_test, encoding='utf-8')
+        'require("./cam_gui_body")(reloadBundle)\nrequire("./cam_v2_body")(reloadBundle)\n'
+        'require("./cam_v2_perf_body")(reloadBundle)\n'+loader_test, encoding='utf-8')
     try:
         subprocess.run([runner, str(harness)], cwd=ROOT, check=True)
     finally:

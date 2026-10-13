@@ -1,7 +1,7 @@
 --!nonstrict
 -- Actual published loader text and actual Cam payload, with explicit doubles.
 return function(payload,loader)
- local Mock=require("./CamMock")
+ local Mock=require("./CamV2Mock")
  local tests,checks=0,0
  local function check(value,message) checks+=1;assert(value,message) end
  local function test(name,body)

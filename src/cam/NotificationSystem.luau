@@ -12,7 +12,7 @@ local function finite(value)
 end
 
 function NotificationSystem.new(playerGui, config)
-	local self = setmetatable({destroyed = false, queue = {}}, NotificationSystem)
+	local self = setmetatable({destroyed = false, queue = {},recent={},connections={},config=config}, NotificationSystem)
 	local ok, problem = pcall(function()
 		self.overlay = Overlay.new(playerGui, {ShowDot = false, DotOutline = false,
 			ShowNotifications = not config or config.ShowNotifications ~= false, NotificationDuration = 2})
@@ -38,7 +38,9 @@ function NotificationSystem.new(playerGui, config)
 			for key, value in pairs(properties) do instance[key] = value end
 			instance.Parent = parent
 			return instance
-		end, UDim2.fromOffset(15, 15), UDim2.fromOffset(23, 26), 7)
+		end, UDim2.fromOffset(15, 15), UDim2.fromOffset(23, 26), 7,config,function(signal,callback)
+   local connection=signal:Connect(callback);table.insert(self.connections,connection);return connection
+  end)
 		self.title.TextColor3 = colors.White
 		self.title.TextSize = 13
 		self.body.TextColor3 = colors.Pink
@@ -65,9 +67,29 @@ end
 function NotificationSystem:notify(subtitle, now, duration)
 	if self.destroyed or not finite(now) then return false end
 	subtitle = tostring(subtitle or "")
-	local welcome = subtitle == "Cam Lock Loaded"
+	local welcome = subtitle == "Successfully Loaded"
 	duration = duration or (welcome and 3 or 2)
 	if not finite(duration) or duration <= 0 then return false end
+	-- Search outcomes never enter the notification pipeline. Events are deduped
+	-- against active/pending messages and have a bounded recent-message cache.
+ if subtitle:find("No valid target",1,true) then return false end
+ local state=if subtitle=="Lock Enabled" then "ON" elseif subtitle=="Lock Disabled" then "OFF" else nil
+ if state and self.lockState~=state then
+  self.lockState=state;self.recent[subtitle]=nil
+  if state=="ON" and self.current and self.current.subtitle=="Lock Disabled" then
+   self.current=nil;self.overlay.noticeStart=nil;table.clear(self.queue)
+  end
+ end
+ if self.current and self.current.subtitle==subtitle then return false end
+ for _,pending in self.queue do if pending.subtitle==subtitle then return false end end
+ local cooldown=self.config.NotificationCooldown or 3
+ if self.recent[subtitle] and now-self.recent[subtitle]<cooldown then return false end
+ local count=0
+ for message,time in self.recent do
+  if now-time>=cooldown then self.recent[message]=nil else count+=1 end
+ end
+ if count>=32 then table.clear(self.recent) end
+ self.recent[subtitle]=now
 	if self.overlay.config.ShowNotifications == false then
 		self.current = nil
 		table.clear(self.queue)
@@ -123,7 +145,10 @@ function NotificationSystem:destroy()
 	self.destroyed = true
 	self.current = nil
 	table.clear(self.queue)
+	table.clear(self.recent)
+ for _,connection in self.connections do connection:Disconnect() end;table.clear(self.connections)
 	if self.overlay then self.overlay:destroy() end
 end
+function NotificationSystem:setLogo(asset) Branding.setLogo(self.logo,asset) end
 
 return NotificationSystem

@@ -3,7 +3,7 @@
 -- callbacks, prediction/camera writes, render ordering and lifecycle ownership;
 -- it does not claim Roblox rendering, physics or third-party compatibility.
 return function(reloadBundle)
-	local Mock = require("./CamMock")
+	local Mock = require("./CamV2Mock")
 	local tests, assertions, failures = 0, 0, 0
 	local function check(condition, message)
 		assertions += 1
@@ -53,7 +53,7 @@ return function(reloadBundle)
 		session.ui.controls.HitPart.Activated:Fire()
 		check(session.ui.dropdown.Visible)
 		session.ui.hitPartOptions[part].Activated:Fire()
-		check(not session.ui.dropdown.Visible)
+		check(session.ui.popupField==nil)
 	end
 	local function notices(session)
 		local received, original = {}, session.notifications.notify
@@ -95,35 +95,36 @@ return function(reloadBundle)
 		local api=reloadBundle(mock.env)
 		check(api.session ~= nil and not api.session.destroyed)
 		check(api.session.gui.Parent == mock.playerGui and not api.session.config.Enabled)
-		check(api.session.notifications.body.Text == "Cam Lock Loaded")
+		check(api.session.notifications.body.Text == "Successfully Loaded")
 		near(mock:countRenderBindings(),1);near(mock.counters.cameraWrites,0)
 		api.Unload()
 		near(mock:countConnections(),0);near(mock:countRenderBindings(),0)
 	end)
 
-	test("default disabled session opens exactly seven MAIN fields and Sedware branding", function(mock, create)
+	test("default disabled V2 has six MAIN fields plus MISC and Sedware branding", function(mock, create)
 		local session = create()
 		local ui = session.ui
 		check(session.gui == ui.gui and ui.gui.Name == "SedwareCamLock_UI")
 		check(ui.gui.Parent == mock.playerGui)
-		near(size(ui.controls), 7); near(size(ui.hitPartOptions), 3)
-		local expected = {Enabled=false, HitPart="UpperTorso", CamPrediction=13.8,
-			PredictionX=0.1205, PredictionY=0.08, Smoothness=0.405, Radius=50}
+		near(size(ui.controls), 17); near(size(ui.hitPartOptions), 3)
+		local expected = {Enabled=false, HitPart="UpperTorso",
+			PredictionX=0.1205, PredictionY=0.08, Smoothness=0.405, Radius=180}
 		for field, value in pairs(expected) do
 			check(session.config[field] == value, "incorrect default " .. field)
 			check(ui.values[field] == value)
 		end
 		check(ui.controls.Enabled.Text == "OFF" and not ui.dropdown.Visible)
 		check(ui.controls.HitPart.Text:find("UpperTorso", 1, true) ~= nil)
-		for _, field in ipairs({"CamPrediction", "PredictionX", "PredictionY", "Smoothness", "Radius"}) do
+		for _, field in ipairs({"PredictionX", "PredictionY", "Smoothness", "Radius"}) do
 			near(tonumber(ui.controls[field].Text), expected[field])
 		end
-		check(ui.title.Text == "SEDWARE" and ui.subtitle.Text == "CAM LOCK" and ui.version.Text == "v1")
-		near(ui.panel.Size.X.Offset, 310); near(ui.panel.Size.Y.Offset, 324)
+		check(ui.title.Text == "SEDWARE" and ui.subtitle.Text == "CAM LOCK · PINK EDITION" and ui.version.Text == "v2")
+		near(ui.panel.Size.X.Offset, 360); near(ui.panel.Size.Y.Offset, 432)
 		near(ui.panel.BackgroundColor3.R, 10/255)
 		check(ui.logo.Name == "SedwareLogo")
-		near(#ui.logo:GetChildren(), 5)
-		for _, bar in ipairs(ui.logo:GetChildren()) do
+		check(ui.logo:FindFirstChild("OriginalLogoImage") ~= nil)
+		near(#ui.logo:FindFirstChild("TemporaryFallback"):GetChildren(), 5)
+		for _, bar in ipairs(ui.logo:FindFirstChild("TemporaryFallback"):GetChildren()) do
 			near(bar.BackgroundColor3.R, 1); near(bar.BackgroundColor3.G, 20/255); near(bar.BackgroundColor3.B, 147/255)
 		end
 		local mainButtons, boxes, choiceButtons = 0, 0, 0
@@ -133,7 +134,7 @@ return function(reloadBundle)
 				if node.Parent == ui.dropdown then choiceButtons += 1 else mainButtons += 1 end
 			end
 		end
-		near(mainButtons, 2); near(boxes, 5); near(choiceButtons, 3)
+		near(mainButtons, 15); near(boxes, 7); near(choiceButtons, 3)
 		mock:resetCounters(); mock:advance(0.1)
 		near(mock.counters.candidateScans, 0); near(mock.counters.cameraWrites, 0)
 		near(mock.counters.mouseWrites, 0)
@@ -165,23 +166,23 @@ return function(reloadBundle)
 		check(not session.destroyed and session.gui.Parent == mock.playerGui)
 	end)
 
-	test("one center-radius scan acquires closest target in both camera modes", function(mock, create)
+	test("first-person center and third-person pointer select their closest target", function(mock, create)
 		local central = mock:addPlayer("Central", mock.env.Vector3.new(3, 0, -50))
-		mock:addPlayer("AtPointer", mock.env.Vector3.new(40, 0, -50))
+		local atPointer=mock:addPlayer("AtPointer", mock.env.Vector3.new(40, 0, -50))
 		mock:setPointer(680, 360)
 		for _, mode in ipairs({"Classic", "LockFirstPerson"}) do
 			mock.services.Players.LocalPlayer.CameraMode = mock.env.Enum.CameraMode[mode]
 			local session = create()
 			mock:resetCounters(); enable(session)
-			check(session:GetLockedTarget() == central)
-			near(mock.counters.candidateScans, 1)
+			check(session:GetLockedTarget() == (if mode=="Classic" then atPointer else central))
+			near(mock.counters.candidateScans, 0)
 			session:destroy()
 		end
 	end)
 
 	test("radius textbox changes acquisition and retains a valid existing player", function(mock, create)
 		local target = mock:addPlayer("OutsideInitialRadius", mock.env.Vector3.new(60, 0, -50))
-		local session = create()
+		local session = create({Radius=50})
 		enable(session); check(session:GetLockedTarget() == nil)
 		edit(session, "Radius", "70")
 		near(session.config.Radius, 70)
@@ -277,7 +278,7 @@ return function(reloadBundle)
 		check(second:GetLockedTarget() == nil and second:GetPrediction() == nil)
 	end)
 
-	test("Cam Prediction and X/Y text edits change actual axis lead while preserving motion memory", function(mock, create)
+	test("direct X/Y text edits change actual axis lead while preserving motion memory", function(mock, create)
 		local V = mock.env.Vector3
 		local target = mock:addPlayer("PredictionControls",V.new(0,0,-50))
 		local session = create({Enabled=true,PredictionSmoothing=0})
@@ -293,10 +294,10 @@ return function(reloadBundle)
 		local y = session:GetPrediction()
 		near(y.predictionX,0.2);near(y.predictionY,0.15)
 		check(y.position.Y > x.position.Y and session.prediction.history == history)
-		edit(session,"CamPrediction","27.6");mock:advance(0.001)
+		edit(session,"PredictionX","0.24");edit(session,"PredictionY","0.10");mock:advance(0.001)
 		local gain = session:GetPrediction()
-		near(gain.camGain,2);near(gain.predictionX,0.35);near(gain.predictionY,0.3)
-		check(gain.position.X > y.position.X and gain.position.Y > y.position.Y)
+		check(gain.camGain==nil);near(gain.predictionX,0.24);near(gain.predictionY,0.10)
+		check(gain.position.X > y.position.X and gain.position.Y < y.position.Y)
 		near(gain.rawPosition.X,gain.currentPosition.X+gain.velocity.X*(gain.predictionX+gain.ageSeconds),1e-7)
 		near(gain.rawPosition.Y,gain.currentPosition.Y+gain.velocity.Y*(gain.predictionY+gain.ageSeconds),1e-7)
 		near(gain.rawPosition.Z,gain.currentPosition.Z+gain.velocity.Z*(gain.predictionX+gain.ageSeconds),1e-7)
@@ -305,7 +306,7 @@ return function(reloadBundle)
 
 	test("Smoothness textbox changes angular response and camera position is preserved", function(mock, create)
 		mock:addPlayer("SmoothnessControls",mock.env.Vector3.new(30,0,-50))
-		local session = create({CamPrediction=0})
+		local session = create({PredictionX=0,PredictionY=0})
 		local errors = {}
 		for _, value in ipairs({0.9,0.1}) do
 			edit(session,"Smoothness",value)
@@ -321,7 +322,7 @@ return function(reloadBundle)
 	test("invalid finite ranges and nonnumeric edits restore fields without corrupting lock", function(mock, create)
 		local target=mock:addPlayer("InvalidEdits",mock.env.Vector3.new(0,0,-50))
 		local session=create({Enabled=true})
-		for field, values in pairs({CamPrediction={"abc","1e309","-1","70"},PredictionX={"nan","-0.1","0.7"},
+		for field, values in pairs({PredictionX={"nan","-0.1","0.7"},
 			PredictionY={"","1e309","0.7"},Smoothness={"-1","2","nan"},Radius={"0","2001","abc"}}) do
 			local previous,text=session.config[field],session.ui.controls[field].Text
 			for _,value in ipairs(values) do
@@ -338,10 +339,10 @@ return function(reloadBundle)
 	test("enabled targetless retries are bounded by .25 seconds rather than render frequency", function(mock, create)
 		local session=create()
 		mock:resetCounters();enable(session)
-		near(mock.counters.candidateScans,1)
+		near(mock.counters.candidateScans,0)
 		for _=1,144*2 do mock:advance(1/144) end
-		check(mock.counters.candidateScans >= 7 and mock.counters.candidateScans <= 10,
-			"unexpected scan count "..tostring(mock.counters.candidateScans))
+		check(session.selector.acquisitionCount>=7 and session.selector.acquisitionCount<=10,"acquisition cadence is unbounded")
+		near(mock.counters.candidateScans,0)
 		near(mock.counters.cameraWrites,0)
 	end)
 
@@ -364,7 +365,7 @@ return function(reloadBundle)
 		mock:advance(0.16)
 		check(session:GetLockedTarget() == replacement)
 		near(session:GetPrediction().velocity.Magnitude,0)
-		near(mock.counters.candidateScans,1)
+		near(mock.counters.candidateScans,0)
 	end)
 
 	test("target respawn never estimates motion across old and new characters", function(mock, create)
@@ -382,9 +383,9 @@ return function(reloadBundle)
 		local session=create()
 		local notification=session.notifications
 		check(notification.gui.Name == "SedwareCamLock_Notifications")
-		check(notification.title.Text == "SEDWARE" and notification.body.Text == "Cam Lock Loaded")
+		check(notification.title.Text == "SEDWARE" and notification.body.Text == "Successfully Loaded")
 		check(notification.toast.Visible and notification.logo.Name == "SedwareLogo")
-		near(#notification.logo:GetChildren(),5)
+		near(#notification.logo:FindFirstChild("TemporaryFallback"):GetChildren(),5)
 		near(notification.toast.BackgroundColor3.R,10/255)
 		mock:advance(0.18);near(notification.toast.GroupTransparency,0)
 		mock:advance(3.2);check(not notification.toast.Visible)
@@ -395,12 +396,12 @@ return function(reloadBundle)
 		local session=create()
 		local notification=session.notifications
 		enable(session)
-		check(notification.body.Text == "Cam Lock Loaded","Enable interrupted the welcome toast")
+		check(notification.body.Text == "Successfully Loaded","Enable interrupted the welcome toast")
 		mock:advance(0.18)
-		check(notification.body.Text == "Cam Lock Loaded" and notification.toast.Visible)
+		check(notification.body.Text == "Successfully Loaded" and notification.toast.Visible)
 		near(notification.toast.GroupTransparency,0)
 		mock:advance(2.7)
-		check(notification.body.Text == "Cam Lock Loaded")
+		check(notification.body.Text == "Successfully Loaded")
 		mock:advance(0.13)
 		check(notification.body.Text == "Lock Enabled" and notification.toast.Visible)
 		mock:advance(0.18)
@@ -464,7 +465,7 @@ return function(reloadBundle)
 
 	test("render callback commits after the default camera and converges despite its resets", function(mock, create)
 		mock:addPlayer("RenderOrder",mock.env.Vector3.new(30,0,-50))
-		local session=create({Enabled=true,Smoothness=0.9,CamPrediction=0})
+		local session=create({Enabled=true,Smoothness=0.9,PredictionX=0,PredictionY=0})
 		mock:resetCounters();mock:advance(1/60)
 		check(mock.renderOrder[1].name == "RobloxDefaultCamera")
 		check(#mock.renderOrder == 2 and mock.renderOrder[2].priority == 201)
@@ -485,8 +486,8 @@ return function(reloadBundle)
 		mock.camera._props.CFrame = rolled
 		local target = mock:addPlayer("InheritedRoll", V.new(15,0,-50))
 		local session = create({Enabled=true,Smoothness=0.9})
-		local expected = {HitPart="UpperTorso",CamPrediction=13.8,PredictionX=0.1205,
-			PredictionY=0.08,Smoothness=0.9,Radius=50}
+		local expected = {HitPart="UpperTorso",PredictionX=0.1205,
+			PredictionY=0.08,Smoothness=0.9,Radius=180}
 		local subject = mock.camera.CameraSubject
 		mock:resetCounters()
 		for _=1,60 do
@@ -499,9 +500,9 @@ return function(reloadBundle)
 			check(session.config[field] == value and session.ui.values[field] == value,
 				"roll correction changed existing field "..field)
 		end
-		near(size(session.ui.controls),7)
-		near(session.ui.panel.Size.X.Offset,310);near(session.ui.panel.Size.Y.Offset,324)
-		check(session.ui.title.Text == "SEDWARE" and session.ui.subtitle.Text == "CAM LOCK")
+		near(size(session.ui.controls),17)
+		near(session.ui.panel.Size.X.Offset,360);near(session.ui.panel.Size.Y.Offset,432)
+		check(session.ui.title.Text == "SEDWARE" and session.ui.subtitle.Text == "CAM LOCK · PINK EDITION")
 		check(mock.camera.CameraSubject == subject)
 		near(mock:cameraWritesFor(mock.camera,"CameraSubject"),0)
 		near(mock:cameraWritesFor(mock.camera,"CameraType"),0)
@@ -541,7 +542,7 @@ return function(reloadBundle)
 		local V = mock.env.Vector3
 		local position = V.new(0,2,20)
 		local target = mock:addPlayer("VerticalPoles",V.new(5,0,-50))
-		local session = create({Enabled=true,CamPrediction=0})
+		local session = create({Enabled=true,PredictionX=0,PredictionY=0})
 		mock:advance(0.04)
 		for _, height in ipairs({60,-60,60,-60}) do
 			mock:move(target,position+V.new(0,height-1,0))
@@ -613,7 +614,7 @@ return function(reloadBundle)
 		for _,fps in ipairs({30,60,120,144}) do
 			mock:setDefaultCamera(mock.camera,rolled)
 			mock.camera._props.CFrame=rolled
-			local session=create({Enabled=true,Smoothness=0.9,CamPrediction=0})
+			local session=create({Enabled=true,Smoothness=0.9,PredictionX=0,PredictionY=0})
 			for _=1,fps/2 do
 				mock:advance(1/fps)
 				leveled(mock.camera.CFrame)
@@ -647,7 +648,7 @@ return function(reloadBundle)
 		end
 		near(diagnostic.roll,0,1e-6)
 		near(diagnostic.deltaTime,1/60,1e-8)
-		near(size(session.ui.controls),7)
+		near(size(session.ui.controls),17)
 		check(session.ui.controls.CameraDebugMode==nil and session.ui.controls.CameraDebugInterval==nil)
 		check(session:configure("CameraDebugMode",false))
 		for _=1,60 do mock:advance(1/60) end
@@ -776,7 +777,7 @@ return function(reloadBundle)
 		check(session == nil and report.ready == false and report.cancelled == true)
 		check(mock:getTime()-started <= 0.151,"Unload did not stop the bounded wait promptly")
 		check(mock.playerGui:FindFirstChild("SedwareCamLock_UI") == nil)
-		check(mock:find("Cam Lock Loaded") == nil)
+		check(mock:find("Successfully Loaded") == nil)
 		near(mock:countRenderBindings(),0);near(mock.counters.cameraWrites,0)
 	end)
 
@@ -867,7 +868,7 @@ return function(reloadBundle)
 		local title=mock:find("SEDWARE | Load Failed")
 		check(title ~= nil,"startup failure toast was not visible")
 		for _,node in ipairs(mock.playerGui:GetDescendants()) do
-			check(node.Text ~= "Cam Lock Loaded","failure emitted a success notification")
+			check(node.Text ~= "Successfully Loaded","failure emitted a success notification")
 		end
 		near(mock.counters.cameraWrites,0);near(mock:countRenderBindings(),0)
 		mock:advance(2.1)
