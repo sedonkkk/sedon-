@@ -22,6 +22,7 @@ def main():
     sources = sorted((ROOT/'src/cam').glob('*.luau')) + sorted((ROOT/'tests').glob('cam*.luau'))
     sources += [ROOT/'tests/CamMock.luau', ROOT/'tests/CamV2Mock.luau', ROOT/'SedwareCamLock.lua']
     sources += sorted((ROOT/'tests/studio').glob('Cam*.luau'))
+    sources += sorted((ROOT/'src/cam_server').glob('*.luau'))
     if (ROOT/'CamLoader.lua').exists():
         sources.append(ROOT/'CamLoader.lua')
     for path in sources:
@@ -42,7 +43,8 @@ def main():
         ' local chunk=assert(loadstring(source,"SedwareCamLock.bundleTest"))\n'
         ' setfenv(chunk,env)\n return chunk()\nend\n'
         'require("./cam_gui_body")(reloadBundle)\nrequire("./cam_v2_body")(reloadBundle)\n'
-        'require("./cam_v2_perf_body")(reloadBundle)\n'+loader_test, encoding='utf-8')
+        'require("./cam_v2_perf_body")(reloadBundle)\n'
+        'require("./cam_v3_body")(reloadBundle,'+literal((ROOT/'src/cam_server/MovementServer.server.luau').read_text())+')\n'+loader_test, encoding='utf-8')
     try:
         subprocess.run([runner, str(harness)], cwd=ROOT, check=True)
     finally:

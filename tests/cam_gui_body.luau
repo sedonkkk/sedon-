@@ -108,7 +108,7 @@ return function(reloadBundle)
 		check(ui.gui.Parent == mock.playerGui)
 		near(size(ui.controls), 17); near(size(ui.hitPartOptions), 3)
 		local expected = {Enabled=false, HitPart="UpperTorso",
-			PredictionX=0.1205, PredictionY=0.08, Smoothness=0.405, Radius=180}
+			PredictionX=13.15, PredictionY=13.15, Smoothness=0.405, Radius=180}
 		for field, value in pairs(expected) do
 			check(session.config[field] == value, "incorrect default " .. field)
 			check(ui.values[field] == value)
@@ -285,16 +285,16 @@ return function(reloadBundle)
 		for index=1,8 do mock:move(target,V.new(index,index*0.5,-50-index*0.2));mock:advance(0.05) end
 		local history, before = session.prediction.history, session:GetPrediction()
 		check(before.velocity.X > 0 and before.velocity.Y > 0 and before.velocity.Z < 0)
-		edit(session,"PredictionX","0.2");mock:advance(0.001)
+		edit(session,"PredictionX",tostring(0.2*13.15/0.1205));mock:advance(0.001)
 		local x = session:GetPrediction()
 		near(x.predictionX,0.2);near(x.predictionY,0.08)
 		check(x.position.X > before.position.X and x.position.Z < before.position.Z)
 		check(session.prediction.history == history)
-		edit(session,"PredictionY","0.15");mock:advance(0.001)
+		edit(session,"PredictionY",tostring(0.15*13.15/0.08));mock:advance(0.001)
 		local y = session:GetPrediction()
 		near(y.predictionX,0.2);near(y.predictionY,0.15)
 		check(y.position.Y > x.position.Y and session.prediction.history == history)
-		edit(session,"PredictionX","0.24");edit(session,"PredictionY","0.10");mock:advance(0.001)
+		edit(session,"PredictionX",tostring(0.24*13.15/0.1205));edit(session,"PredictionY",tostring(0.10*13.15/0.08));mock:advance(0.001)
 		local gain = session:GetPrediction()
 		check(gain.camGain==nil);near(gain.predictionX,0.24);near(gain.predictionY,0.10)
 		check(gain.position.X > y.position.X and gain.position.Y < y.position.Y)
@@ -322,8 +322,8 @@ return function(reloadBundle)
 	test("invalid finite ranges and nonnumeric edits restore fields without corrupting lock", function(mock, create)
 		local target=mock:addPlayer("InvalidEdits",mock.env.Vector3.new(0,0,-50))
 		local session=create({Enabled=true})
-		for field, values in pairs({PredictionX={"nan","-0.1","0.7"},
-			PredictionY={"","1e309","0.7"},Smoothness={"-1","2","nan"},Radius={"0","2001","abc"}}) do
+		for field, values in pairs({PredictionX={"nan","-0.1","1001"},
+			PredictionY={"","1e309","1001"},Smoothness={"-1","2","nan"},Radius={"0","2001","abc"}}) do
 			local previous,text=session.config[field],session.ui.controls[field].Text
 			for _,value in ipairs(values) do
 				edit(session,field,value)
@@ -486,8 +486,8 @@ return function(reloadBundle)
 		mock.camera._props.CFrame = rolled
 		local target = mock:addPlayer("InheritedRoll", V.new(15,0,-50))
 		local session = create({Enabled=true,Smoothness=0.9})
-		local expected = {HitPart="UpperTorso",PredictionX=0.1205,
-			PredictionY=0.08,Smoothness=0.9,Radius=180}
+		local expected = {HitPart="UpperTorso",PredictionX=13.15,
+			PredictionY=13.15,Smoothness=0.9,Radius=180}
 		local subject = mock.camera.CameraSubject
 		mock:resetCounters()
 		for _=1,60 do

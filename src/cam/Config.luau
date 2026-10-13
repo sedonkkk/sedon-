@@ -1,18 +1,24 @@
 --!nonstrict
--- V2 uses direct X/Z and Y horizons in seconds; no prediction gain.
+-- V3 visible scale has one explicit, provisional linear calibration to seconds.
 local PinkConfig = if script then require(script.Parent.Parent.pink.Config) else require("../pink/Config")
 local Config = {}
 
 -- The standalone builder copies this literal to the editable file header.
 Config.sourceLiteral = [=[{
  Enabled=false, HitPart="UpperTorso",
- PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=180,
+ PredictionX=13.15, PredictionY=13.15, Smoothness=0.405, Radius=180,
  LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
  Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
  FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
  MovementAuthorized=false,
+ ReferenceScale=13.15, ReferenceHorizontalSeconds=0.1205, ReferenceVerticalSeconds=0.0800,
+ MinScale=0, MaxScale=100, TrackingMode="Fixed", AdaptiveMinTau=0.008, AdaptiveMaxTau=0.06,
+ AdaptiveErrorDegrees=8, AdaptiveGainSmoothing=0.08, CriticalFrequency=18,
+ AngularMaxSpeed=720, AngularMaxAcceleration=4000, SmartSelection=false,
+ TargetGraceSeconds=0.2, ReleaseRadiusMultiplier=1.3, TargetVisibilityHz=10,
+ MotionFilter="Memory", FilterMinCutoff=1, FilterBeta=0.05, AlphaBetaAlpha=0.85, AlphaBetaBeta=0.05,
  ESP=false, Hitboxes=false, Names=false, ESPTargetMode="All", ESPUsername="",
- ESPUpdateHz=20, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
+ ESPUpdateHz=10, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
  ShowFOV=false,
  -- Internal settings: these intentionally have no extra GUI controls.
  LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
@@ -33,7 +39,12 @@ Config.sourceLiteral = [=[{
 Config.HitParts = {"Head", "UpperTorso", "HumanoidRootPart"}
 Config.hitParts = Config.HitParts
 Config.numericLimits = {
- PredictionX={0,0.6}, PredictionY={0,0.6}, Smoothness={0,1}, Radius={1,2000},
+ PredictionX={0,1000}, PredictionY={0,1000}, ReferenceScale={0.001,1000},
+ ReferenceHorizontalSeconds={0,0.6}, ReferenceVerticalSeconds={0,0.6}, MinScale={0,1000}, MaxScale={0.001,1000},
+ AdaptiveMinTau={0.001,1}, AdaptiveMaxTau={0.001,1}, AdaptiveErrorDegrees={0.01,180}, AdaptiveGainSmoothing={0,1},
+ CriticalFrequency={0.1,100}, AngularMaxSpeed={1,5000}, AngularMaxAcceleration={1,50000},
+ TargetGraceSeconds={0,2}, ReleaseRadiusMultiplier={1,3}, TargetVisibilityHz={1,30},
+ FilterMinCutoff={0.01,100}, FilterBeta={0,10}, AlphaBetaAlpha={0.01,1}, AlphaBetaBeta={0.001,1}, Smoothness={0,1}, Radius={1,2000},
  CameraDebugInterval={0.1,10}, NotificationCooldown={0.1,30},
  FlySpeed={1,200}, WalkSpeed={1,100}, FlySmoothing={0,1}, FlyMaxForce={1000,10000000},
  ESPUpdateHz={1,30}, ESPMaxDistance={10,2000},
@@ -49,8 +60,8 @@ Config.limits = Config.numericLimits
 Config.controls = {
  {key="Enabled",label="Enable",kind="toggle",tab="MAIN"},
  {key="HitPart",label="Hit Part",kind="choice",options=Config.HitParts,tab="MAIN"},
- {key="PredictionX",label="Prediction X",kind="number",decimals=4,tab="MAIN"},
- {key="PredictionY",label="Prediction Y",kind="number",decimals=4,tab="MAIN"},
+ {key="PredictionX",label="Prediction X",kind="number",decimals=2,tab="MAIN"},
+ {key="PredictionY",label="Prediction Y",kind="number",decimals=2,tab="MAIN"},
  {key="Smoothness",label="Smoothness",kind="number",decimals=3,tab="MAIN"},
  {key="Radius",label="Radius",kind="number",decimals=0,tab="MAIN"},
  {key="Fly",label="Fly",kind="toggle",tab="MISC",section="MOVEMENT"},
@@ -77,13 +88,19 @@ end
 function Config.defaults()
  return {
   Enabled=false, HitPart="UpperTorso",
-  PredictionX=0.1205, PredictionY=0.0800, Smoothness=0.405, Radius=180,
+  PredictionX=13.15, PredictionY=13.15, Smoothness=0.405, Radius=180,
   LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
   Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
   FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
   MovementAuthorized=false,
+ ReferenceScale=13.15, ReferenceHorizontalSeconds=0.1205, ReferenceVerticalSeconds=0.0800,
+ MinScale=0, MaxScale=100, TrackingMode="Fixed", AdaptiveMinTau=0.008, AdaptiveMaxTau=0.06,
+ AdaptiveErrorDegrees=8, AdaptiveGainSmoothing=0.08, CriticalFrequency=18,
+ AngularMaxSpeed=720, AngularMaxAcceleration=4000, SmartSelection=false,
+ TargetGraceSeconds=0.2, ReleaseRadiusMultiplier=1.3, TargetVisibilityHz=10,
+ MotionFilter="Memory", FilterMinCutoff=1, FilterBeta=0.05, AlphaBetaAlpha=0.85, AlphaBetaBeta=0.05,
   ESP=false, Hitboxes=false, Names=false, ESPTargetMode="All", ESPUsername="",
-  ESPUpdateHz=20, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
+  ESPUpdateHz=10, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
   ShowFOV=false,
   LockKey="C", AutoPrediction=false, PingCompensation=true, PingSmoothing=0.8,
   PingReferences={{PingMs=55,X=0.113,Y=0.075},{PingMs=62,X=0.120,Y=0.080},{PingMs=70,X=0.128,Y=0.085}},
@@ -156,8 +173,8 @@ function Config.toPredictionConfig(config)
  for _,key in sharedFields do legacy[key]=config[key] end
  legacy.TargetPart=config.HitPart
  legacy.WeaponProfile="Default"
- legacy.PredictionX=math.clamp(config.PredictionX,config.MinPredictionX,config.MaxPredictionX)
- legacy.PredictionY=math.clamp(config.PredictionY,config.MinPredictionY,config.MaxPredictionY)
+ legacy.PredictionX=math.clamp(config.PredictionX*config.ReferenceHorizontalSeconds/config.ReferenceScale,config.MinPredictionX,config.MaxPredictionX)
+ legacy.PredictionY=math.clamp(config.PredictionY*config.ReferenceVerticalSeconds/config.ReferenceScale,config.MinPredictionY,config.MaxPredictionY)
  legacy.PingReferences={}
  for _,point in config.PingReferences do table.insert(legacy.PingReferences,table.clone(point)) end
  for _,range in {"Close","Medium","Long"} do legacy[range.."Offset"]=config[range.."Offset"] end
@@ -178,6 +195,11 @@ function Config.new(overrides)
  for key,bounds in Config.numericLimits do
   if config[key]<bounds[1] or config[key]>bounds[2] then return nil,key.." fuera de rango" end
  end
+ if config.MinScale>config.MaxScale or config.PredictionX<config.MinScale or config.PredictionX>config.MaxScale
+  or config.PredictionY<config.MinScale or config.PredictionY>config.MaxScale then return nil,"Prediction scale fuera de límites configurados" end
+ if config.AdaptiveMinTau>config.AdaptiveMaxTau then return nil,"Adaptive tau limits invertidos" end
+ if not table.find({"Fixed","Adaptive","Critical"},config.TrackingMode) then return nil,"TrackingMode inválido" end
+ if not table.find({"Memory","AlphaBeta","OneEuro"},config.MotionFilter) then return nil,"MotionFilter inválido" end
  if config.HistoryCapacity%1~=0 then return nil,"HistoryCapacity debe ser entero" end
  if not table.find(Config.HitParts,config.HitPart) then return nil,"HitPart desconocido" end
  if config.MinPredictionX>config.MaxPredictionX or config.MinPredictionY>config.MaxPredictionY then

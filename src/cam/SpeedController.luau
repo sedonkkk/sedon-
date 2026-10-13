@@ -13,6 +13,9 @@ function SpeedController:stop()
 end
 function SpeedController:sync(entry,flying)
  if not self.config.Speed or flying or not MovementAccess.allowed(self.config,self.report) or not MovementAccess.ready(entry,self.report.world) then self:stop();return end
+ if self.report.movementBridge and self.report.movementBridge.available then
+  self.active=self.report.movementBridge.active and self.report.movementBridge.serverSpeed==true;return
+ end
  if self.humanoid~=entry.humanoid then
   self:stop();self.humanoid=entry.humanoid;self.original=self.humanoid.WalkSpeed
  end

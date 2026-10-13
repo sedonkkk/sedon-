@@ -66,6 +66,17 @@ function UI:setValue(field,value)
  if field=="ESPTargetMode" and not self.building then self:_layoutMisc() end
  return true
 end
+function UI:setStatus(movement,esp,available)
+ if self.destroyed then return end
+ self.movementAvailable=available
+ if self.movementStatus.Text~=movement then self.movementStatus.Text=movement end
+ if self.espStatus.Text~=esp then self.espStatus.Text=esp end
+ for _,field in {"Fly","Speed"} do
+  local text=if not available then "N/A" elseif self.values[field] then "ON" else "OFF"
+  self.controls[field].Active=available
+  if self.controls[field].Text~=text then self.controls[field].Text=text end
+ end
+end
 function UI:setCapture(field,active)
  if self.destroyed then return end
  self.capturing=if active then field else nil
@@ -185,6 +196,7 @@ function UI:_row(parent,descriptor)
   control=self:_button(row,descriptor.key,"",UDim2.fromOffset(164,3),UDim2.fromOffset(160,27))
   self:_connect(control.Activated,function()
    if self.minimized or self.tab~=descriptor.tab then return end
+   if (descriptor.key=="Fly" or descriptor.key=="Speed") and self.movementAvailable==false then return end
    if descriptor.kind=="toggle" then self:_change(descriptor.key,not self.values[descriptor.key])
    elseif descriptor.kind=="choice" then self:_openDropdown(descriptor.key)
    elseif descriptor.kind=="keybind" then self:_action("CaptureKey",descriptor.key) end
@@ -195,11 +207,13 @@ function UI:_row(parent,descriptor)
 end
 function UI:_layoutMisc()
  if not self.miscScroll then return end
- local y=26
+ self.movementStatus.Position=UDim2.fromOffset(0,20)
+ local y=42
  for _,descriptor in Config.controls do
   if descriptor.tab=="MISC" and descriptor.section=="MOVEMENT" then self.rows[descriptor.key].Position=UDim2.fromOffset(0,y);y+=ROW end
  end
- self.espLabel.Position=UDim2.fromOffset(0,y+10);y+=38
+ self.espLabel.Position=UDim2.fromOffset(0,y+10)
+ self.espStatus.Position=UDim2.fromOffset(0,y+28);y+=52
  for _,descriptor in Config.controls do
   if descriptor.section=="ESP" then
    local visible=descriptor.key~="ESPUsername" or self.values.ESPTargetMode=="Specific Player"
@@ -260,6 +274,8 @@ function UI.new(playerGui,config,onChange,onNotice,onAction,player)
    Size=UDim2.fromScale(1,1),CanvasSize=UDim2.fromOffset(0,500),ScrollBarThickness=3,ScrollBarImageColor3=C.Pink,
    ScrollingDirection=Enum.ScrollingDirection.Y,ClipsDescendants=true,ZIndex=4},self.pages.MISC)
   self.movementLabel=self:_label(self.miscScroll,"MovementLabel","MOVEMENT",UDim2.fromOffset(0,0),UDim2.fromOffset(300,22),10,C.Pink)
+  self.movementStatus=self:_label(self.miscScroll,"MovementStatus","Checking authorization",UDim2.fromOffset(0,20),UDim2.fromOffset(320,16),9,C.Muted)
+  self.espStatus=self:_label(self.miscScroll,"ESPStatus","Enable ESP + Hitboxes or Names",UDim2.fromOffset(0,263),UDim2.fromOffset(320,16),9,C.Muted)
   self.espLabel=self:_label(self.miscScroll,"ESPLabel","ESP",UDim2.fromOffset(0,245),UDim2.fromOffset(300,22),10,C.Pink)
   local mainIndex=0
   for _,descriptor in Config.controls do

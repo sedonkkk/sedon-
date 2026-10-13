@@ -22,16 +22,19 @@ function PlayerRegistry:_refresh(entry)
  entry.humanoid=character and character:FindFirstChildOfClass("Humanoid")
  entry.root=character and character:FindFirstChild("HumanoidRootPart")
  entry.head=character and character:FindFirstChild("Head")
+ if entry.root and not entry.root:IsA("BasePart") then entry.root=nil end
+ if entry.head and not entry.head:IsA("BasePart") then entry.head=nil end
  if oldHumanoid~=entry.humanoid then
   if entry.deathConnection then entry.deathConnection:Disconnect();entry.deathConnection=nil end
   if entry.humanoid then
-   entry.deathConnection=entry.charCleanup:connect(entry.humanoid.Died,function() self:_emit("Died",entry) end)
+   entry.deathConnection=entry.humanoid.Died:Connect(function() self:_emit("Died",entry) end)
   end
  end
  self:_emit("Ready",entry)
 end
 function PlayerRegistry:_character(entry,character)
- entry.charCleanup:destroy();entry.charCleanup=Cleanup.new();entry.deathConnection=nil
+ if entry.deathConnection then entry.deathConnection:Disconnect();entry.deathConnection=nil end
+ entry.charCleanup:destroy();entry.charCleanup=Cleanup.new()
  entry.character=character;entry.humanoid=nil;entry.root=nil;entry.head=nil
  if character then
   entry.charCleanup:connect(character.ChildAdded,function() self:_refresh(entry) end)
@@ -55,13 +58,15 @@ function PlayerRegistry:_remove(player)
  self.entries[player]=nil;self.byUsername[string.lower(player.Name)]=nil
  for index,value in self.list do if value==entry then table.remove(self.list,index);break end end
  self:_emit("PlayerRemoving",entry)
+ if entry.deathConnection then entry.deathConnection:Disconnect();entry.deathConnection=nil end
  entry.cleanup:destroy();entry.charCleanup:destroy()
 end
 function PlayerRegistry:lookup(username) return self.byUsername[string.lower(username)] end
 function PlayerRegistry:destroy()
  if self.destroyed then return end
  self.destroyed=true;self.cleanup:destroy()
- for _,entry in self.list do entry.cleanup:destroy();entry.charCleanup:destroy() end
+ for _,entry in self.list do if entry.deathConnection then entry.deathConnection:Disconnect();entry.deathConnection=nil end
+ entry.cleanup:destroy();entry.charCleanup:destroy() end
  table.clear(self.entries);table.clear(self.list);table.clear(self.byUsername)
 end
 return PlayerRegistry

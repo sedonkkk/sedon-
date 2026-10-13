@@ -10,6 +10,12 @@
           "$path": "SedwareCamLock.lua"
         }
       }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "SEDWAREMovementServer": {
+        "$path": "src/cam_server/MovementServer.server.luau"
+      }
     }
   }
 }

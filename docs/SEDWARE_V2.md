@@ -1,3 +1,5 @@
+> Documento histórico de V2. La versión actual es [SEDWARE V3](SEDWARE_V3.md); las URLs de esta guía ejecutan V2.
+
 # SEDWARE CAM LOCK V2 — PINK EDITION
 
 Actualización sobre [SedwareCamLock.lua](../SedwareCamLock.lua), generado a partir de los módulos de `src/cam` y los algoritmos existentes. Se conservan PinkDotLock.lua, DaHoodPrediction.lua, sus fuentes y el controlador de cámara corregido. El archivo autónomo incorpora 28 módulos; no carga otros archivos Lua ni solicita servidores durante la ejecución.

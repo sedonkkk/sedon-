@@ -184,7 +184,7 @@ return function(reloadBundle)
   mock:advance(0.11);local renderer=s.esp.renderers[target];check(renderer~=nil)
   local box,name=renderer.box,renderer.billboard
   mock:respawn(target,mock.env.Vector3.new(20,0,-50));mock:advance(0.11)
-  check(renderer.box==box and renderer.billboard==name and box.Adornee==target.Character)
+  check(renderer.box==box and renderer.billboard==name and box.Adornee==target.Character:FindFirstChild("HumanoidRootPart"))
   mock:removePlayer(target);near(count(s.esp.renderers),0)
   near(mock:liveInstances("SelectionBox"),0);near(mock:liveInstances("BillboardGui"),0)
  end)

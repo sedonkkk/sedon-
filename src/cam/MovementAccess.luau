@@ -9,6 +9,6 @@ function MovementAccess.allowed(config,report)
 end
 function MovementAccess.ready(entry,world)
  return entry and entry.character and entry.character:IsDescendantOf(world)
-  and entry.humanoid and entry.humanoid.Health>0 and entry.root and entry.root:IsA("BasePart")
+  and entry.humanoid and entry.humanoid.Health>0 and entry.root and entry.root:IsA("BasePart") and not entry.root.Anchored
 end
 return MovementAccess

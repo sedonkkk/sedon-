@@ -60,6 +60,17 @@ function TargetSelector:resolve(player)
  return {player=player,character=character,humanoid=humanoid,part=part,actualHitPart=part.Name,
   distanceStuds=distance,valid=true}
 end
+function TargetSelector:validateLocked(data)
+ -- Reuse the locked record; no allocation or body-part search per camera frame.
+ local p,c,h,part=data.player,data.character,data.humanoid,data.part
+ if p.Parent~=self.services.Players or p.Character~=c or not c:IsDescendantOf(self.world) then return nil,"character unavailable" end
+ if not h:IsDescendantOf(c) or not finite(h.Health) or h.Health<=0 then return nil,"target is dead/humanoid replaced" end
+ if not part:IsDescendantOf(c) or not vector(part.Position) then return nil,"Hit Part unavailable" end
+ local origin=self:origin();if not origin then return nil,"camera origin unavailable" end
+ local distance=(part.Position-origin).Magnitude
+ if distance>self.config.MaxDistance then return nil,"target exceeds MaxDistance" end
+ data.distanceStuds=distance;return data
+end
 function TargetSelector:visible(data)
  if not self.config.VisibilityCheck then return true end
  if not self.rayParams then
@@ -72,6 +83,19 @@ function TargetSelector:visible(data)
  if direction.Magnitude<0.001 then return true end
  local hit=self.world:Raycast(origin,direction,self.rayParams)
  return hit==nil or (hit.Instance and hit.Instance:IsDescendantOf(data.character))
+end
+function TargetSelector:retain(data,now)
+ local camera=self.world.CurrentCamera
+ if not camera then return false,"camera missing" end
+ local point,onScreen=camera:WorldToViewportPoint(data.part.Position)
+ local reference=self:reference(now)
+ local inBounds=onScreen and point.Z>0 and reference
+  and ((point.X-reference.X)^2+(point.Y-reference.Y)^2)<=(self.config.Radius*self.config.ReleaseRadiusMultiplier)^2
+ local visible=self:visible(data)
+ if inBounds and visible then self.lossSince=nil;return true end
+ self.lossSince=self.lossSince or now
+ if now-self.lossSince<=self.config.TargetGraceSeconds then return nil,if visible then "screen grace" else "occlusion grace" end
+ return false,if visible then "outside release radius/offscreen" else "occluded beyond grace"
 end
 function TargetSelector:acquire(player)
  self.acquisitionCount=(self.acquisitionCount or 0)+1
@@ -92,11 +116,12 @@ function TargetSelector:acquire(player)
    if data then
     local point,onScreen=camera:WorldToViewportPoint(data.part.Position)
     data.screenPosition=point;data.onScreen=onScreen==true and vector(point) and point.Z>0
-    data.visible=self:visible(data)
     if not data.onScreen then reason="offscreen or behind camera"
-    elseif not data.visible then reason="occluded"
-    elseif not Selection.within(data,reference,self.config.Radius) then reason="outside Radius"
-    else table.insert(candidates,data);diagnostics.valid+=1 end
+    elseif ((point.X-reference.X)^2+(point.Y-reference.Y)^2)>self.config.Radius^2 then reason="outside Radius"
+    else
+     data.visible=self:visible(data)
+     if not data.visible then reason="occluded" else table.insert(candidates,data);diagnostics.valid+=1 end
+    end
    end
    if reason and #diagnostics.reasons<32 then table.insert(diagnostics.reasons,tostring(candidate.Name)..": "..reason) end
   end

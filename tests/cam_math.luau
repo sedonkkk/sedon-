@@ -30,17 +30,19 @@ local function configuration(overrides)
 end
 local function moving(overrides)
  local input={Enabled=true,MemoryTracking=false}
- for key,value in overrides or {} do input[key]=value end
+ for key,value in overrides or {} do
+  input[key]=if key=="PredictionX" then value*13.15/0.1205 elseif key=="PredictionY" then value*13.15/0.08 else value
+ end
  local engine=PredictionEngine.new(configuration(input))
  check(engine:observe(0,zero,"Running"))
  check(engine:observe(0.1,V.new(1,2,3),"Running"))
  return engine
 end
 
-test("standalone header and independent defaults match V2 controls",function()
+test("standalone header and independent defaults match V3 controls",function()
  local a,b=Config.defaults(),Config.defaults()
  check(not a.Enabled and a.HitPart=="UpperTorso")
- check(a.CamPrediction==nil);near(a.PredictionX,0.1205);near(a.PredictionY,0.08)
+ check(a.CamPrediction==nil);near(a.PredictionX,13.15);near(a.PredictionY,13.15)
  near(a.Smoothness,0.405);near(a.Radius,180)
  near(a.PredictionSmoothing,0);near(a.VelocitySmoothing,0.06)
  check(a.MemoryTracking and a.VelocityPrediction and a.PingCompensation)
@@ -169,7 +171,7 @@ test("numeric control updates preserve motion and ping and apply on next predict
  local velocity=history.velocity
  local config=configuration(engine.config)
  for _,edit in {{"FlySpeed",80},{"PredictionX",0.1},{"PredictionY",0.04},{"Smoothness",0.9},{"Radius",120}} do
-  check(Config.updateField(config,edit[1],edit[2]))
+  check(Config.updateField(config,edit[1],if edit[1]=="PredictionX" then edit[2]*13.15/0.1205 elseif edit[1]=="PredictionY" then edit[2]*13.15/0.08 else edit[2]))
   check(engine:updateConfig(config))
   check(engine.history==history and engine.history:latest()==latest and engine.latency==latency)
   vectorNear(engine.history.velocity,velocity)

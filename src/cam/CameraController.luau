@@ -66,6 +66,18 @@ function CameraController.alpha(smoothness,dt)
  return math.clamp(1-math.exp(-dt/tau),0,1)
 end
 
+-- Closed-form critically damped response to a piecewise constant setpoint.
+-- Rate/acceleration saturation is explicit and measured separately in the lab.
+function CameraController.critical(delta,velocity,omega,dt,maxRate,maxAcceleration)
+ local x=-delta;local e=math.exp(-omega*dt);local q=velocity+omega*x
+ local step=delta+(x+q*dt)*e
+ local v=(velocity-omega*q*dt)*e
+ local bounded=math.clamp(v,-maxRate,maxRate)
+ bounded=math.clamp(bounded,velocity-maxAcceleration*dt,velocity+maxAcceleration*dt)
+ if bounded~=v then step=(velocity+bounded)*dt*0.5 end
+ if delta==0 or step*delta<0 or math.abs(step)>math.abs(delta) then return delta,0 end
+ return step,bounded
+end
 local function nativeVector(x,y,z) return Vector3.new(x,y,z) end
 local function nativeFromBasis(position,right,up,look) return CFrame.fromMatrix(position,right,up,-look) end
 
@@ -93,6 +105,7 @@ function CameraController:reset()
  self.camera=nil
  self.lastFrame=nil
  self.yaw=nil;self.pitch=nil;self.polarHold=nil;self.polarTurn=nil
+ self.adaptiveTau=nil;self.yawVelocity=0;self.pitchVelocity=0;self.mode=nil
  self.diagnostics=diagnostic("RESET")
 end
 function CameraController:destroy() self:reset() end
@@ -151,14 +164,31 @@ function CameraController:_update(camera,predicted,dt)
  local yawDelta=shortest(targetYaw-previousYaw)
  local polarTurn=sameCamera and self.polarTurn==true
  if wasHeld and not held and math.abs(yawDelta)>1e-3 then polarTurn=true end
+ local mode=self.config.TrackingMode or "Fixed"
+ if not sameCamera or self.mode~=mode then self.yawVelocity=0;self.pitchVelocity=0;self.adaptiveTau=nil end
+ self.mode=mode
+ if mode=="Adaptive" then
+  local errorDegrees=math.deg(math.sqrt(yawDelta*yawDelta+(targetPitch-previousPitch)^2))
+  local gain=errorDegrees/(errorDegrees+self.config.AdaptiveErrorDegrees)
+  local wanted=math.clamp((self.config.Smoothness/.405)^2*(self.config.AdaptiveMaxTau+(self.config.AdaptiveMinTau-self.config.AdaptiveMaxTau)*gain),self.config.AdaptiveMinTau,self.config.AdaptiveMaxTau)
+  local ga=if self.config.AdaptiveGainSmoothing==0 then 1 else 1-math.exp(-dt/self.config.AdaptiveGainSmoothing)
+  self.adaptiveTau=if self.adaptiveTau then self.adaptiveTau+(wanted-self.adaptiveTau)*ga else wanted
+  alpha=if self.config.Smoothness==0 then 1 else 1-math.exp(-dt/self.adaptiveTau)
+ end
  local yawStep=yawDelta*alpha
+ local pitchStep=(targetPitch-previousPitch)*alpha
+ if mode=="Critical" and self.config.Smoothness>0 then
+  local maxRate=math.rad(self.config.AngularMaxSpeed);local maxAccel=math.rad(self.config.AngularMaxAcceleration)
+  yawStep,self.yawVelocity=CameraController.critical(yawDelta,self.yawVelocity or 0,self.config.CriticalFrequency*.405/math.max(self.config.Smoothness,.001),dt,maxRate,maxAccel)
+  pitchStep,self.pitchVelocity=CameraController.critical(targetPitch-previousPitch,self.pitchVelocity or 0,self.config.CriticalFrequency*.405/math.max(self.config.Smoothness,.001),dt,maxRate,maxAccel)
+ else self.yawVelocity=0;self.pitchVelocity=0 end
  -- Only the singular polar transition has a speed guard. It prevents an
  -- instant 180-degree heading flip on exit even with Smoothness=0, without
  -- adding another smoothing filter to ordinary tracking.
  local guarded=not held and (polarTurn or horizontal<POLAR_BAND)
  if guarded then yawStep=math.clamp(yawStep,-POLAR_YAW_RATE*dt,POLAR_YAW_RATE*dt) end
  local resultYaw=wrap(previousYaw+yawStep)
- local resultPitch=math.clamp(previousPitch+(targetPitch-previousPitch)*alpha,-HALF_PI,HALF_PI)
+ local resultPitch=math.clamp(previousPitch+pitchStep,-HALF_PI,HALF_PI)
  if math.abs(shortest(targetYaw-resultYaw))<1e-3 then polarTurn=false end
  local base,previousLook=self:_level(current.Position,previousYaw,previousPitch)
  if not frameOK(base) then return false,"Leveled initial camera CFrame is invalid" end
@@ -172,6 +202,8 @@ function CameraController:_update(camera,predicted,dt)
  self.lastFrame=result
  self.yaw=resultYaw;self.pitch=resultPitch;self.polarHold=held;self.polarTurn=polarTurn
  local data=self.diagnostics
+ data.mode=mode;data.tauSeconds=if mode=="Adaptive" then self.adaptiveTau else CameraController.timeConstant(self.config.Smoothness)
+ data.yawVelocity=self.yawVelocity;data.pitchVelocity=self.pitchVelocity
  data.yaw=math.deg(resultYaw);data.pitch=math.deg(resultPitch)
  data.roll=math.deg(math.atan2(dot(result.RightVector,referenceUp),dot(result.RightVector,referenceRight)))
  data.targetAngle=angle(previousLook,direction);data.deltaTime=dt;data.angularError=angle(result.LookVector,direction)

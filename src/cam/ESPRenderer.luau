@@ -11,22 +11,23 @@ function ESPRenderer:_new(className)
 end
 function ESPRenderer:sync(visible)
  local entry,config=self.entry,self.config
- if config.Hitboxes and entry.character then
+ if config.Hitboxes and entry.root then
   if not self.box then
    self.box=self:_new("SelectionBox");self.box.Name="SEDWAREVisualHitbox"
    self.box.Color3=Branding.Colors.Pink;self.box.SurfaceColor3=Branding.Colors.Pink
    self.box.LineThickness=0.025;self.box.Transparency=0.2;self.box.SurfaceTransparency=0.95;self.box.Parent=self.parent
   end
-  if self.box.Adornee~=entry.character then self.box.Adornee=entry.character end
+  -- BasePart reference avoids ambiguous Model bounding boxes; never resizes physics.
+  if self.box.Adornee~=entry.root then self.box.Adornee=entry.root end
   self.box.Visible=visible
  elseif self.box then self.box:Destroy();self.box=nil end
  if config.Names and (entry.head or entry.root) then
   if not self.billboard then
    self.billboard=self:_new("BillboardGui");self.billboard.Name="SEDWAREPlayerName"
-   self.billboard.AlwaysOnTop=false;self.billboard.LightInfluence=0;self.billboard.Size=UDim2.fromOffset(132,22)
+   self.billboard.AlwaysOnTop=false;self.billboard.LightInfluence=0;self.billboard.Size=UDim2.fromOffset(180,28)
    self.billboard.StudsOffsetWorldSpace=Vector3.new(0,2,0);self.billboard.Parent=self.parent
    self.label=self:_new("TextLabel");self.label.BackgroundTransparency=1;self.label.Size=UDim2.fromScale(1,1)
-   self.label.Text=entry.player.Name;self.label.Font=Enum.Font.GothamMedium;self.label.TextSize=12
+   self.label.Text=entry.player.Name;self.label.Font=Enum.Font.GothamMedium;self.label.TextSize=14
    self.label.TextColor3=Branding.Colors.White;self.label.TextStrokeTransparency=0.5;self.label.Parent=self.billboard
   end
   local adornee=entry.head or entry.root

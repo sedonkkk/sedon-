@@ -20,6 +20,7 @@ function FlyController:start(entry)
  if not MovementAccess.allowed(self.config,self.report) then return false,"Fly requiere una experiencia propia o autorización explícita" end
  if not MovementAccess.ready(entry,self.report.world) then return true,"Waiting for character" end
  if self.active and self.root==entry.root then return true end
+ if self.report.movementBridge and self.report.movementBridge.available then return true,"Waiting for server confirmation" end
  self:stop()
  self.humanoid=entry.humanoid;self.root=entry.root
  self.original={autoRotate=self.humanoid.AutoRotate,platformStand=self.humanoid.PlatformStand,state=self.humanoid:GetState()}
@@ -40,7 +41,11 @@ function FlyController:update(entry,camera,dt,keys)
  if not self.active or self.root~=entry.root then
   local started,reason=self:start(entry);assert(started,reason)
  end
- if not self.active then return end
+ local bridge=self.report.movementBridge
+ if bridge and bridge.available then
+  self.active=bridge.active and bridge.serverFly==true and self.config.Fly
+  if not camera then self.velocity=Vector3.zero;return end
+ elseif not self.active then return end
  if not camera then self.velocity=Vector3.zero;self.constraint.VectorVelocity=Vector3.zero;return end
  if type(dt)~="number" or dt<=0 or dt~=dt or dt==math.huge then return end
  local direction=camera.CFrame.LookVector*((keys.W and 1 or 0)-(keys.S and 1 or 0))
@@ -50,6 +55,7 @@ function FlyController:update(entry,camera,dt,keys)
  local wanted=direction*self.config.FlySpeed
  local alpha=if self.config.FlySmoothing==0 then 1 else 1-math.exp(-dt/self.config.FlySmoothing)
  self.velocity=self.velocity:Lerp(wanted,alpha)
+ if bridge and bridge.available then return end
  self.constraint.VectorVelocity=self.velocity
  if self.constraint.MaxForce~=self.config.FlyMaxForce then self.constraint.MaxForce=self.config.FlyMaxForce end
 end

@@ -11,6 +11,7 @@ local KeybindManager=if script then require(script.Parent.KeybindManager) else r
 local MovementAccess=if script then require(script.Parent.MovementAccess) else require("./MovementAccess")
 local FlyController=if script then require(script.Parent.FlyController) else require("./FlyController")
 local SpeedController=if script then require(script.Parent.SpeedController) else require("./SpeedController")
+local MovementBridge=if script then require(script.Parent.MovementBridge) else require("./MovementBridge")
 local ESPManager=if script then require(script.Parent.ESPManager) else require("./ESPManager")
 local Runtime=if script then require(script.Parent.Parent.pink.Runtime) else require("../pink/Runtime")
 local Overlay=if script then require(script.Parent.Parent.pink.Overlay) else require("../pink/Overlay")
@@ -55,12 +56,14 @@ function Session:LockTarget(player)
   return false,reason
  end
  self.prediction:reset();self.controller:reset();self.predictionOutput=nil
+ self.selector.lossSince=nil;self.nextRetention=nil
  self.nextObservation=nil;self.nextPing=nil
  self:_bindTarget(data)
  self:_ping(now)
  self.prediction:observe(now,data.part.Position,tostring(data.humanoid:GetState()))
  self.nextObservation=now+1/self.config.UpdateHz
  self.predictionOutput=self.prediction:predict(self.selector:origin(),now)
+ if self.predictionOutput then self.predictionOutput.captureTimeKnown=false;self.predictionOutput.ageSource="LocalReadTime" end
  self:_notify("Target Locked")
  Runtime.trace(self.report,"CamTarget","LOCKED",tostring(data.player.Name).." | "..data.actualHitPart)
  return true
@@ -104,7 +107,7 @@ function Session:configure(field,value)
  end
  if field=="LogoAssetId" then self.ui:setLogo(value);self.notifications:setLogo(value) end
  if field=="ShowNotifications" then self.notifications.overlay.config.ShowNotifications=value end
- self.predictionOutput=nil
+ if field=="PredictionX" or field=="PredictionY" or field=="HitPart" or field:match("^Reference") then self.predictionOutput=nil end
  if priorPart~=self.config.HitPart then
   self.controller:reset();self.nextObservation=nil
   if self.locked then
@@ -144,7 +147,9 @@ function Session:_registryChanged(kind,entry)
   if self.ui then self.ui:resetDrag();self.ui:closeDropdown(true) end
  end
 end
-function Session:_movement(dt)
+function Session:_movement(dt,now)
+ self.movementBridge:sync(self.registry.entries[self.player])
+ self.movementBridge:step(now,if self.config.Fly then self.fly.velocity else nil)
  if not self.config.Fly and not self.config.Speed and not self.fly.active and not self.speed.active then return end
  local entry=self.registry.entries[self.player]
  local ok,reason=pcall(function() self.fly:update(entry,self.world.CurrentCamera,dt,self.keybinds:movement()) end)
@@ -159,7 +164,10 @@ function Session:_movement(dt)
  end
 end
 function Session:_espUpdate(now)
+ local profiled=self.config.DebugMode and debug and type(debug.profilebegin)=="function" and type(debug.profileend)=="function"
+ if profiled then debug.profilebegin("SEDWARE ESP") end
  local ok,reason=pcall(function() self.esp:update(now) end)
+ if profiled then debug.profileend() end
  if not ok then
   self.esp:destroy();self.config.ESP=false;self.ui:setValue("ESP",false)
   Runtime.trace(self.report,"ESP","FAIL",reason);self:_notify("ESP unavailable | "..tostring(reason))
@@ -195,15 +203,23 @@ function Session:_track(dt,now)
  self:_ping(now)
  if not self.locked and not self.manualReleased and now>=(self.nextAcquisition or 0) then self:LockTarget() end
  if not self.locked then return end
- local data,reason=self.selector:resolve(self.locked.player)
+ local data,reason=self.selector:validateLocked(self.locked)
  if not data or data.character~=self.locked.character or data.part~=self.locked.part then
   self:UnlockTarget("Target Lost");Runtime.trace(self.report,"CamTarget","LOST",reason or "character/part changed");return
  end
+ if self.config.SmartSelection and (not self.nextRetention or now>=self.nextRetention) then
+  self.nextRetention=now+1/self.config.TargetVisibilityHz
+  local retained,loss=self.selector:retain(data,now)
+  if retained==false then self:UnlockTarget("Target Lost");Runtime.trace(self.report,"CamTarget","LOST",loss);return end
+  self.retentionPaused=retained==nil
+ end
+ if self.config.SmartSelection and self.retentionPaused then self:_pause("Target temporarily outside visible bounds",now);return end
  if not self.nextObservation or now+1e-7>=self.nextObservation then
   self.nextObservation=now+1/self.config.UpdateHz
   self.prediction:observe(now,data.part.Position,tostring(data.humanoid:GetState()))
  end
  self.predictionOutput=self.prediction:predict(camera.CFrame.Position,now)
+ if self.predictionOutput then self.predictionOutput.captureTimeKnown=false;self.predictionOutput.ageSource="LocalReadTime" end
  if not self.predictionOutput then self:_pause("Prediction unavailable or observation stale",now);return end
  if self.config.RespectScriptableCamera and camera.CameraType==Enum.CameraType.Scriptable then
   self:_pause("Scriptable camera active; preserving its controller",now);return
@@ -218,14 +234,35 @@ end
 function Session:_step(dt)
  if self.destroyed then return end
  local now=self:_clock()
+ local started=os.clock()
  self.ui:step(now);self.notifications:step(now)
- self:_track(dt,now);self:_movement(dt);self:_espUpdate(now)
+ self:_track(dt,now);self:_movement(dt,now);self:_espUpdate(now)
  if self.config.ShowFOV then self.ui:updateFOV(self.selector:reference(now),self.config.Radius) else self.ui:updateFOV(nil,0) end
- if self.config.DebugMode and (not self.nextESPDebug or now>=self.nextESPDebug) then
-  self.nextESPDebug=now+1
+ self.updateSeconds=os.clock()-started
+ if not self.nextStatus or now>=self.nextStatus then
+  self.nextStatus=now+0.5
+  local allowed=MovementAccess.allowed(self.config,self.report)
+  local ready=MovementAccess.ready(self.registry.entries[self.player],self.world)
+  local bridge=self.movementBridge
+  local movement=if not allowed then "Unavailable: owned/server authorization required"
+   elseif not ready then "Waiting for living, unanchored character"
+   elseif bridge.available then bridge.state.." | Fly "..tostring(self.fly.active).." Speed "..tostring(self.speed.active)
+   else "Local authorized mode; server replication unverified"
   local stats=self.esp.stats
-  Runtime.trace(self.report,"ESP","PERFORMANCE",string.format("updateMs=%.4f maxMs=%.4f visible=%d considered=%d created=%d",
-   stats.lastSeconds*1000,stats.maxSeconds*1000,stats.visible,stats.considered,stats.created))
+  local esp=if not self.config.ESP then "OFF | Enable ESP + Hitboxes or Names"
+   elseif not self.config.Hitboxes and not self.config.Names then "Choose Hitboxes or Names to show indicators"
+   else string.format("%d visible / %d evaluated | %d active",stats.visible,stats.considered,stats.active)
+  self.ui:setStatus(movement,esp,allowed)
+  if self.config.DebugMode then
+   Runtime.trace(self.report,"Movement","STATUS",movement.." | "..tostring(bridge.reason or ""))
+   Runtime.trace(self.report,"ESP","DIAGNOSTIC",string.format("registered=%d evaluated=%d range=%d screen=%d occluded=%d notReady=%d far=%d offscreen=%d visible=%d active=%d created=%d raycasts=%d ms=%.4f maxMs=%.4f",
+    stats.registered,stats.considered,stats.inRange,stats.onScreen,stats.occluded,stats.notReady,stats.outOfRange,stats.offscreen,stats.visible,stats.active,stats.created,stats.raycasts,stats.lastSeconds*1000,stats.maxSeconds*1000))
+   local p=self.predictionOutput;local d=self.controller.diagnostics
+   Runtime.trace(self.report,"Tracking","DIAGNOSTIC",string.format("target=%s angularError=%.3f scaleX=%.2f scaleY=%.2f horizonX=%.6f horizonY=%.6f smoothness=%.3f mode=%s fps=%.1f pingMs=%s smoothedPingMs=%s localReadAge=%s captureTime=unknown observationDelay=unknown updateMs=%.4f",
+    self.locked and self.locked.player.Name or "none",d.angularError,self.config.PredictionX,self.config.PredictionY,
+    p and p.predictionX or 0,p and p.predictionY or 0,self.config.Smoothness,self.config.TrackingMode,
+    if finite(dt) and dt>0 then 1/dt else 0,tostring(p and p.rawPingMs),tostring(p and p.smoothedPingMs),tostring(p and p.ageSeconds),self.updateSeconds*1000))
+  end
  end
 end
 function Session:destroy()
@@ -233,6 +270,7 @@ function Session:destroy()
  self.destroyed=true;self.config.Enabled=false;self.locked=nil;self.predictionOutput=nil
  self.targetCleanup:destroy();self.cleanup:destroy()
  if self.keybinds then self.keybinds:destroy() end
+ if self.movementBridge then self.movementBridge:destroy() end
  if self.fly then self.fly:destroy() end;if self.speed then self.speed:destroy() end
  if self.esp then self.esp:destroy() end;if self.registry then self.registry:destroy() end
  if self.controller then self.controller:destroy() end
@@ -272,6 +310,7 @@ function Session.init(options,report)
   self.registry=PlayerRegistry.new(self.services.Players,function(kind,entry) self:_registryChanged(kind,entry) end)
   report.registry=self.registry
   self.prediction=PredictionEngine.new(config);self.controller=CameraController.new(config);self.selector=TargetSelector.new(config,report)
+  self.movementBridge=MovementBridge.new(config,report);report.movementBridge=self.movementBridge
   self.fly=FlyController.new(config,report);self.speed=SpeedController.new(config,report);self.esp=ESPManager.new(config,report,self.registry)
   if config.Fly or config.Speed then assert(MovementAccess.allowed(config,report),"Movement configuration requires an authorized experience") end
   stage="Graphics"
