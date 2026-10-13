@@ -24,15 +24,19 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/e18ba899586cd12214bee587802f927fa258d4c9/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 246 pruebas de Pink/SEDWARE y 96 anteriores pasan; el loader carga las funciones de cliente. Los controladores multiarmas y el servidor se distribuyen en el lugar de Studio.
 
-## SEDWARE CAM LOCK V2 — PINK EDITION
+## SEDWARE CAM LOCK V3 — PINK EDITION
 
-[`SedwareCamLock.lua`](SedwareCamLock.lua) actualiza la variante existente con MAIN/MISC, panel minimizable y arrastrable tras respawn, dropdowns sobre una capa independiente y un ImageLabel preparado para el logo original. CamPrediction se elimina: X/Y son segundos directos, Radius arranca en 180. Conserva Memory, Auto Prediction y el controlador sin roll.
+[`SedwareCamLock.lua`](SedwareCamLock.lua) conserva MAIN/MISC, minimizar, arrastre, Memory y cámara sin roll. Prediction X/Y usa una escala provisional explícita: 13.15 → 0.1205 s en X / 0.0800 s en Y. La GUI explica disponibilidad de movimiento y dependencias del ESP.
 
-MISC incorpora Fly/Speed para experiencias autorizadas, keybinds configurables y ESP visible con cajas visuales, nombres y selección exacta de Username. No modifica colisiones ni remotes de juegos ajenos. No se dispone todavía de un asset ID del logo; se utiliza un fallback temporal explícito.
+Incluye un componente propio de servidor para Fly/Speed autorizados, ESP con cajas de referencia/nombres, diagnósticos, Adaptive/Critical experimentales y Calibration Lab. Fixed + Memory sigue por defecto: las alternativas tienen ventajas y costes medidos. No se modifica ningún remote protegido. El logo original sigue esperando un asset ID.
 
-[Guía y límites](docs/SEDWARE_V2.md) · [Demo de experiencia propia](studio/SedwareCamLock.rbxlx) · [Pruebas nativas preparadas](studio/SedwareCamV2Test.rbxlx). `python3 scripts/check_cam.py` pasa 108 casos de V2/cámara y 342 anteriores; las mediciones de CLI con jugadores simulados no son FPS de Roblox. La ejecución nativa sigue pendiente.
+[Guía V3](docs/SEDWARE_V3.md) · [Resultados y CSV](docs/SEDWARE_V3_RESULTS.md) · [Demo propio](studio/SedwareCamLock.rbxlx) · [Runner nativo preparado](studio/SedwareCamV3Test.rbxlx). 458 regresiones CLI/dobles sin fallos; 1944 escenarios sintéticos y 24 condiciones CPU V2/V3. **Candidata: física/ESP visual/FPS de Roblox Studio y Da Hood no verificados.**
 
-[Raw V2 verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/43612248fc40e2750678873acda642ab41f85c35/SedwareCamLock.lua) · [CamLoader.lua V2](CamLoader.lua). Sustituye el loader con commit anterior para ejecutar Pink Edition.
+[Raw V3 verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a/SedwareCamLock.lua) · [CamLoader.lua actualizado](CamLoader.lua). Los cargadores fijados a commits anteriores siguen ejecutando versiones anteriores.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a/SedwareCamLock.lua"))()
+```
 
 ## Ejecutar el laboratorio original
 

@@ -124,3 +124,23 @@ Da Hood original conserva su sistema de armas y validaciones. No hay integració
 - [Roblox SelectionBox](https://create.roblox.com/docs/reference/engine/classes/SelectionBox), [BillboardGui](https://create.roblox.com/docs/reference/engine/classes/BillboardGui), [LinearVelocity](https://create.roblox.com/docs/reference/engine/classes/LinearVelocity), [MicroProfiler](https://create.roblox.com/docs/studio/microprofiler).
 - [Casiez, Roussel, Vogel: 1€ Filter](https://gerycasiez.github.io/1euro/), CHI 2012, DOI [10.1145/2207676.2208639](https://doi.org/10.1145/2207676.2208639).
 - EMA y amortiguación crítica se justifican por las ecuaciones explícitas anteriores; la comparación mide las variantes implementadas, no un controlador abstracto ideal.
+
+## Publicación verificada
+
+Código: commit [`7eeb3d1`](https://github.com/sedonkkk/sedon-/commit/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a). HTTP 200 y bytes Raw idénticos al archivo local: 208746 bytes, SHA256 `44a7b9288a17e0ccc7daee89f6b865de3170ce3a21600340313c22e1e3831fe1`. El loader usa este commit nuevo; no reutiliza el de V2.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a/SedwareCamLock.lua"))()
+```
+
+Requiere un host con `game:HttpGet` y `loadstring`; no es un cargador estándar de LocalScript en un cliente publicado. En tu experiencia propia usa el LocalScript incluido en el demo/Rojo, sin ese loader externo. En un host sin estas APIs, CamLoader.lua informa el error. Todo el código cliente está en el payload; el componente de servidor se instala por separado en la experiencia propia.
+
+Para conservar un handle y limpiar la sesión, asigna el resultado a una variable y llama a `sedware.Unload()`:
+
+```lua
+local sedware = loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a/SedwareCamLock.lua"))()
+-- Cuando quieras terminar:
+sedware.Unload()
+```
+
+Descargas Raw verificadas (mismo commit): [script](https://raw.githubusercontent.com/sedonkkk/sedon-/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a/SedwareCamLock.lua), [demo propio](https://raw.githubusercontent.com/sedonkkk/sedon-/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a/studio/SedwareCamLock.rbxlx), [runner V3](https://raw.githubusercontent.com/sedonkkk/sedon-/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a/studio/SedwareCamV3Test.rbxlx), [runner de roll](https://raw.githubusercontent.com/sedonkkk/sedon-/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a/studio/SedwareCamRollTest.rbxlx). En GitHub puedes abrir el archivo → Raw; conserva el commit en la URL para fijar esta versión.
