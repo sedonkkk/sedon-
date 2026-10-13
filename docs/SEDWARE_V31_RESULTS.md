@@ -9,7 +9,7 @@ Estado: **Luau CLI y dobles de API ejecutados; Roblox Studio, física/render/FPS
 Ambas versiones cargan sus módulos desde el **bundle autónomo real**, no desde una fórmula duplicada.
 
 - V3: commit [`7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a`](https://github.com/sedonkkk/sedon-/blob/7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a/SedwareCamLock.lua), SHA256 `44a7b9288a17e0ccc7daee89f6b865de3170ce3a21600340313c22e1e3831fe1`.
-- V3.1: [`SedwareCamLock.lua`](../SedwareCamLock.lua), 230147 bytes, SHA256 `3a8e56d1220f34b961102f32b59e1a42f470ee58f739b7a3b7eea9c7b9ab602b`.
+- V3.1: commit [`da44a4c7af3857c1fed22b9fb757c012180650ac`](https://github.com/sedonkkk/sedon-/blob/da44a4c7af3857c1fed22b9fb757c012180650ac/SedwareCamLock.lua), 230147 bytes, SHA256 `3a8e56d1220f34b961102f32b59e1a42f470ee58f739b7a3b7eea9c7b9ab602b`.
 - Los cuatro resúmenes JSON contienen el mismo hash V3.1. Si el archivo cambia, estos resultados describen exclusivamente ese snapshot y deben regenerarse.
 
 Herramientas: Luau CLI oficial y `CamV2Mock`. Los cuatro runners se ejecutaron secuencialmente; las mediciones de CPU se hicieron sin ejecutar las regresiones en paralelo.

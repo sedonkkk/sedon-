@@ -4,6 +4,8 @@ Actualización del proyecto existente, basada en el código, observaciones del u
 
 Estado de entrega: código, regresiones CLI/dobles y comparaciones ejecutados; **Roblox Studio, física/render/FPS nativos y Da Hood no verificados**. Se incluye un runner nativo preparado. No se atribuyen disparos fallidos únicamente a la cámara ni se anuncia una corrección del sistema de armas.
 
+Código publicado en el commit [`da44a4c7af3857c1fed22b9fb757c012180650ac`](https://github.com/sedonkkk/sedon-/commit/da44a4c7af3857c1fed22b9fb757c012180650ac). El [Raw nuevo](https://raw.githubusercontent.com/sedonkkk/sedon-/da44a4c7af3857c1fed22b9fb757c012180650ac/SedwareCamLock.lua) devolvió HTTP 200 y coincidió byte por byte con los 230147 bytes probados. CamLoader.lua utiliza ese commit; los cargadores anteriores no reciben esta actualización.
+
 ## Uso
 
 El archivo autónomo es [`SedwareCamLock.lua`](../SedwareCamLock.lua); el cargador verificado y fijado al nuevo commit se publica en el [README](../README.md). Al iniciar aparece el menú. Activa Enable en MAIN y pulsa C para seleccionar o liberar; primera persona usa el centro y tercera persona el cursor. Edita Config al principio del script para los parámetros de seguimiento, movimiento y ESP. El modo de movimiento y el alcance extendido se eligen desde esa configuración; la interfaz existente conserva sus controles.
