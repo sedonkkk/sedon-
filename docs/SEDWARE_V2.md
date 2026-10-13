@@ -119,4 +119,16 @@ Estas cifras cambian según máquina/ejecución. Excluyen el renderizador, rayca
 
 ## Publicación
 
-El nuevo Raw y loader se añadirán después de publicar el commit V2 y comprobar sus bytes. Los enlaces anteriores con commit fijo continúan ejecutando versiones anteriores.
+Código publicado en **43612248fc40e2750678873acda642ab41f85c35**. [SedwareCamLock.lua Raw V2](https://raw.githubusercontent.com/sedonkkk/sedon-/43612248fc40e2750678873acda642ab41f85c35/SedwareCamLock.lua) y [CamLoader.lua](../CamLoader.lua) apuntan a esta versión. Los enlaces anteriores con commit fijo continúan ejecutando versiones anteriores.
+
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/43612248fc40e2750678873acda642ab41f85c35/SedwareCamLock.lua"))()
+```
+
+Raw verificado: HTTP 200, 181.065 bytes, SHA-256 `e5d39e32cc616b85b088f25d712b716edd2c61a5db49090eca0853445e8b8341`. La respuesta se comparó byte por byte con la fuente probada. También se comprobaron los Raw de los lugares:
+
+- [Demo autorizado](https://raw.githubusercontent.com/sedonkkk/sedon-/43612248fc40e2750678873acda642ab41f85c35/studio/SedwareCamLock.rbxlx).
+- [Runner nativo V2](https://raw.githubusercontent.com/sedonkkk/sedon-/43612248fc40e2750678873acda642ab41f85c35/studio/SedwareCamV2Test.rbxlx).
+- [Runner de cámara sin roll](https://raw.githubusercontent.com/sedonkkk/sedon-/43612248fc40e2750678873acda642ab41f85c35/studio/SedwareCamRollTest.rbxlx).
+
+Para conservar una referencia y descargar después, guarda el resultado en `local api = loadstring(...)()` y llama a `api.Unload()`. El loader solo obtiene el archivo público; su compatibilidad depende de que el host permita HTTP y compilar Luau. Un LocalScript publicado normal no incluye esas funciones; en Studio copia el archivo directamente o usa los lugares incluidos.

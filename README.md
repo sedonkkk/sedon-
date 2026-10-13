@@ -32,6 +32,8 @@ MISC incorpora Fly/Speed para experiencias autorizadas, keybinds configurables y
 
 [Guía y límites](docs/SEDWARE_V2.md) · [Demo de experiencia propia](studio/SedwareCamLock.rbxlx) · [Pruebas nativas preparadas](studio/SedwareCamV2Test.rbxlx). `python3 scripts/check_cam.py` pasa 108 casos de V2/cámara y 342 anteriores; las mediciones de CLI con jugadores simulados no son FPS de Roblox. La ejecución nativa sigue pendiente.
 
+[Raw V2 verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/43612248fc40e2750678873acda642ab41f85c35/SedwareCamLock.lua) · [CamLoader.lua V2](CamLoader.lua). Sustituye el loader con commit anterior para ejecutar Pink Edition.
+
 ## Ejecutar el laboratorio original
 
 Abre [`build/AimLab.rbxlx`](build/AimLab.rbxlx) con Roblox Studio y pulsa **Play**. Selecciona un bot con el cursor, mantén **RMB** para orientar la cámara y dispara con **F** o el botón. Puedes minimizar y mover el panel. Sus seis secciones incluyen los controles de predicción, blancos, armas y diagnósticos.
