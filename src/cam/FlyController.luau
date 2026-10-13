@@ -20,7 +20,8 @@ function FlyController:start(entry)
  if not MovementAccess.allowed(self.config,self.report) then return false,"Fly requiere una experiencia propia o autorización explícita" end
  if not MovementAccess.ready(entry,self.report.world) then return true,"Waiting for character" end
  if self.active and self.root==entry.root then return true end
- if self.report.movementBridge and self.report.movementBridge.available then return true,"Waiting for server confirmation" end
+ if MovementAccess.server(self.config,self.report) then return true,"Waiting for server confirmation" end
+ if entry.root:FindFirstChild("SEDWAREServerFlyVelocity") then return true,"Waiting for server controller to release" end
  self:stop()
  self.humanoid=entry.humanoid;self.root=entry.root
  self.original={autoRotate=self.humanoid.AutoRotate,platformStand=self.humanoid.PlatformStand,state=self.humanoid:GetState()}
@@ -42,7 +43,7 @@ function FlyController:update(entry,camera,dt,keys)
   local started,reason=self:start(entry);assert(started,reason)
  end
  local bridge=self.report.movementBridge
- if bridge and bridge.available then
+ if MovementAccess.server(self.config,self.report) then
   self.active=bridge.active and bridge.serverFly==true and self.config.Fly
   if not camera then self.velocity=Vector3.zero;return end
  elseif not self.active then return end
@@ -55,7 +56,7 @@ function FlyController:update(entry,camera,dt,keys)
  local wanted=direction*self.config.FlySpeed
  local alpha=if self.config.FlySmoothing==0 then 1 else 1-math.exp(-dt/self.config.FlySmoothing)
  self.velocity=self.velocity:Lerp(wanted,alpha)
- if bridge and bridge.available then return end
+ if MovementAccess.server(self.config,self.report) then return end
  self.constraint.VectorVelocity=self.velocity
  if self.constraint.MaxForce~=self.config.FlyMaxForce then self.constraint.MaxForce=self.config.FlyMaxForce end
 end

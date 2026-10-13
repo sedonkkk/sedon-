@@ -1,3 +1,5 @@
+> Guía histórica de V3. La actualización actual es [SEDWARE V3.1](SEDWARE_V31.md); sus URL fijadas siguen ejecutando V3.
+
 # SEDWARE V3 — Performance & Tracking
 
 V3 conserva la GUI Pink Edition y el proyecto existente. Esta entrega es una **versión candidata**, comprobada con Luau CLI y dobles explícitos de APIs. La ejecución de Roblox Studio, la apariencia del ESP y la física real siguen pendientes. No se ha verificado en Da Hood.

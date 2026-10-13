@@ -16,8 +16,8 @@ MODULES = {
     **{name: ROOT / f'src/pink/{name}.luau' for name in ('Selection', 'ModeDetector', 'Runtime', 'Overlay')},
     **{name: ROOT / f'src/cam/{name}.luau' for name in
        ('Config', 'Branding', 'UIAnimations', 'PlayerRegistry', 'MovementAccess', 'FlyController',
-        'SpeedController', 'KeybindManager', 'ESPRenderer', 'ESPManager', 'NotificationSystem', 'UI', 'TargetSelector',
-        'CalibrationLab', 'MotionFilter', 'MovementBridge', 'CameraController', 'PredictionEngine', 'Cleanup', 'Session', 'Bootstrap')},
+        'SpeedController', 'KeybindManager', 'ESPAccess', 'ESPRenderer', 'ESPManager', 'NotificationSystem', 'UI', 'TargetSelector',
+        'VerticalControl', 'CalibrationLab', 'MotionFilter', 'MovementBridge', 'CameraController', 'PredictionEngine', 'Cleanup', 'Session', 'Bootstrap')},
 }
 BY_PATH = {path.resolve(): name for name, path in MODULES.items()}
 IMPORT = re.compile(r'if script then require\(script\.[A-Za-z0-9_.]+\) else require\("([./A-Za-z0-9_]+)"\)')
@@ -31,7 +31,7 @@ def source_bundle(check=False):
     manifest = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in MODULES.items()}
     lines = [
         '--!nonstrict',
-        '-- SEDWARE CAM LOCK V3 — PINK EDITION | edit Config below.',
+        '-- SEDWARE CAM LOCK V3.1 — PINK EDITION | edit Config below.',
         '-- Prediction X/Y use a provisional Sedware scale; explicit calibration below. Movement requires authorization.',
         '-- Enabled=false opens the GUI without controlling the camera.',
         '-- Public client APIs only. No remote weapon integration or bypass.',
@@ -45,7 +45,7 @@ def source_bundle(check=False):
         ' local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn',
         ' if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end',
         'end',
-        'bootLog("CamExecution","START","SEDWARE CAM LOCK V3 — PINK EDITION payload began execution")',
+        'bootLog("CamExecution","START","SEDWARE CAM LOCK V3.1 — PINK EDITION payload began execution")',
         'local Config',
         'local configBuilt,headerError=xpcall(function() Config = '+match.group(2)+' end,bootTraceback)',
         'if configBuilt then headerError=nil else bootLog("CamConfiguration","FAIL",headerError) end',
@@ -197,22 +197,22 @@ def studio_place(source_path, check=False):
         else:
             regression_delivery.write_bytes(regression_build.read_bytes())
         print(f'Packaged native roll regression place: {regression_delivery} (not executed in this Linux environment)')
-        v2_runner = ROOT/'tests/studio/CamV3Regression.client.luau'
+        v2_runner = ROOT/'tests/studio/CamV31Regression.client.luau'
         if v2_runner.exists():
-            starter_script.find('Properties/string[@name="Name"]').text = 'CamV3Regression'
+            starter_script.find('Properties/string[@name="Name"]').text = 'CamV31Regression'
             starter_script.find('Properties/ProtectedString[@name="Source"]').text = v2_runner.read_text(encoding='utf-8')
             ET.indent(document, space='  ')
-            v2_build = ROOT/'build/SedwareCamV3Test.rbxlx'
+            v2_build = ROOT/'build/SedwareCamV31Test.rbxlx'
             ET.ElementTree(document).write(v2_build, encoding='utf-8', xml_declaration=True)
-            v2_delivery = ROOT/'studio/SedwareCamV3Test.rbxlx'
+            v2_delivery = ROOT/'studio/SedwareCamV31Test.rbxlx'
             embedded = ET.parse(v2_build).findall('.//ProtectedString[@name="Source"]')
             assert sorted(node.text for node in embedded) == sorted([*expected_sources, v2_runner.read_text(encoding='utf-8')])
             if check:
                 if not v2_delivery.exists() or v2_delivery.read_bytes() != v2_build.read_bytes():
-                    raise RuntimeError('V3 native place differs: run scripts/build_cam.py')
+                    raise RuntimeError('V3.1 native place differs: run scripts/build_cam.py')
             else:
                 v2_delivery.write_bytes(v2_build.read_bytes())
-            print(f'Packaged native V3 regression place: {v2_delivery} (native results pending)')
+            print(f'Packaged native V3.1 regression place: {v2_delivery} (native results pending)')
 
 
 if __name__ == '__main__':

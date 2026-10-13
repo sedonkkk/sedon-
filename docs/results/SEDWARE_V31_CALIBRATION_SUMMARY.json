@@ -1,0 +1,1593 @@
+{
+  "baselineCommit": "7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a",
+  "baselineSha256": "44a7b9288a17e0ccc7daee89f6b865de3170ce3a21600340313c22e1e3831fe1",
+  "currentSha256": "3a8e56d1220f34b961102f32b59e1a42f470ee58f739b7a3b7eea9c7b9ab602b",
+  "rows": 2304,
+  "pairedConfigurations": 1152,
+  "durationSeconds": 3.0,
+  "quick": false,
+  "receiptSamplingHz": 30,
+  "rttSamplingHz": 5,
+  "deterministicNoiseStuds": {
+    "xAmplitude": 0.04,
+    "yAmplitude": 0.025,
+    "zAmplitude": 0
+  },
+  "fpsTimesteps": [
+    30,
+    60,
+    120,
+    144
+  ],
+  "nominalRttMs": [
+    60,
+    100,
+    150,
+    300
+  ],
+  "environment": "Official Luau CLI and CamV2Mock API doubles; no Roblox renderer, physics, network, FPS measurement, weapon or Da Hood run",
+  "capturePolicy": "Simulator delays captured position by instantaneous RTT/2; estimator receives receipt time and independently sampled RTT",
+  "predictedErrorReference": "Future trajectory at requested unmodified horizontal and vertical horizons; shorter safety horizons can increase this metric",
+  "instantErrorReference": "Trajectory at current receipt time; prediction may intentionally lead it",
+  "acquisitionReference": "Time when a run of at least 100ms within 1 degree of predicted setpoint completes; does not measure player-selection acquisition. CSV -1 means not acquired; summary means exclude failed rows",
+  "signChangeReference": "Error sign changes beyond +/-0.05 degree; changing targets can cause them and they do not prove controller oscillation",
+  "aggregateWarning": "Means weight rows equally, not frames; max errors and axis rates include initial acquisition",
+  "groups": [
+    {
+      "group": [
+        "V3",
+        "Fixed"
+      ],
+      "rows": 384,
+      "meanAngularDegrees": 1.4052413677083333,
+      "meanYawErrorDegrees": 1.2919103730963541,
+      "meanPitchErrorDegrees": 0.19755560802083336,
+      "meanSetpointAngularDegrees": 0.4861326371458334,
+      "meanPredictedErrorStuds": 2.2847240979973957,
+      "meanInstantPositionErrorStuds": 1.4395015982552082,
+      "acquisitionSeconds": 0.21946614586458332,
+      "yawSignChanges": 2.4713541666666665,
+      "pitchSignChanges": 6.002604166666667,
+      "stopYawOvershootDegrees": 0.18187342120572916,
+      "landingPitchUndershootDegrees": 0.6689684871510417,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed"
+      ],
+      "rows": 384,
+      "meanAngularDegrees": 1.515621431450521,
+      "meanYawErrorDegrees": 1.3266486426848958,
+      "meanPitchErrorDegrees": 0.2824604286302083,
+      "meanSetpointAngularDegrees": 0.6133258502421876,
+      "meanPredictedErrorStuds": 2.2705135500338542,
+      "meanInstantPositionErrorStuds": 1.4131080216041667,
+      "acquisitionSeconds": 0.23383969908854166,
+      "yawSignChanges": 1.953125,
+      "pitchSignChanges": 5.893229166666667,
+      "stopYawOvershootDegrees": 0.18187342120572916,
+      "landingPitchUndershootDegrees": 0.14591807026302084,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive"
+      ],
+      "rows": 384,
+      "meanAngularDegrees": 1.2740669524375001,
+      "meanYawErrorDegrees": 1.1342552803072916,
+      "meanPitchErrorDegrees": 0.21042274219010415,
+      "meanSetpointAngularDegrees": 1.027579957091146,
+      "meanPredictedErrorStuds": 2.2847240979973957,
+      "meanInstantPositionErrorStuds": 1.4395015982552082,
+      "acquisitionSeconds": 0.5405779803567708,
+      "yawSignChanges": 1.4557291666666667,
+      "pitchSignChanges": 4.2734375,
+      "stopYawOvershootDegrees": 0.14470356658072916,
+      "landingPitchUndershootDegrees": 0.45570224717708335,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive"
+      ],
+      "rows": 384,
+      "meanAngularDegrees": 1.396714652216146,
+      "meanYawErrorDegrees": 1.174506957015625,
+      "meanPitchErrorDegrees": 0.3021515432369792,
+      "meanSetpointAngularDegrees": 1.1411473196223958,
+      "meanPredictedErrorStuds": 2.2705135500338542,
+      "meanInstantPositionErrorStuds": 1.4131080216041667,
+      "acquisitionSeconds": 0.5396520544296876,
+      "yawSignChanges": 1.3723958333333333,
+      "pitchSignChanges": 4.106770833333333,
+      "stopYawOvershootDegrees": 0.14470356658072916,
+      "landingPitchUndershootDegrees": 0.012624691583333333,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical"
+      ],
+      "rows": 384,
+      "meanAngularDegrees": 3.538690396380208,
+      "meanYawErrorDegrees": 3.354098614742188,
+      "meanPitchErrorDegrees": 0.3678994380130209,
+      "meanSetpointAngularDegrees": 3.9532687058411455,
+      "meanPredictedErrorStuds": 2.2847240979973957,
+      "meanInstantPositionErrorStuds": 1.4395015982552082,
+      "acquisitionSeconds": 1.4924116161863636,
+      "yawSignChanges": 0.7395833333333334,
+      "pitchSignChanges": 1.7395833333333333,
+      "stopYawOvershootDegrees": 0.07378495644791667,
+      "landingPitchUndershootDegrees": 0.12674545678645835,
+      "acquisitionFailures": 164
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical"
+      ],
+      "rows": 384,
+      "meanAngularDegrees": 3.5844258721432296,
+      "meanYawErrorDegrees": 3.3550193794375,
+      "meanPitchErrorDegrees": 0.42798267443489585,
+      "meanSetpointAngularDegrees": 3.9478976902187504,
+      "meanPredictedErrorStuds": 2.2705135500338542,
+      "meanInstantPositionErrorStuds": 1.4131080216041667,
+      "acquisitionSeconds": 1.5025529100857142,
+      "yawSignChanges": 0.8125,
+      "pitchSignChanges": 1.5208333333333333,
+      "stopYawOvershootDegrees": 0.07378495644791667,
+      "landingPitchUndershootDegrees": 0.005613487966145834,
+      "acquisitionFailures": 174
+    }
+  ],
+  "scenarios": [
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Walking"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.737237727125,
+      "meanYawErrorDegrees": 0.73671846346875,
+      "meanPitchErrorDegrees": 0.01822076128125,
+      "meanSetpointAngularDegrees": 0.33174131728125,
+      "meanPredictedErrorStuds": 0.98766283759375,
+      "meanInstantPositionErrorStuds": 0.70680004965625,
+      "acquisitionSeconds": 0.1785590278125,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Walking"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.737237727125,
+      "meanYawErrorDegrees": 0.73671846346875,
+      "meanPitchErrorDegrees": 0.01822076128125,
+      "meanSetpointAngularDegrees": 0.33174131728125,
+      "meanPredictedErrorStuds": 0.98766283759375,
+      "meanInstantPositionErrorStuds": 0.70680004965625,
+      "acquisitionSeconds": 0.1785590278125,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Walking"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.5623591379375,
+      "meanYawErrorDegrees": 0.56191199715625,
+      "meanPitchErrorDegrees": 0.00820316046875,
+      "meanSetpointAngularDegrees": 0.654318118625,
+      "meanPredictedErrorStuds": 0.98766283759375,
+      "meanInstantPositionErrorStuds": 0.70680004965625,
+      "acquisitionSeconds": 0.210329861125,
+      "yawSignChanges": 0.59375,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Walking"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.5623591379375,
+      "meanYawErrorDegrees": 0.56191199715625,
+      "meanPitchErrorDegrees": 0.00820316046875,
+      "meanSetpointAngularDegrees": 0.654318118625,
+      "meanPredictedErrorStuds": 0.98766283759375,
+      "meanInstantPositionErrorStuds": 0.70680004965625,
+      "acquisitionSeconds": 0.210329861125,
+      "yawSignChanges": 0.59375,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Walking"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.5074108325,
+      "meanYawErrorDegrees": 2.5065268561875,
+      "meanPitchErrorDegrees": 0.0213790366875,
+      "meanSetpointAngularDegrees": 2.919071702,
+      "meanPredictedErrorStuds": 0.98766283759375,
+      "meanInstantPositionErrorStuds": 0.70680004965625,
+      "acquisitionSeconds": 2.50407986125,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Walking"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.5074108325,
+      "meanYawErrorDegrees": 2.5065268561875,
+      "meanPitchErrorDegrees": 0.0213790366875,
+      "meanSetpointAngularDegrees": 2.919071702,
+      "meanPredictedErrorStuds": 0.98766283759375,
+      "meanInstantPositionErrorStuds": 0.70680004965625,
+      "acquisitionSeconds": 2.50407986125,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Running"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.06886294634375,
+      "meanYawErrorDegrees": 1.06859941678125,
+      "meanPitchErrorDegrees": 0.01614049346875,
+      "meanSetpointAngularDegrees": 0.4145097435625,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.20260416675,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Running"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.06886294634375,
+      "meanYawErrorDegrees": 1.06859941678125,
+      "meanPitchErrorDegrees": 0.01614049346875,
+      "meanSetpointAngularDegrees": 0.4145097435625,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.20260416675,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Running"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.82213709828125,
+      "meanYawErrorDegrees": 0.8218721154687499,
+      "meanPitchErrorDegrees": 0.007546201875,
+      "meanSetpointAngularDegrees": 0.91541682484375,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.6981770833125,
+      "yawSignChanges": 0.65625,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Running"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.82213709828125,
+      "meanYawErrorDegrees": 0.8218721154687499,
+      "meanPitchErrorDegrees": 0.007546201875,
+      "meanSetpointAngularDegrees": 0.91541682484375,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.6981770833125,
+      "yawSignChanges": 0.65625,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Running"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.938280659375,
+      "meanYawErrorDegrees": 2.93785305784375,
+      "meanPitchErrorDegrees": 0.0189493693125,
+      "meanSetpointAngularDegrees": 3.57426540121875,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 2.9129629632222223,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 23
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Running"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.938280659375,
+      "meanYawErrorDegrees": 2.93785305784375,
+      "meanPitchErrorDegrees": 0.0189493693125,
+      "meanSetpointAngularDegrees": 3.57426540121875,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 2.9129629632222223,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 23
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "RepeatedJump"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.5959502270625,
+      "meanYawErrorDegrees": 0.9295723825,
+      "meanPitchErrorDegrees": 1.04553174684375,
+      "meanSetpointAngularDegrees": 0.5522630246875,
+      "meanPredictedErrorStuds": 2.75823120890625,
+      "meanInstantPositionErrorStuds": 1.78468544625,
+      "acquisitionSeconds": 0.2328125,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 8.5,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "RepeatedJump"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.6926275105,
+      "meanYawErrorDegrees": 1.12998356096875,
+      "meanPitchErrorDegrees": 0.89923052496875,
+      "meanSetpointAngularDegrees": 0.79765344865625,
+      "meanPredictedErrorStuds": 2.5504957251875,
+      "meanInstantPositionErrorStuds": 1.57617155328125,
+      "acquisitionSeconds": 0.261631944375,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 8.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "RepeatedJump"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.52101482721875,
+      "meanYawErrorDegrees": 0.72116406359375,
+      "meanPitchErrorDegrees": 1.15198296884375,
+      "meanSetpointAngularDegrees": 1.18981512575,
+      "meanPredictedErrorStuds": 2.75823120890625,
+      "meanInstantPositionErrorStuds": 1.78468544625,
+      "acquisitionSeconds": 0.61354166665625,
+      "yawSignChanges": 1.09375,
+      "pitchSignChanges": 7.8125,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "RepeatedJump"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.6375227471875,
+      "meanYawErrorDegrees": 0.95277712046875,
+      "meanPitchErrorDegrees": 0.99042261965625,
+      "meanSetpointAngularDegrees": 1.33991097290625,
+      "meanPredictedErrorStuds": 2.5504957251875,
+      "meanInstantPositionErrorStuds": 1.57617155328125,
+      "acquisitionSeconds": 0.5515624999375,
+      "yawSignChanges": 1.21875,
+      "pitchSignChanges": 7.4375,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "RepeatedJump"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 3.5745556990625,
+      "meanYawErrorDegrees": 2.7383363255,
+      "meanPitchErrorDegrees": 1.42431405771875,
+      "meanSetpointAngularDegrees": 3.96042883253125,
+      "meanPredictedErrorStuds": 2.75823120890625,
+      "meanInstantPositionErrorStuds": 1.78468544625,
+      "acquisitionSeconds": null,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 7.25,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 32
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "RepeatedJump"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 3.6161256149375,
+      "meanYawErrorDegrees": 2.7383363255,
+      "meanPitchErrorDegrees": 1.4785620785625,
+      "meanSetpointAngularDegrees": 3.82075433390625,
+      "meanPredictedErrorStuds": 2.5504957251875,
+      "meanInstantPositionErrorStuds": 1.57617155328125,
+      "acquisitionSeconds": null,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 7.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 32
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Landing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.09574366525,
+      "meanYawErrorDegrees": 0.869242853875,
+      "meanPitchErrorDegrees": 0.3667736279375,
+      "meanSetpointAngularDegrees": 0.42241720946875,
+      "meanPredictedErrorStuds": 1.73178520925,
+      "meanInstantPositionErrorStuds": 1.17086595334375,
+      "acquisitionSeconds": 0.1789930555625,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 2.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 2.0870624798125,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Landing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.0586801048125,
+      "meanYawErrorDegrees": 0.869242853875,
+      "meanPitchErrorDegrees": 0.30105646584375,
+      "meanSetpointAngularDegrees": 0.43131062090625,
+      "meanPredictedErrorStuds": 1.690839064625,
+      "meanInstantPositionErrorStuds": 1.10055818759375,
+      "acquisitionSeconds": 0.1789930555625,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 2.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.879033043625,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Landing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.956038808,
+      "meanYawErrorDegrees": 0.66646710528125,
+      "meanPitchErrorDegrees": 0.4143845118125,
+      "meanSetpointAngularDegrees": 0.90094016753125,
+      "meanPredictedErrorStuds": 1.73178520925,
+      "meanInstantPositionErrorStuds": 1.17086595334375,
+      "acquisitionSeconds": 0.27890625009375,
+      "yawSignChanges": 0.84375,
+      "pitchSignChanges": 2.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 1.1930683138437501,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Landing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.92998840534375,
+      "meanYawErrorDegrees": 0.66524575475,
+      "meanPitchErrorDegrees": 0.36702481884375,
+      "meanSetpointAngularDegrees": 0.87190099203125,
+      "meanPredictedErrorStuds": 1.690839064625,
+      "meanInstantPositionErrorStuds": 1.10055818759375,
+      "acquisitionSeconds": 0.27890625009375,
+      "yawSignChanges": 0.84375,
+      "pitchSignChanges": 1.25,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0793409704375,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Landing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 3.0339630435,
+      "meanYawErrorDegrees": 2.67227558425,
+      "meanPitchErrorDegrees": 0.56127976446875,
+      "meanSetpointAngularDegrees": 3.4694665014375,
+      "meanPredictedErrorStuds": 1.73178520925,
+      "meanInstantPositionErrorStuds": 1.17086595334375,
+      "acquisitionSeconds": 2.825000000125,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 2.09375,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.25556626525,
+      "acquisitionFailures": 24
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Landing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 3.07306741134375,
+      "meanYawErrorDegrees": 2.67227558425,
+      "meanPitchErrorDegrees": 0.61161411275,
+      "meanSetpointAngularDegrees": 3.4131027545625,
+      "meanPredictedErrorStuds": 1.690839064625,
+      "meanInstantPositionErrorStuds": 1.10055818759375,
+      "acquisitionSeconds": 2.8462962964444447,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 1.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.02743787871875,
+      "acquisitionFailures": 23
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Falling"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.38463854675,
+      "meanYawErrorDegrees": 0.93225090503125,
+      "meanPitchErrorDegrees": 0.73340856646875,
+      "meanSetpointAngularDegrees": 0.541279097,
+      "meanPredictedErrorStuds": 1.7007899878125,
+      "meanInstantPositionErrorStuds": 1.02831848190625,
+      "acquisitionSeconds": 0.1809027778125,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 3.96875,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 5.940559366,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Falling"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.633448973375,
+      "meanYawErrorDegrees": 1.13269693984375,
+      "meanPitchErrorDegrees": 1.9643773778125,
+      "meanSetpointAngularDegrees": 1.8166210284375,
+      "meanPredictedErrorStuds": 1.76134935815625,
+      "meanInstantPositionErrorStuds": 1.00084781515625,
+      "acquisitionSeconds": 0.324565972125,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 3.96875,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.8719837995312499,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Falling"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.2884766041875,
+      "meanYawErrorDegrees": 0.70611482625,
+      "meanPitchErrorDegrees": 0.84016755228125,
+      "meanSetpointAngularDegrees": 1.114922051625,
+      "meanPredictedErrorStuds": 1.7007899878125,
+      "meanInstantPositionErrorStuds": 1.02831848190625,
+      "acquisitionSeconds": 0.64809027775,
+      "yawSignChanges": 0.84375,
+      "pitchSignChanges": 2.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 4.27535865228125,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Falling"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.6430385475625,
+      "meanYawErrorDegrees": 0.932172183,
+      "meanPitchErrorDegrees": 2.14988699765625,
+      "meanSetpointAngularDegrees": 2.3625297895625,
+      "meanPredictedErrorStuds": 1.76134935815625,
+      "meanInstantPositionErrorStuds": 1.00084781515625,
+      "acquisitionSeconds": 0.69895833334375,
+      "yawSignChanges": 0.84375,
+      "pitchSignChanges": 1.125,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0721553285625,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Falling"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 3.7434037079999998,
+      "meanYawErrorDegrees": 2.7392648960625,
+      "meanPitchErrorDegrees": 2.158426369875,
+      "meanSetpointAngularDegrees": 4.19615480178125,
+      "meanPredictedErrorStuds": 1.7007899878125,
+      "meanInstantPositionErrorStuds": 1.02831848190625,
+      "acquisitionSeconds": 2.9333333335000003,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 3.96875,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 1.2653792161875,
+      "acquisitionFailures": 24
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Falling"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 4.20030360096875,
+      "meanYawErrorDegrees": 2.7392648960625,
+      "meanPitchErrorDegrees": 2.779743007,
+      "meanSetpointAngularDegrees": 4.3311588710625,
+      "meanPredictedErrorStuds": 1.76134935815625,
+      "meanInstantPositionErrorStuds": 1.00084781515625,
+      "acquisitionSeconds": 2.9333333335000003,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 2.65625,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.039923976875,
+      "acquisitionFailures": 24
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Reversal"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.1764504511875,
+      "meanYawErrorDegrees": 1.17605224046875,
+      "meanPitchErrorDegrees": 0.0191555388125,
+      "meanSetpointAngularDegrees": 0.4438886276875,
+      "meanPredictedErrorStuds": 1.77778708015625,
+      "meanInstantPositionErrorStuds": 1.2420179945625,
+      "acquisitionSeconds": 0.18611111121874999,
+      "yawSignChanges": 1.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Reversal"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.17778696790625,
+      "meanYawErrorDegrees": 1.17734371753125,
+      "meanPitchErrorDegrees": 0.01914908278125,
+      "meanSetpointAngularDegrees": 0.4438838185625,
+      "meanPredictedErrorStuds": 1.7961835850625,
+      "meanInstantPositionErrorStuds": 1.23782222065625,
+      "acquisitionSeconds": 0.18611111121874999,
+      "yawSignChanges": 1.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Reversal"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.913778579,
+      "meanYawErrorDegrees": 0.91347273315625,
+      "meanPitchErrorDegrees": 0.00933909096875,
+      "meanSetpointAngularDegrees": 0.9980331633125,
+      "meanPredictedErrorStuds": 1.77778708015625,
+      "meanInstantPositionErrorStuds": 1.2420179945625,
+      "acquisitionSeconds": 0.39001736118749997,
+      "yawSignChanges": 1.65625,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Reversal"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.922706598625,
+      "meanYawErrorDegrees": 0.92241694490625,
+      "meanPitchErrorDegrees": 0.00932988203125,
+      "meanSetpointAngularDegrees": 0.9979793803125,
+      "meanPredictedErrorStuds": 1.7961835850625,
+      "meanInstantPositionErrorStuds": 1.23782222065625,
+      "acquisitionSeconds": 0.39001736118749997,
+      "yawSignChanges": 1.65625,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Reversal"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.97106353875,
+      "meanYawErrorDegrees": 2.97038350146875,
+      "meanPitchErrorDegrees": 0.022545035,
+      "meanSetpointAngularDegrees": 3.65224463778125,
+      "meanPredictedErrorStuds": 1.77778708015625,
+      "meanInstantPositionErrorStuds": 1.2420179945625,
+      "acquisitionSeconds": 1.7236111109999999,
+      "yawSignChanges": 1.625,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 24
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Reversal"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.97213841234375,
+      "meanYawErrorDegrees": 2.97146153646875,
+      "meanPitchErrorDegrees": 0.02253997253125,
+      "meanSetpointAngularDegrees": 3.65572563453125,
+      "meanPredictedErrorStuds": 1.7961835850625,
+      "meanInstantPositionErrorStuds": 1.23782222065625,
+      "acquisitionSeconds": null,
+      "yawSignChanges": 1.875,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 32
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Near"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 4.098220923125,
+      "meanYawErrorDegrees": 4.09191809684375,
+      "meanPitchErrorDegrees": 0.0954735169375,
+      "meanSetpointAngularDegrees": 1.13369401459375,
+      "meanPredictedErrorStuds": 1.8598270070625,
+      "meanInstantPositionErrorStuds": 1.07783707309375,
+      "acquisitionSeconds": 0.4027777778125,
+      "yawSignChanges": 4.09375,
+      "pitchSignChanges": 50.625,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Near"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 4.11288630496875,
+      "meanYawErrorDegrees": 4.10724026340625,
+      "meanPitchErrorDegrees": 0.09539737734375,
+      "meanSetpointAngularDegrees": 1.13402340165625,
+      "meanPredictedErrorStuds": 1.864552975625,
+      "meanInstantPositionErrorStuds": 1.07971266053125,
+      "acquisitionSeconds": 0.4027777778125,
+      "yawSignChanges": 3.96875,
+      "pitchSignChanges": 49.8125,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Near"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 3.95201280003125,
+      "meanYawErrorDegrees": 3.95033738084375,
+      "meanPitchErrorDegrees": 0.05752549253125,
+      "meanSetpointAngularDegrees": 2.524131638125,
+      "meanPredictedErrorStuds": 1.8598270070625,
+      "meanInstantPositionErrorStuds": 1.07783707309375,
+      "acquisitionSeconds": 1.2006076388437499,
+      "yawSignChanges": 3.34375,
+      "pitchSignChanges": 39.46875,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Near"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 3.96733284459375,
+      "meanYawErrorDegrees": 3.96569273365625,
+      "meanPitchErrorDegrees": 0.05748912571875,
+      "meanSetpointAngularDegrees": 2.523286091,
+      "meanPredictedErrorStuds": 1.864552975625,
+      "meanInstantPositionErrorStuds": 1.07971266053125,
+      "acquisitionSeconds": 1.2006076388437499,
+      "yawSignChanges": 3.34375,
+      "pitchSignChanges": 39.46875,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Near"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 7.4414418365625,
+      "meanYawErrorDegrees": 7.4375304204375,
+      "meanPitchErrorDegrees": 0.11569598328125,
+      "meanSetpointAngularDegrees": 8.669405206625,
+      "meanPredictedErrorStuds": 1.8598270070625,
+      "meanInstantPositionErrorStuds": 1.07783707309375,
+      "acquisitionSeconds": 1.222222222,
+      "yawSignChanges": 3.1875,
+      "pitchSignChanges": 5.375,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 21
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Near"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 7.4624924161875,
+      "meanYawErrorDegrees": 7.45900557496875,
+      "meanPitchErrorDegrees": 0.11235957178125,
+      "meanSetpointAngularDegrees": 8.674816418625,
+      "meanPredictedErrorStuds": 1.864552975625,
+      "meanInstantPositionErrorStuds": 1.07971266053125,
+      "acquisitionSeconds": 1.4277777775,
+      "yawSignChanges": 3.1875,
+      "pitchSignChanges": 5.4375,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 24
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Far"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.47678038446875,
+      "meanYawErrorDegrees": 0.47671711878125,
+      "meanPitchErrorDegrees": 0.00456503434375,
+      "meanSetpointAngularDegrees": 0.265549311125,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.17656249999999998,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Far"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.47678038446875,
+      "meanYawErrorDegrees": 0.47671711878125,
+      "meanPitchErrorDegrees": 0.00456503434375,
+      "meanSetpointAngularDegrees": 0.265549311125,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.17656249999999998,
+      "yawSignChanges": 0.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Far"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.36927022971875,
+      "meanYawErrorDegrees": 0.36921314678125,
+      "meanPitchErrorDegrees": 0.00199547,
+      "meanSetpointAngularDegrees": 0.4295628025,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.182465277875,
+      "yawSignChanges": 0.53125,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Far"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.36927022971875,
+      "meanYawErrorDegrees": 0.36921314678125,
+      "meanPitchErrorDegrees": 0.00199547,
+      "meanSetpointAngularDegrees": 0.4295628025,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.182465277875,
+      "yawSignChanges": 0.53125,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Far"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.19592874778125,
+      "meanYawErrorDegrees": 2.19582076990625,
+      "meanPitchErrorDegrees": 0.00536099578125,
+      "meanSetpointAngularDegrees": 2.4130448370625,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.508723958375,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Far"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.19592874778125,
+      "meanYawErrorDegrees": 2.19582076990625,
+      "meanPitchErrorDegrees": 0.00536099578125,
+      "meanSetpointAngularDegrees": 2.4130448370625,
+      "meanPredictedErrorStuds": 1.974103868875,
+      "meanInstantPositionErrorStuds": 1.4118487031875,
+      "acquisitionSeconds": 0.508723958375,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Circle"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.7048402494375,
+      "meanYawErrorDegrees": 1.704360374625,
+      "meanPitchErrorDegrees": 0.01923301528125,
+      "meanSetpointAngularDegrees": 0.5348441565,
+      "meanPredictedErrorStuds": 4.20530265115625,
+      "meanInstantPositionErrorStuds": 2.68381998975,
+      "acquisitionSeconds": 0.300868055625,
+      "yawSignChanges": 2.71875,
+      "pitchSignChanges": 1.25,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Circle"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.7048402494375,
+      "meanYawErrorDegrees": 1.704360374625,
+      "meanPitchErrorDegrees": 0.01923301528125,
+      "meanSetpointAngularDegrees": 0.5348441565,
+      "meanPredictedErrorStuds": 4.20530265115625,
+      "meanInstantPositionErrorStuds": 2.68381998975,
+      "acquisitionSeconds": 0.300868055625,
+      "yawSignChanges": 2.71875,
+      "pitchSignChanges": 1.25,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Circle"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.5861803585625,
+      "meanYawErrorDegrees": 1.586042494375,
+      "meanPitchErrorDegrees": 0.00931790225,
+      "meanSetpointAngularDegrees": 1.2039336031875,
+      "meanPredictedErrorStuds": 4.20530265115625,
+      "meanInstantPositionErrorStuds": 2.68381998975,
+      "acquisitionSeconds": 0.5144097223125,
+      "yawSignChanges": 2.4375,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Circle"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.5861803585625,
+      "meanYawErrorDegrees": 1.586042494375,
+      "meanPitchErrorDegrees": 0.00931790225,
+      "meanSetpointAngularDegrees": 1.2039336031875,
+      "meanPredictedErrorStuds": 4.20530265115625,
+      "meanInstantPositionErrorStuds": 2.68381998975,
+      "acquisitionSeconds": 0.5144097223125,
+      "yawSignChanges": 2.4375,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Circle"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 3.89230322778125,
+      "meanYawErrorDegrees": 3.89182447328125,
+      "meanPitchErrorDegrees": 0.02220421171875,
+      "meanSetpointAngularDegrees": 4.32354105378125,
+      "meanPredictedErrorStuds": 4.20530265115625,
+      "meanInstantPositionErrorStuds": 2.68381998975,
+      "acquisitionSeconds": 0.69843749996875,
+      "yawSignChanges": 2.0,
+      "pitchSignChanges": 0.4375,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Circle"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 3.89230322778125,
+      "meanYawErrorDegrees": 3.89182447328125,
+      "meanPitchErrorDegrees": 0.02220421171875,
+      "meanSetpointAngularDegrees": 4.32354105378125,
+      "meanPredictedErrorStuds": 4.20530265115625,
+      "meanInstantPositionErrorStuds": 2.68381998975,
+      "acquisitionSeconds": 0.69843749996875,
+      "yawSignChanges": 2.0,
+      "pitchSignChanges": 0.4375,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Stop"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.007693068875,
+      "meanYawErrorDegrees": 1.00178005153125,
+      "meanPitchErrorDegrees": 0.02678645315625,
+      "meanSetpointAngularDegrees": 0.41739670534375,
+      "meanPredictedErrorStuds": 1.16422636165625,
+      "meanInstantPositionErrorStuds": 0.83009815484375,
+      "acquisitionSeconds": 0.23763020834375,
+      "yawSignChanges": 12.59375,
+      "pitchSignChanges": 5.6875,
+      "stopYawOvershootDegrees": 2.18248105446875,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Stop"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.00519384921875,
+      "meanYawErrorDegrees": 0.99852644928125,
+      "meanPitchErrorDegrees": 0.026776213125,
+      "meanSetpointAngularDegrees": 0.41429160109375,
+      "meanPredictedErrorStuds": 1.15458879334375,
+      "meanInstantPositionErrorStuds": 0.82046058653125,
+      "acquisitionSeconds": 0.23763020834375,
+      "yawSignChanges": 6.5,
+      "pitchSignChanges": 5.6875,
+      "stopYawOvershootDegrees": 2.18248105446875,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Stop"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.82147196975,
+      "meanYawErrorDegrees": 0.8188502410625,
+      "meanPitchErrorDegrees": 0.0130659568125,
+      "meanSetpointAngularDegrees": 0.8246067633437499,
+      "meanPredictedErrorStuds": 1.16422636165625,
+      "meanInstantPositionErrorStuds": 0.83009815484375,
+      "acquisitionSeconds": 1.355555555625,
+      "yawSignChanges": 2.25,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 1.73644279896875,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Stop"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.82118306978125,
+      "meanYawErrorDegrees": 0.8183277826875,
+      "meanPitchErrorDegrees": 0.013058402875,
+      "meanSetpointAngularDegrees": 0.82060125184375,
+      "meanPredictedErrorStuds": 1.15458879334375,
+      "meanInstantPositionErrorStuds": 0.82046058653125,
+      "acquisitionSeconds": 1.355555555625,
+      "yawSignChanges": 1.125,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 1.73644279896875,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Stop"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.90806816496875,
+      "meanYawErrorDegrees": 2.90279071484375,
+      "meanPitchErrorDegrees": 0.03183721446875,
+      "meanSetpointAngularDegrees": 3.39548170921875,
+      "meanPredictedErrorStuds": 1.16422636165625,
+      "meanInstantPositionErrorStuds": 0.83009815484375,
+      "acquisitionSeconds": 1.72686631946875,
+      "yawSignChanges": 2.0,
+      "pitchSignChanges": 1.75,
+      "stopYawOvershootDegrees": 0.885419477375,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Stop"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.897590804,
+      "meanYawErrorDegrees": 2.89168316353125,
+      "meanPitchErrorDegrees": 0.03027799946875,
+      "meanSetpointAngularDegrees": 3.38606359265625,
+      "meanPredictedErrorStuds": 1.15458879334375,
+      "meanInstantPositionErrorStuds": 0.82046058653125,
+      "acquisitionSeconds": 1.72686631946875,
+      "yawSignChanges": 2.625,
+      "pitchSignChanges": 1.71875,
+      "stopYawOvershootDegrees": 0.885419477375,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "Teleport"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.71052030028125,
+      "meanYawErrorDegrees": 1.7101416265625,
+      "meanPitchErrorDegrees": 0.0118653641875,
+      "meanSetpointAngularDegrees": 0.42593459384375,
+      "meanPredictedErrorStuds": 5.818527473,
+      "meanInstantPositionErrorStuds": 2.8150871104375,
+      "acquisitionSeconds": 0.176779513875,
+      "yawSignChanges": 2.25,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "Teleport"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.71052030028125,
+      "meanYawErrorDegrees": 1.7101416265625,
+      "meanPitchErrorDegrees": 0.0118653641875,
+      "meanSetpointAngularDegrees": 0.42593459384375,
+      "meanPredictedErrorStuds": 5.818527473,
+      "meanInstantPositionErrorStuds": 2.8150871104375,
+      "acquisitionSeconds": 0.176779513875,
+      "yawSignChanges": 2.25,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "Teleport"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.87546183328125,
+      "meanYawErrorDegrees": 1.875182742875,
+      "meanPitchErrorDegrees": 0.00539257559375,
+      "meanSetpointAngularDegrees": 0.86991906365625,
+      "meanPredictedErrorStuds": 5.818527473,
+      "meanInstantPositionErrorStuds": 2.8150871104375,
+      "acquisitionSeconds": 0.1834201389375,
+      "yawSignChanges": 1.6875,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "Teleport"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 1.87546183328125,
+      "meanYawErrorDegrees": 1.875182742875,
+      "meanPitchErrorDegrees": 0.00539257559375,
+      "meanSetpointAngularDegrees": 0.86991906365625,
+      "meanPredictedErrorStuds": 5.818527473,
+      "meanInstantPositionErrorStuds": 2.8150871104375,
+      "acquisitionSeconds": 0.1834201389375,
+      "yawSignChanges": 1.6875,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "Teleport"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 4.67546696225,
+      "meanYawErrorDegrees": 4.67493407059375,
+      "meanPitchErrorDegrees": 0.01397820565625,
+      "meanSetpointAngularDegrees": 3.82641028509375,
+      "meanPredictedErrorStuds": 5.818527473,
+      "meanInstantPositionErrorStuds": 2.8150871104375,
+      "acquisitionSeconds": 0.6669270833125,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "Teleport"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 4.67546696225,
+      "meanYawErrorDegrees": 4.67493407059375,
+      "meanPitchErrorDegrees": 0.01397820565625,
+      "meanSetpointAngularDegrees": 3.82641028509375,
+      "meanPredictedErrorStuds": 5.818527473,
+      "meanInstantPositionErrorStuds": 2.8150871104375,
+      "acquisitionSeconds": 0.6669270833125,
+      "yawSignChanges": 0.0,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Fixed",
+        "VariablePing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.80595792259375,
+      "meanYawErrorDegrees": 0.8055709466875,
+      "meanPitchErrorDegrees": 0.01351317753125,
+      "meanSetpointAngularDegrees": 0.35007384465625,
+      "meanPredictedErrorStuds": 1.464341621625,
+      "meanInstantPositionErrorStuds": 1.11079151884375,
+      "acquisitionSeconds": 0.1789930555625,
+      "yawSignChanges": 1.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Fixed",
+        "VariablePing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.80859185896875,
+      "meanYawErrorDegrees": 0.80821292709375,
+      "meanPitchErrorDegrees": 0.013513433125,
+      "meanSetpointAngularDegrees": 0.34954716128125,
+      "meanPredictedErrorStuds": 1.46845239890625,
+      "meanInstantPositionErrorStuds": 1.11231867928125,
+      "acquisitionSeconds": 0.1789930555625,
+      "yawSignChanges": 1.75,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Adaptive",
+        "VariablePing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.62060118328125,
+      "meanYawErrorDegrees": 0.62043451684375,
+      "meanPitchErrorDegrees": 0.00615202284375,
+      "meanSetpointAngularDegrees": 0.70536016259375,
+      "meanPredictedErrorStuds": 1.464341621625,
+      "meanInstantPositionErrorStuds": 1.11079151884375,
+      "acquisitionSeconds": 0.2114149305625,
+      "yawSignChanges": 1.53125,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3.1",
+        "Adaptive",
+        "VariablePing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 0.62339495571875,
+      "meanYawErrorDegrees": 0.6232284680625,
+      "meanPitchErrorDegrees": 0.006151361875,
+      "meanSetpointAngularDegrees": 0.704408945,
+      "meanPredictedErrorStuds": 1.46845239890625,
+      "meanInstantPositionErrorStuds": 1.11231867928125,
+      "acquisitionSeconds": 0.2114149305625,
+      "yawSignChanges": 1.53125,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 0
+    },
+    {
+      "group": [
+        "V3",
+        "Critical",
+        "VariablePing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.58239833603125,
+      "meanYawErrorDegrees": 2.58164270653125,
+      "meanPitchErrorDegrees": 0.018823012187499998,
+      "meanSetpointAngularDegrees": 3.0397095015625,
+      "meanPredictedErrorStuds": 1.464341621625,
+      "meanInstantPositionErrorStuds": 1.11079151884375,
+      "acquisitionSeconds": 2.0907986110625,
+      "yawSignChanges": 0.0625,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 16
+    },
+    {
+      "group": [
+        "V3.1",
+        "Critical",
+        "VariablePing"
+      ],
+      "rows": 32,
+      "meanAngularDegrees": 2.58200177625,
+      "meanYawErrorDegrees": 2.58124624465625,
+      "meanPitchErrorDegrees": 0.01882353196875,
+      "meanSetpointAngularDegrees": 3.036817398125,
+      "meanPredictedErrorStuds": 1.46845239890625,
+      "meanInstantPositionErrorStuds": 1.11231867928125,
+      "acquisitionSeconds": 2.0907986110625,
+      "yawSignChanges": 0.0625,
+      "pitchSignChanges": 0.0,
+      "stopYawOvershootDegrees": 0.0,
+      "landingPitchUndershootDegrees": 0.0,
+      "acquisitionFailures": 16
+    }
+  ]
+}

@@ -43,7 +43,7 @@ def main():
         ' local chunk=assert(loadstring(source,"SedwareCamLock.bundleTest"))\n'
         ' setfenv(chunk,env)\n return chunk()\nend\n'
         'require("./cam_gui_body")(reloadBundle)\nrequire("./cam_v2_body")(reloadBundle)\n'
-        'require("./cam_v2_perf_body")(reloadBundle)\n'
+        'require("./cam_v2_perf_body")(reloadBundle)\nrequire("./cam_v31_body")(reloadBundle)\n'
         'require("./cam_v3_body")(reloadBundle,'+literal((ROOT/'src/cam_server/MovementServer.server.luau').read_text())+')\n'+loader_test, encoding='utf-8')
     try:
         subprocess.run([runner, str(harness)], cwd=ROOT, check=True)

@@ -4,7 +4,7 @@ local Branding=if script then require(script.Parent.Branding) else require("./Br
 local UIAnimations=if script then require(script.Parent.UIAnimations) else require("./UIAnimations")
 local UI={}
 UI.__index=UI
-local WIDTH,HEIGHT,HEADER,ROW=360,432,56,34
+local WIDTH,HEIGHT,HEADER,ROW=420,520,56,34
 local function finite(n) return type(n)=="number" and n==n and math.abs(n)<math.huge end
 local function point(input) local p=input and input.Position;if p and finite(p.X) and finite(p.Y) then return p.X,p.Y end end
 local function contains(object,x,y)
@@ -37,14 +37,14 @@ function UI:_button(parent,name,text,position,size)
  end)
  return button
 end
-function UI:_notice(message) if self.onNotice then self.onNotice(tostring(message)) end end
+function UI:_notice(message,field) if self.onNotice then self.onNotice(tostring(message),field) end end
 function UI:_action(name,value) if self.onAction then return self.onAction(name,value) end end
 function UI:_change(field,value)
  if self.destroyed then return false end
  local ok,accepted,reason=pcall(self.onChange,field,value)
  if not ok then reason=accepted;accepted=false end
  if accepted then self:setValue(field,value);return true end
- self:setValue(field,self.values[field]);self:_notice(reason or "Invalid value");return false
+ self:setValue(field,self.values[field]);self:_notice(reason or "Invalid value",field);return false
 end
 function UI:setValue(field,value)
  if self.destroyed or not self.controls[field] then return false end
@@ -53,7 +53,7 @@ function UI:setValue(field,value)
  local control,descriptor=self.controls[field],Config.fields[field]
  local text
  if descriptor.kind=="toggle" then
-  text=if value then "ON" else "OFF"
+  text=if value then (if field=="Fly" or field=="Speed" then "LOCAL ONLY" else "ON") else "OFF"
   local properties={BackgroundColor3=if value then Branding.Colors.Neon else Branding.Colors.Input,
    TextColor3=if value then Branding.Colors.White else Branding.Colors.Muted}
   if self.building then for key,property in properties do control[key]=property end
@@ -66,13 +66,13 @@ function UI:setValue(field,value)
  if field=="ESPTargetMode" and not self.building then self:_layoutMisc() end
  return true
 end
-function UI:setStatus(movement,esp,available)
+function UI:setStatus(movement,esp,available,report)
  if self.destroyed then return end
  self.movementAvailable=available
  if self.movementStatus.Text~=movement then self.movementStatus.Text=movement end
  if self.espStatus.Text~=esp then self.espStatus.Text=esp end
  for _,field in {"Fly","Speed"} do
-  local text=if not available then "N/A" elseif self.values[field] then "ON" else "OFF"
+  local text=if report then report[field].state elseif not available then "UNAVAILABLE" elseif self.values[field] then "LOCAL ONLY" else "OFF"
   self.controls[field].Active=available
   if self.controls[field].Text~=text then self.controls[field].Text=text end
  end
@@ -185,7 +185,7 @@ function UI:_row(parent,descriptor)
   control=self:_create("TextBox",{Name=descriptor.key,Active=true,BackgroundColor3=Branding.Colors.Input,
    BorderSizePixel=0,ClearTextOnFocus=false,Text="",PlaceholderText=if descriptor.kind=="text" then "Exact username" else "",
    Font=Enum.Font.Gotham,TextSize=12,TextColor3=Branding.Colors.White,PlaceholderColor3=Branding.Colors.Muted,
-   Position=UDim2.fromOffset(164,3),Size=UDim2.fromOffset(160,27),ZIndex=6},row)
+   Position=UDim2.fromOffset(164,3),Size=UDim2.fromOffset(WIDTH-196,27),ZIndex=6},row)
   self:_create("UICorner",{CornerRadius=UDim.new(0,5)},control)
   self:_connect(control.FocusLost,function()
    local value=if descriptor.kind=="text" then control.Text:gsub("^%s*(.-)%s*$","%1") else tonumber(control.Text)
@@ -193,7 +193,7 @@ function UI:_row(parent,descriptor)
    else self:_change(descriptor.key,value) end
   end)
  else
-  control=self:_button(row,descriptor.key,"",UDim2.fromOffset(164,3),UDim2.fromOffset(160,27))
+  control=self:_button(row,descriptor.key,"",UDim2.fromOffset(164,3),UDim2.fromOffset(WIDTH-196,27))
   self:_connect(control.Activated,function()
    if self.minimized or self.tab~=descriptor.tab then return end
    if (descriptor.key=="Fly" or descriptor.key=="Speed") and self.movementAvailable==false then return end
@@ -255,16 +255,16 @@ function UI.new(playerGui,config,onChange,onNotice,onAction,player)
    Size=UDim2.fromOffset(WIDTH,HEADER),ZIndex=3},self.panel)
   self.logo=Branding.addLogo(self.header,function(...) return self:_create(...) end,
    UDim2.fromOffset(15,13),UDim2.fromOffset(30,30),5,config,function(...) return self:_connect(...) end)
-  self.title=self:_label(self.header,"Title","SEDWARE",UDim2.fromOffset(56,9),UDim2.fromOffset(218,22),17)
+  self.title=self:_label(self.header,"Title","SEDWARE V3.1",UDim2.fromOffset(56,9),UDim2.fromOffset(218,22),17)
   self.title.Font=Enum.Font.GothamBold
   self.subtitle=self:_label(self.header,"Subtitle",Branding.Subtitle,UDim2.fromOffset(57,32),UDim2.fromOffset(255,14),9,C.Pink)
-  self.version=self:_label(self.header,"Version","v2",UDim2.fromOffset(276,15),UDim2.fromOffset(22,17),10,C.Muted)
-  self.minimizeButton=self:_button(self.header,"Minimize","−",UDim2.fromOffset(317,12),UDim2.fromOffset(29,29))
+  self.version=self:_label(self.header,"Version",Branding.Version,UDim2.fromOffset(WIDTH-100,15),UDim2.fromOffset(45,17),10,C.Muted)
+  self.minimizeButton=self:_button(self.header,"Minimize","−",UDim2.fromOffset(WIDTH-43,12),UDim2.fromOffset(29,29))
   self:_connect(self.minimizeButton.Activated,function() self:setMinimized(not self.minimized) end)
   self.tabs=self:_create("Frame",{Name="Tabs",Active=false,BackgroundTransparency=1,
    Position=UDim2.fromOffset(16,66),Size=UDim2.fromOffset(WIDTH-32,28),ZIndex=4},self.panel)
   for index,name in {"MAIN","MISC"} do
-   local tab=self:_button(self.tabs,name,name,UDim2.fromOffset((index-1)*164,0),UDim2.fromOffset(160,28))
+   local tab=self:_button(self.tabs,name,name,UDim2.fromOffset((index-1)*(WIDTH-28)/2,0),UDim2.fromOffset((WIDTH-36)/2,28))
    self.tabButtons[name]=tab;self:_connect(tab.Activated,function() self:setTab(name) end)
    self.pages[name]=self:_create("CanvasGroup",{Name=name.."Page",Active=false,BackgroundTransparency=1,
     Position=UDim2.fromOffset(16,106),Size=UDim2.fromOffset(WIDTH-32,HEIGHT-122),Visible=name=="MAIN",ZIndex=4},self.panel)
@@ -339,7 +339,7 @@ function UI.new(playerGui,config,onChange,onNotice,onAction,player)
   self:_connect(self.gui.AncestryChanged,function() self:resetDrag();self:closeDropdown(true) end)
   self:setTab("MAIN");self:_fit(true)
  end,debug.traceback)
- if not ok then self:destroy();error("SEDWARE V2 UI: "..tostring(problem),2) end
+ if not ok then self:destroy();error("SEDWARE V3.1 UI: "..tostring(problem),2) end
  return self
 end
 function UI:setLogo(asset) Branding.setLogo(self.logo,asset) end

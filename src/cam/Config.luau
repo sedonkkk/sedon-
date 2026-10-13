@@ -10,12 +10,18 @@ Config.sourceLiteral = [=[{
  LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
  Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
  FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
- MovementAuthorized=false,
+ MovementAuthorized=false, MovementMode="Auto", LocalMovementAllowed=false,
+ ESPAuthorized=false, ESPUnlimitedRange=false, ESPFarDistance=350, ESPFarUpdateHz=3,
+ VerticalControl=true, RisingHorizon=0.055, FallingHorizon=0.045, ApexHorizon=0.025,
+ MaxVerticalLead=2.25, MaxVerticalSpeed=85, MaxVerticalVelocityChange=450, ApexVelocity=3,
+ LandingHoldSeconds=0.10, ReversalDamping=true, ReversalWindow=0.08, ReversalScale=0.5,
+ AngularSafety=true, PitchMaxSpeed=180, PitchMaxAcceleration=1200, CloseSafetyDistance=8,
+ MovementProbeSeconds=0.8, MovementMinimumSpeed=1,
  ReferenceScale=13.15, ReferenceHorizontalSeconds=0.1205, ReferenceVerticalSeconds=0.0800,
  MinScale=0, MaxScale=100, TrackingMode="Fixed", AdaptiveMinTau=0.008, AdaptiveMaxTau=0.06,
  AdaptiveErrorDegrees=8, AdaptiveGainSmoothing=0.08, CriticalFrequency=18,
  AngularMaxSpeed=720, AngularMaxAcceleration=4000, SmartSelection=false,
- TargetGraceSeconds=0.2, ReleaseRadiusMultiplier=1.3, TargetVisibilityHz=10,
+ TargetPartGraceSeconds=0.15, ReacquireOnLoss=false, TargetGraceSeconds=0.2, ReleaseRadiusMultiplier=1.3, TargetVisibilityHz=10,
  MotionFilter="Memory", FilterMinCutoff=1, FilterBeta=0.05, AlphaBetaAlpha=0.85, AlphaBetaBeta=0.05,
  ESP=false, Hitboxes=false, Names=false, ESPTargetMode="All", ESPUsername="",
  ESPUpdateHz=10, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
@@ -39,11 +45,16 @@ Config.sourceLiteral = [=[{
 Config.HitParts = {"Head", "UpperTorso", "HumanoidRootPart"}
 Config.hitParts = Config.HitParts
 Config.numericLimits = {
+ RisingHorizon={0,0.35}, FallingHorizon={0,0.35}, ApexHorizon={0,0.35},
+ MaxVerticalLead={0,20}, MaxVerticalSpeed={1,200}, MaxVerticalVelocityChange={1,5000}, ApexVelocity={0.1,20},
+ LandingHoldSeconds={0,0.5}, ReversalWindow={0.01,1}, ReversalScale={0,1},
+ PitchMaxSpeed={1,1000}, PitchMaxAcceleration={1,20000}, CloseSafetyDistance={0,30},
+ MovementProbeSeconds={0.2,5}, MovementMinimumSpeed={0.1,10}, ESPFarDistance={10,2000}, ESPFarUpdateHz={1,10},
  PredictionX={0,1000}, PredictionY={0,1000}, ReferenceScale={0.001,1000},
  ReferenceHorizontalSeconds={0,0.6}, ReferenceVerticalSeconds={0,0.6}, MinScale={0,1000}, MaxScale={0.001,1000},
  AdaptiveMinTau={0.001,1}, AdaptiveMaxTau={0.001,1}, AdaptiveErrorDegrees={0.01,180}, AdaptiveGainSmoothing={0,1},
  CriticalFrequency={0.1,100}, AngularMaxSpeed={1,5000}, AngularMaxAcceleration={1,50000},
- TargetGraceSeconds={0,2}, ReleaseRadiusMultiplier={1,3}, TargetVisibilityHz={1,30},
+ TargetPartGraceSeconds={0,1}, TargetGraceSeconds={0,2}, ReleaseRadiusMultiplier={1,3}, TargetVisibilityHz={1,30},
  FilterMinCutoff={0.01,100}, FilterBeta={0,10}, AlphaBetaAlpha={0.01,1}, AlphaBetaBeta={0.001,1}, Smoothness={0,1}, Radius={1,2000},
  CameraDebugInterval={0.1,10}, NotificationCooldown={0.1,30},
  FlySpeed={1,200}, WalkSpeed={1,100}, FlySmoothing={0,1}, FlyMaxForce={1000,10000000},
@@ -92,12 +103,18 @@ function Config.defaults()
   LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
   Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
   FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
-  MovementAuthorized=false,
+  MovementAuthorized=false, MovementMode="Auto", LocalMovementAllowed=false,
+ ESPAuthorized=false, ESPUnlimitedRange=false, ESPFarDistance=350, ESPFarUpdateHz=3,
+ VerticalControl=true, RisingHorizon=0.055, FallingHorizon=0.045, ApexHorizon=0.025,
+ MaxVerticalLead=2.25, MaxVerticalSpeed=85, MaxVerticalVelocityChange=450, ApexVelocity=3,
+ LandingHoldSeconds=0.10, ReversalDamping=true, ReversalWindow=0.08, ReversalScale=0.5,
+ AngularSafety=true, PitchMaxSpeed=180, PitchMaxAcceleration=1200, CloseSafetyDistance=8,
+ MovementProbeSeconds=0.8, MovementMinimumSpeed=1,
  ReferenceScale=13.15, ReferenceHorizontalSeconds=0.1205, ReferenceVerticalSeconds=0.0800,
  MinScale=0, MaxScale=100, TrackingMode="Fixed", AdaptiveMinTau=0.008, AdaptiveMaxTau=0.06,
  AdaptiveErrorDegrees=8, AdaptiveGainSmoothing=0.08, CriticalFrequency=18,
  AngularMaxSpeed=720, AngularMaxAcceleration=4000, SmartSelection=false,
- TargetGraceSeconds=0.2, ReleaseRadiusMultiplier=1.3, TargetVisibilityHz=10,
+ TargetPartGraceSeconds=0.15, ReacquireOnLoss=false, TargetGraceSeconds=0.2, ReleaseRadiusMultiplier=1.3, TargetVisibilityHz=10,
  MotionFilter="Memory", FilterMinCutoff=1, FilterBeta=0.05, AlphaBetaAlpha=0.85, AlphaBetaBeta=0.05,
   ESP=false, Hitboxes=false, Names=false, ESPTargetMode="All", ESPUsername="",
   ESPUpdateHz=10, ESPMaxDistance=350, ESPOcclusionMode="VisibleOnly", ESPLowPerformanceMode=true,
@@ -216,7 +233,8 @@ function Config.new(overrides)
   previous=point.PingMs
  end
  if config.ESPTargetMode~="All" and config.ESPTargetMode~="Specific Player" then return nil,"ESP Target Mode inválido" end
- if config.ESPOcclusionMode~="VisibleOnly" then return nil,"ESP solo admite VisibleOnly" end
+ if not table.find({"Auto","Local","Server"},config.MovementMode) then return nil,"MovementMode inválido" end
+ if not table.find({"VisibleOnly","AlwaysOnTop"},config.ESPOcclusionMode) then return nil,"ESPOcclusionMode inválido" end
  if #config.ESPUsername>20 or (config.ESPUsername~="" and not config.ESPUsername:match("^[%w_]+$")) then return nil,"Username inválido" end
  if config.LogoAssetId~="rbxassetid://COLOCAR_ID_REAL" and config.LogoAssetId~=""
   and not config.LogoAssetId:match("^rbxassetid://[1-9]%d*$") then return nil,"LogoAssetId requiere un ID real rbxassetid://" end

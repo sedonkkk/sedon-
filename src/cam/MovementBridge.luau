@@ -21,7 +21,7 @@ function MovementBridge:refresh()
  self.state=if self.available then "SERVER_READY" else "SERVER_COMPONENT_MISSING"
 end
 function MovementBridge:sync(entry)
- if not self.available or self.destroyed then return end
+ if not self.available or self.destroyed or self.config.MovementMode=="Local" then return end
  local c=self.config
  local character=entry and entry.character
  local previous=self.wanted
@@ -34,6 +34,7 @@ end
 function MovementBridge:_send()
  if self.inflight or self.destroyed then return end
  local revision=self.revision;local request=table.clone(self.wanted)
+ self.active=false;self.serverFly=false;self.serverSpeed=false
  self.inflight=true;self.state="WAITING_SERVER";self.started=os.clock()
  task.spawn(function()
   local ok,result=pcall(function() return self.control:InvokeServer(request) end)
@@ -56,15 +57,13 @@ function MovementBridge:step(now,velocity)
   if not self.available then return end
  end
  if self.inflight and os.clock()-self.started>3 then self.active=false;self.state="SERVER_TIMEOUT" end
- if self.config.Fly or self.config.Speed then
-  if not self.nextSend or now>=self.nextSend then
-   self.nextSend=now+0.1
-   local player=self.report.player
-   local own=player:GetAttribute("SEDWAREMovementToken")==self.token
-   self.serverFly=own and player:GetAttribute("SEDWAREServerFlyActive")==true
-   self.serverSpeed=own and player:GetAttribute("SEDWAREServerSpeedActive")==true
-   self.input:FireServer(self.token,velocity or Vector3.zero)
-  end
+ if not self.nextSend or now>=self.nextSend then
+  self.nextSend=now+0.1
+  local player=self.report.player
+  local own=player:GetAttribute("SEDWAREMovementToken")==self.token
+  self.serverFly=own and player:GetAttribute("SEDWAREServerFlyActive")==true
+  self.serverSpeed=own and player:GetAttribute("SEDWAREServerSpeedActive")==true
+  if self.config.MovementMode~="Local" and (self.config.Fly or self.config.Speed) then self.input:FireServer(self.token,velocity or Vector3.zero) end
  end
 end
 function MovementBridge:destroy()

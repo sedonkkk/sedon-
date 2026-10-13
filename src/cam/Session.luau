@@ -12,6 +12,7 @@ local MovementAccess=if script then require(script.Parent.MovementAccess) else r
 local FlyController=if script then require(script.Parent.FlyController) else require("./FlyController")
 local SpeedController=if script then require(script.Parent.SpeedController) else require("./SpeedController")
 local MovementBridge=if script then require(script.Parent.MovementBridge) else require("./MovementBridge")
+local ESPAccess=if script then require(script.Parent.ESPAccess) else require("./ESPAccess")
 local ESPManager=if script then require(script.Parent.ESPManager) else require("./ESPManager")
 local Runtime=if script then require(script.Parent.Parent.pink.Runtime) else require("../pink/Runtime")
 local Overlay=if script then require(script.Parent.Parent.pink.Overlay) else require("../pink/Overlay")
@@ -25,20 +26,34 @@ end
 function Session:_notify(message,duration)
  if self.notifications and not self.destroyed then self.notifications:notify(message,self:_clock(),duration or self.config.NotificationDuration) end
 end
+function Session:GetTrackingDiagnostics()
+ local d=self.controller:GetDiagnostics()
+ d.target=self.locked and self.locked.player.Name;d.locked=self.locked~=nil
+ d.trackingState=self.trackingState or "IDLE";d.reason=self.trackingReason;d.lastLoss=self.lastLoss
+ d.pauseReason=self.pauseReason;d.prediction=self.predictionOutput
+ return d
+end
+function Session:_lose(code,detail)
+ self.lastLoss={code=code,detail=detail,time=self:_clock(),target=self.locked and self.locked.player.Name}
+ self:UnlockTarget("Target Lost")
+ self.trackingState="LOST";self.trackingReason=code
+ if not self.config.ReacquireOnLoss then self.manualReleased=true end
+ Runtime.trace(self.report,"CamTarget",code,detail or code)
+end
 function Session:_bindTarget(data)
  self.targetCleanup:destroy();self.targetCleanup=Cleanup.new();self.locked=data
- local function lost()
-  if self.locked==data then self:UnlockTarget("Target Lost") end
+ local function lost(code)
+  if self.locked==data then self:_lose(if type(code)=="string" then code else "TARGET_DEAD",code) end
  end
  self.targetCleanup:connect(data.humanoid.Died,lost,"Target.Died")
  self.targetCleanup:connect(data.character.AncestryChanged,function()
-  if not data.character:IsDescendantOf(self.world) then lost() end
+  if not data.character:IsDescendantOf(self.world) then lost("CHARACTER_REMOVED") end
  end)
  self.targetCleanup:connect(data.part.AncestryChanged,function()
-  if not data.part:IsDescendantOf(data.character) then lost() end
+  if not data.part:IsDescendantOf(data.character) then self.partGapSince=self:_clock();self:_pause("HIT_PART_UNAVAILABLE",self.partGapSince) end
  end)
  if data.player.CharacterRemoving then
-  self.targetCleanup:connect(data.player.CharacterRemoving,function(character) if character==data.character then lost() end end)
+  self.targetCleanup:connect(data.player.CharacterRemoving,function(character) if character==data.character then lost("CHARACTER_CHANGED") end end)
  end
 end
 function Session:LockTarget(player)
@@ -50,6 +65,7 @@ function Session:LockTarget(player)
  local data,reason=self.selector:acquire(player)
  self.lastSelection=self.selector.lastSelection
  if not data then
+  self.trackingState="SEARCHING";self.trackingReason=reason
   if self.config.DebugMode and (not self.nextAcquisitionDebug or now>=self.nextAcquisitionDebug) then
    self.nextAcquisitionDebug=now+1;Runtime.trace(self.report,"Acquisition","SEARCHING",reason)
   end
@@ -58,6 +74,7 @@ function Session:LockTarget(player)
  self.prediction:reset();self.controller:reset();self.predictionOutput=nil
  self.selector.lossSince=nil;self.nextRetention=nil
  self.nextObservation=nil;self.nextPing=nil
+ self.partGapSince=nil;self.trackingState="TRACKING";self.trackingReason=nil
  self:_bindTarget(data)
  self:_ping(now)
  self.prediction:observe(now,data.part.Position,tostring(data.humanoid:GetState()))
@@ -71,6 +88,7 @@ end
 function Session:UnlockTarget(reason)
  if not self.locked then return false end
  self.locked=nil;self.predictionOutput=nil
+ self.trackingState=if self.config.Enabled then "IDLE" else "DISABLED";self.trackingReason=nil;self.pauseReason=nil
  self.targetCleanup:destroy();self.targetCleanup=Cleanup.new()
  self.prediction:reset();self.controller:reset();self.nextObservation=nil;self.nextPing=nil
  self.nextAcquisition=self:_clock()+self.config.AcquisitionInterval
@@ -84,11 +102,17 @@ function Session:configure(field,value)
  if self.destroyed then return false,"Session is unloaded" end
  local updated,message=Config.update(self.config,field,value)
  if not updated then return false,message end
+ if field=="MovementMode" and (self.config.Fly or self.config.Speed) then return false,"Disable Fly and Speed before changing movement route" end
  if (field=="Fly" or field=="Speed") and value==true and not MovementAccess.allowed(updated,self.report) then
-  return false,"Movimiento disponible solo en experiencias propias o autorizadas"
+  return false,if updated.MovementMode=="Server" then "Server component/authorization unavailable" else "Local movement requires a permitted test environment (Studio or explicit LocalMovementAllowed)"
  end
+ if field=="Fly" then self.fly.error=nil end
+ if field=="Speed" then self.speed.error=nil end
  if field=="Fly" and value==true then
   local started,reason=self.fly:start(self.registry.entries[self.player]);if not started then return false,reason end
+ end
+ if ((field=="ESPOcclusionMode" and value=="AlwaysOnTop") or (field=="ESPUnlimitedRange" and value==true) or (field=="ESP" and value==true and (updated.ESPOcclusionMode=="AlwaysOnTop" or updated.ESPUnlimitedRange))) and not ESPAccess.allowed(updated,self.report) then
+  return false,"ESP AlwaysOnTop/UnlimitedRange requires an authorized context"
  end
  local priorEnabled=self.config.Enabled
  local priorPart=self.config.HitPart
@@ -100,8 +124,11 @@ function Session:configure(field,value)
  if field=="Fly" and not value then self.fly:stop() end
  if field=="Speed" or field=="WalkSpeed" or field=="Fly" then self.speed:sync(self.registry.entries[self.player],self.config.Fly) end
  if field=="ESP" or field=="Hitboxes" or field=="Names" or field=="ESPTargetMode" or field=="ESPMaxDistance"
-  or field=="ESPUpdateHz" or field=="ESPLowPerformanceMode" then
-  if self.esp.destroyed then self.esp=ESPManager.new(self.config,self.report,self.registry) end
+  or field=="ESPUpdateHz" or field=="ESPLowPerformanceMode" or field=="ESPOcclusionMode" or field=="ESPUnlimitedRange" or field=="ESPFarUpdateHz" then
+  if self.esp.destroyed or field=="ESPOcclusionMode" then
+   local applied=self.esp.selectedUsername;self.esp:destroy()
+   self.esp=ESPManager.new(self.config,self.report,self.registry);self.esp.selectedUsername=applied
+  end
   self.esp:refresh();local updatedESP,espError=self:_espUpdate(self:_clock())
   if not updatedESP then return false,"ESP API: "..tostring(espError) end
  end
@@ -118,7 +145,7 @@ function Session:configure(field,value)
  end
  if priorEnabled~=self.config.Enabled then
   if self.config.Enabled then self.manualReleased=false;self:_notify("Lock Enabled");self.nextAcquisition=0;self:LockTarget()
-  else self:UnlockTarget();self.controller:reset();self:_notify("Lock Disabled") end
+  else self:UnlockTarget();self.controller:reset();self.trackingState="DISABLED";self.trackingReason=nil;self:_notify("Lock Disabled") end
  end
  return true
 end
@@ -147,19 +174,59 @@ function Session:_registryChanged(kind,entry)
   if self.ui then self.ui:resetDrag();self.ui:closeDropdown(true) end
  end
 end
+function Session:GetMovementDiagnostics()
+ local entry=self.registry.entries[self.player];local ready=MovementAccess.ready(entry,self.world)
+ local permitted=MovementAccess.allowed(self.config,self.report);local server=MovementAccess.server(self.config,self.report)
+ local bridge=self.movementBridge;local result={mode=if server then "Server" else "Local",permitted=permitted,characterReady=ready==true}
+ for _,field in {"Fly","Speed"} do
+  local controller=if field=="Fly" then self.fly else self.speed
+  local requested=self.config[field];local effective=false
+  local state,reason="OFF","Not requested"
+  if not permitted then state="UNAVAILABLE";reason="No permitted local context or own server authorization"
+  elseif field=="Speed" and requested and self.config.Fly then state="OFF";reason="Paused while Fly is requested"
+  elseif requested and not ready then state="UNAVAILABLE";reason="Waiting for living, unanchored character"
+  elseif requested then
+   local root=entry.root;local velocity=root.AssemblyLinearVelocity
+   local measured=velocity and (if field=="Fly" then velocity.Magnitude else math.sqrt(velocity.X^2+velocity.Z^2)) or 0
+   local wanted=if field=="Fly" then self.fly.velocity.Magnitude>self.config.MovementMinimumSpeed else entry.humanoid.MoveDirection and entry.humanoid.MoveDirection.Magnitude>0.1
+   effective=(controller.active and measured>=self.config.MovementMinimumSpeed and (if field=="Fly" then self.fly.velocity.Magnitude>=self.config.MovementMinimumSpeed and velocity:Dot(self.fly.velocity)>0 else wanted and velocity:Dot(entry.humanoid.MoveDirection)>0))==true
+   if server then
+    local applied=if field=="Fly" then bridge.serverFly else bridge.serverSpeed
+    state=if bridge.active and applied then "SERVER AUTHORIZED" elseif bridge.state=="SERVER_REJECTED" or bridge.state=="SERVER_TIMEOUT" then "SERVER LIMITED" else "UNAVAILABLE"
+    reason=bridge.reason or bridge.state
+   elseif controller.limited then state="SERVER LIMITED";reason="WalkSpeed changed externally; not overwritten"
+   elseif effective then state="LOCAL ACTIVE";reason="Physical velocity observed locally; replication unverified"
+   else
+    controller.probeSince=if wanted then controller.probeSince or self:_clock() else nil
+    state=if controller.probeSince and self:_clock()-controller.probeSince>=self.config.MovementProbeSeconds then "SERVER LIMITED" else "LOCAL ONLY"
+    reason=if state=="SERVER LIMITED" then "Requested motion not observed; environment restriction/physics cause unconfirmed" else "Idle, waiting for input or physical confirmation"
+   end
+  else controller.probeSince=nil end
+  if controller.error then state="ERROR";reason=controller.error end
+  result[field]={requested=requested,controllerActive=controller.active==true,effective=effective,state=state,reason=reason}
+ end
+ return result
+end
 function Session:_movement(dt,now)
- self.movementBridge:sync(self.registry.entries[self.player])
  self.movementBridge:step(now,if self.config.Fly then self.fly.velocity else nil)
+ local route=if MovementAccess.server(self.config,self.report) then "Server" else "Local"
+ if self.movementRoute and route~=self.movementRoute then
+  self.fly:stop();self.speed:stop();self.fly.probeSince=nil;self.speed.probeSince=nil
+ end
+ self.movementRoute=route
+ self.movementBridge:sync(self.registry.entries[self.player])
  if not self.config.Fly and not self.config.Speed and not self.fly.active and not self.speed.active then return end
  local entry=self.registry.entries[self.player]
  local ok,reason=pcall(function() self.fly:update(entry,self.world.CurrentCamera,dt,self.keybinds:movement()) end)
  if not ok then
   self.fly:stop();self.config.Fly=false;self.ui:setValue("Fly",false)
+  self.fly.error=tostring(reason)
   Runtime.trace(self.report,"Fly","FAIL",reason);self:_notify("Fly unavailable | "..tostring(reason))
  end
  local speedOK,speedError=pcall(function() self.speed:sync(entry,self.config.Fly) end)
  if not speedOK then
   self.speed:stop();self.config.Speed=false;self.ui:setValue("Speed",false)
+  self.speed.error=tostring(speedError)
   Runtime.trace(self.report,"Speed","FAIL",speedError);self:_notify("Speed unavailable | "..tostring(speedError))
  end
 end
@@ -181,6 +248,7 @@ function Session:_ping(now)
  self.prediction:samplePing(if measured and finite(rtt) and rtt>=0 and rtt<=2 then rtt else nil,now)
 end
 function Session:_pause(reason,now)
+ self.trackingState="PAUSED";self.trackingReason=reason
  self.controller:reset()
  if reason~=self.pauseReason then Runtime.trace(self.report,"CamTracking","PAUSED",reason) end
  self.pauseReason=reason
@@ -204,13 +272,26 @@ function Session:_track(dt,now)
  if not self.locked and not self.manualReleased and now>=(self.nextAcquisition or 0) then self:LockTarget() end
  if not self.locked then return end
  local data,reason=self.selector:validateLocked(self.locked)
- if not data or data.character~=self.locked.character or data.part~=self.locked.part then
-  self:UnlockTarget("Target Lost");Runtime.trace(self.report,"CamTarget","LOST",reason or "character/part changed");return
+ if not data then
+  if reason=="camera origin unavailable" then
+   self:_pause("CAMERA_ORIGIN_UNAVAILABLE",now);return
+  elseif reason=="Hit Part unavailable" then
+   self.partGapSince=self.partGapSince or now
+   local replacement=self.selector:resolve(self.locked.player)
+   if replacement and replacement.character==self.locked.character then
+    self:_bindTarget(replacement);self.prediction:reset();self.controller:reset();self.nextObservation=nil
+    self.partGapSince=nil;data=replacement
+   elseif now-self.partGapSince<self.config.TargetPartGraceSeconds then self:_pause("HIT_PART_UNAVAILABLE",now);return
+   else self:_lose("HIT_PART_UNAVAILABLE",reason);return end
+  else
+   local code=if reason=="target exceeds MaxDistance" then "OUT_OF_RANGE" elseif reason=="target is dead/humanoid replaced" then "TARGET_DEAD_OR_HUMANOID_CHANGED" else "CHARACTER_UNAVAILABLE"
+   self:_lose(code,reason);return
+  end
  end
  if self.config.SmartSelection and (not self.nextRetention or now>=self.nextRetention) then
   self.nextRetention=now+1/self.config.TargetVisibilityHz
   local retained,loss=self.selector:retain(data,now)
-  if retained==false then self:UnlockTarget("Target Lost");Runtime.trace(self.report,"CamTarget","LOST",loss);return end
+  if retained==false then self:_lose(if loss=="occluded beyond grace" then "OCCLUDED" else "OFFSCREEN_OR_RELEASE_RADIUS",loss);return end
   self.retentionPaused=retained==nil
  end
  if self.config.SmartSelection and self.retentionPaused then self:_pause("Target temporarily outside visible bounds",now);return end
@@ -220,16 +301,16 @@ function Session:_track(dt,now)
  end
  self.predictionOutput=self.prediction:predict(camera.CFrame.Position,now)
  if self.predictionOutput then self.predictionOutput.captureTimeKnown=false;self.predictionOutput.ageSource="LocalReadTime" end
- if not self.predictionOutput then self:_pause("Prediction unavailable or observation stale",now);return end
+ if not self.predictionOutput then self:_pause("PREDICTION_UNAVAILABLE_OR_STALE",now);return end
  if self.config.RespectScriptableCamera and camera.CameraType==Enum.CameraType.Scriptable then
   self:_pause("Scriptable camera active; preserving its controller",now);return
  end
  if not finite(dt) or dt<=0 then return end
- local moved,message=self.controller:update(camera,self.predictionOutput.position,dt)
+ local moved,message=self.controller:update(camera,self.predictionOutput.position,dt,self.predictionOutput)
  self:_cameraDiagnostic(now)
- if not moved then self:_pause(message,now);return end
+ if not moved then self:_pause("CONTROLLER_ERROR | "..tostring(message),now);return end
  if self.pauseReason then Runtime.trace(self.report,"CamTracking","RESUMED","Predicted Hit Part tracking resumed") end
- self.pauseReason=nil
+ self.pauseReason=nil;self.trackingState="TRACKING";self.trackingReason=nil
 end
 function Session:_step(dt)
  if self.destroyed then return end
@@ -241,20 +322,17 @@ function Session:_step(dt)
  self.updateSeconds=os.clock()-started
  if not self.nextStatus or now>=self.nextStatus then
   self.nextStatus=now+0.5
-  local allowed=MovementAccess.allowed(self.config,self.report)
-  local ready=MovementAccess.ready(self.registry.entries[self.player],self.world)
+  local movementReport=self:GetMovementDiagnostics()
+  local allowed=movementReport.permitted
   local bridge=self.movementBridge
-  local movement=if not allowed then "Unavailable: owned/server authorization required"
-   elseif not ready then "Waiting for living, unanchored character"
-   elseif bridge.available then bridge.state.." | Fly "..tostring(self.fly.active).." Speed "..tostring(self.speed.active)
-   else "Local authorized mode; server replication unverified"
+  local movement="Fly "..movementReport.Fly.state.." / Speed "..movementReport.Speed.state
   local stats=self.esp.stats
   local esp=if not self.config.ESP then "OFF | Enable ESP + Hitboxes or Names"
    elseif not self.config.Hitboxes and not self.config.Names then "Choose Hitboxes or Names to show indicators"
    else string.format("%d visible / %d evaluated | %d active",stats.visible,stats.considered,stats.active)
-  self.ui:setStatus(movement,esp,allowed)
+  self.ui:setStatus(movement,esp,allowed,movementReport)
   if self.config.DebugMode then
-   Runtime.trace(self.report,"Movement","STATUS",movement.." | "..tostring(bridge.reason or ""))
+   Runtime.trace(self.report,"Movement","STATUS",movement.." | mode="..movementReport.mode.." | "..movementReport.Fly.reason.." | "..movementReport.Speed.reason)
    Runtime.trace(self.report,"ESP","DIAGNOSTIC",string.format("registered=%d evaluated=%d range=%d screen=%d occluded=%d notReady=%d far=%d offscreen=%d visible=%d active=%d created=%d raycasts=%d ms=%.4f maxMs=%.4f",
     stats.registered,stats.considered,stats.inRange,stats.onScreen,stats.occluded,stats.notReady,stats.outOfRange,stats.offscreen,stats.visible,stats.active,stats.created,stats.raycasts,stats.lastSeconds*1000,stats.maxSeconds*1000))
    local p=self.predictionOutput;local d=self.controller.diagnostics
@@ -262,6 +340,9 @@ function Session:_step(dt)
     self.locked and self.locked.player.Name or "none",d.angularError,self.config.PredictionX,self.config.PredictionY,
     p and p.predictionX or 0,p and p.predictionY or 0,self.config.Smoothness,self.config.TrackingMode,
     if finite(dt) and dt>0 then 1/dt else 0,tostring(p and p.rawPingMs),tostring(p and p.smoothedPingMs),tostring(p and p.ageSeconds),self.updateSeconds*1000))
+   Runtime.trace(self.report,"Tracking","STATE",string.format("state=%s reason=%s lastLoss=%s phase=%s hitPart=%s verticalVelocity=%s yawError=%s pitchError=%s horizonXUsed=%s horizonYUsed=%s",
+    tostring(self.trackingState),tostring(self.trackingReason),self.lastLoss and self.lastLoss.code or "none",p and p.movementPhase or "unknown",self.config.HitPart,
+    tostring(p and p.verticalVelocityUsed),tostring(d.yawError),tostring(d.pitchError),tostring(p and p.horizontalHorizonUsed),tostring(p and p.verticalHorizonUsed)))
   end
  end
 end
@@ -310,13 +391,15 @@ function Session.init(options,report)
   self.registry=PlayerRegistry.new(self.services.Players,function(kind,entry) self:_registryChanged(kind,entry) end)
   report.registry=self.registry
   self.prediction=PredictionEngine.new(config);self.controller=CameraController.new(config);self.selector=TargetSelector.new(config,report)
+  assert(not (config.ESP and (config.ESPOcclusionMode=="AlwaysOnTop" or config.ESPUnlimitedRange)) or ESPAccess.allowed(config,report),"ESP mode requires authorization")
   self.movementBridge=MovementBridge.new(config,report);report.movementBridge=self.movementBridge
+  self.movementRoute=if MovementAccess.server(config,report) then "Server" else "Local"
   self.fly=FlyController.new(config,report);self.speed=SpeedController.new(config,report);self.esp=ESPManager.new(config,report,self.registry)
-  if config.Fly or config.Speed then assert(MovementAccess.allowed(config,report),"Movement configuration requires an authorized experience") end
+  if (config.Fly or config.Speed) and not MovementAccess.allowed(config,report) then Runtime.trace(report,"Movement","UNAVAILABLE","Requested movement has no permitted local context or own server authorization") end
   stage="Graphics"
   self.notifications=NotificationSystem.new(report.playerGui,config)
   self.ui=UI.new(report.playerGui,config,function(field,value) return self:configure(field,value) end,
-   function(reason) self:_notify("Invalid value | "..tostring(reason)) end,function(name,value) return self:_action(name,value) end,self.player)
+   function(reason,field) self:_notify((if field=="Fly" or field=="Speed" then field.." | " else "Invalid value | ")..tostring(reason)) end,function(name,value) return self:_action(name,value) end,self.player)
   self.gui=self.ui.gui
   assert(self.gui.Parent==report.playerGui and self.notifications.gui.Parent==report.playerGui,"Cam Lock interface failed to attach")
   self.cleanup:connect(self.gui.Destroying,function() self:destroy() end)
@@ -340,7 +423,7 @@ function Session.init(options,report)
     if not handled then self:destroy();Session.notifyFailure(report,errorMessage) end
    end,
   })
-  self.cleanup:connect(self.services.Players.PlayerRemoving,function(player) if self.locked and self.locked.player==player then self:UnlockTarget("Target Lost") end end)
+  self.cleanup:connect(self.services.Players.PlayerRemoving,function(player) if self.locked and self.locked.player==player then self:_lose("PLAYER_LEFT",tostring(player.Name).." left") end end)
   stage="Render"
   self.cleanup:add(function() run:UnbindFromRenderStep(self.bindName) end)
   run:BindToRenderStep(self.bindName,priority+1,function(dt)

@@ -101,7 +101,7 @@ return function(reloadBundle)
 		near(mock:countConnections(),0);near(mock:countRenderBindings(),0)
 	end)
 
-	test("default disabled V2 has six MAIN fields plus MISC and Sedware branding", function(mock, create)
+	test("default disabled V3.1 has six MAIN fields plus MISC and Sedware branding", function(mock, create)
 		local session = create()
 		local ui = session.ui
 		check(session.gui == ui.gui and ui.gui.Name == "SedwareCamLock_UI")
@@ -118,8 +118,8 @@ return function(reloadBundle)
 		for _, field in ipairs({"PredictionX", "PredictionY", "Smoothness", "Radius"}) do
 			near(tonumber(ui.controls[field].Text), expected[field])
 		end
-		check(ui.title.Text == "SEDWARE" and ui.subtitle.Text == "CAM LOCK · PINK EDITION" and ui.version.Text == "v2")
-		near(ui.panel.Size.X.Offset, 360); near(ui.panel.Size.Y.Offset, 432)
+		check(ui.title.Text == "SEDWARE V3.1" and ui.subtitle.Text == "CAM LOCK · PINK EDITION" and ui.version.Text == "v3.1")
+		near(ui.panel.Size.X.Offset, 420); near(ui.panel.Size.Y.Offset, 520)
 		near(ui.panel.BackgroundColor3.R, 10/255)
 		check(ui.logo.Name == "SedwareLogo")
 		check(ui.logo:FindFirstChild("OriginalLogoImage") ~= nil)
@@ -272,7 +272,7 @@ return function(reloadBundle)
 		vectorNear(session:GetPrediction().currentPosition,r6.Character:FindFirstChild("Head").Position)
 		session:destroy(); mock:removePlayer(r6)
 		local r15 = mock:addPlayer("R15NoUpperTorso",mock.env.Vector3.new(0,0,-50))
-		local second = create({Enabled=true})
+		local second = create({Enabled=true,TargetPartGraceSeconds=0})
 		check(second:GetLockedTarget() == r15)
 		r15.Character:FindFirstChild("UpperTorso"):Destroy(); mock:advance(0.04)
 		check(second:GetLockedTarget() == nil and second:GetPrediction() == nil)
@@ -281,7 +281,7 @@ return function(reloadBundle)
 	test("direct X/Y text edits change actual axis lead while preserving motion memory", function(mock, create)
 		local V = mock.env.Vector3
 		local target = mock:addPlayer("PredictionControls",V.new(0,0,-50))
-		local session = create({Enabled=true,PredictionSmoothing=0})
+		local session = create({Enabled=true,PredictionSmoothing=0,VerticalControl=false,ReversalDamping=false})
 		for index=1,8 do mock:move(target,V.new(index,index*0.5,-50-index*0.2));mock:advance(0.05) end
 		local history, before = session.prediction.history, session:GetPrediction()
 		check(before.velocity.X > 0 and before.velocity.Y > 0 and before.velocity.Z < 0)
@@ -350,7 +350,7 @@ return function(reloadBundle)
 		local V=mock.env.Vector3
 		local selected=mock:addPlayer("Lost",V.new(0,0,-50))
 		local replacement=mock:addPlayer("Replacement",V.new(5,0,-50))
-		local session=create({Enabled=true})
+		local session=create({Enabled=true,ReacquireOnLoss=true})
 		local received=notices(session)
 		for index=1,5 do mock:move(selected,V.new(index,0,-50));mock:advance(0.04) end
 		local previous=session.prediction.history
@@ -370,7 +370,7 @@ return function(reloadBundle)
 
 	test("target respawn never estimates motion across old and new characters", function(mock, create)
 		local target=mock:addPlayer("Respawn",mock.env.Vector3.new(0,0,-50))
-		local session=create({Enabled=true})
+		local session=create({Enabled=true,ReacquireOnLoss=true})
 		for index=1,6 do mock:move(target,mock.env.Vector3.new(index,0,-50));mock:advance(0.04) end
 		local previous=session.prediction.history
 		mock:respawn(target,mock.env.Vector3.new(20,0,-50));mock:advance(0.26)
@@ -501,8 +501,8 @@ return function(reloadBundle)
 				"roll correction changed existing field "..field)
 		end
 		near(size(session.ui.controls),17)
-		near(session.ui.panel.Size.X.Offset,360);near(session.ui.panel.Size.Y.Offset,432)
-		check(session.ui.title.Text == "SEDWARE" and session.ui.subtitle.Text == "CAM LOCK · PINK EDITION")
+		near(session.ui.panel.Size.X.Offset,420);near(session.ui.panel.Size.Y.Offset,520)
+		check(session.ui.title.Text == "SEDWARE V3.1" and session.ui.subtitle.Text == "CAM LOCK · PINK EDITION")
 		check(mock.camera.CameraSubject == subject)
 		near(mock:cameraWritesFor(mock.camera,"CameraSubject"),0)
 		near(mock:cameraWritesFor(mock.camera,"CameraType"),0)

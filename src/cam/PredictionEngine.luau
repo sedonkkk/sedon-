@@ -4,6 +4,7 @@
 local Config = if script then require(script.Parent.Config) else require("./Config")
 local Prediction = if script then require(script.Parent.Parent.pink.Prediction) else require("../pink/Prediction")
 local MotionFilter=if script then require(script.Parent.MotionFilter) else require("./MotionFilter")
+local Vertical=if script then require(script.Parent.VerticalControl) else require("./VerticalControl")
 local PredictionEngine = {}
 PredictionEngine.__index = PredictionEngine
 
@@ -22,7 +23,7 @@ function PredictionEngine.new(config)
  self.sync=self.prediction._sync
  -- Config is private; recompute settings on edits, not on each render.
  self.prediction._sync=function() end
- self.filter=MotionFilter.new(normalized)
+ self.filter=MotionFilter.new(normalized);self.vertical=Vertical.new(normalized)
  aliases(self)
  return self
 end
@@ -39,6 +40,7 @@ function PredictionEngine:observe(t,position,state)
  end
  local filtered=self.filter:observe(t,position,state)
  local accepted=self.prediction:observe(t,filtered,state)
+ if accepted then self.vertical:observe(t,position,state) end
  if not accepted and self.config.MotionFilter~="Memory" then self.filter:reset() end
  aliases(self)
  return accepted
@@ -51,6 +53,7 @@ end
 function PredictionEngine:predict(origin,now)
  local output=self.prediction:predict(origin,now)
  if output then
+  self.vertical:apply(output,now)
   output.hitPart=self.config.HitPart
   output.predictionUnits="seconds"
   output.visibleX=self.config.PredictionX;output.visibleY=self.config.PredictionY
@@ -64,7 +67,7 @@ function PredictionEngine:predict(origin,now)
  return output
 end
 function PredictionEngine:reset()
- self.prediction:reset();self.filter:reset()
+ self.prediction:reset();self.filter:reset();self.vertical:reset()
  aliases(self)
 end
 function PredictionEngine:updateConfig(config)
@@ -84,14 +87,14 @@ function PredictionEngine:updateConfig(config)
  self.config=normalized
  self.prediction.config=legacy
  self.sync(self.prediction)
- self.filter.config=normalized
+ self.filter.config=normalized;self.vertical.config=normalized
  -- GUI edits must retain motion samples and accepted ping. Rebase auto slew
  -- so explicit prediction edits take effect on the next camera frame.
  if baseChanged then for _,policy in self.prediction.policies do
   policy.baseX=nil;policy.baseY=nil;policy.lastBaseTime=nil
  end end
  if hitPartChanged or filterChanged then
-  self.filter:reset()
+  self.filter:reset();self.vertical:reset()
   -- A different body part is a new position stream. Retain latency but reset
   -- the motion and output filters; never infer velocity across body parts.
   local retainedLatency=self.prediction.latency

@@ -8,7 +8,7 @@ function MotionFilter:observe(t,p,state)
  if c.MotionFilter=="Memory" then return p end
  if not dt or dt<=0 or dt>c.StaleAfter or state~=self.state
   or (p-self.raw).Magnitude>c.MaxObservedSpeed*dt+c.TeleportSlack
-  or (self.velocity and (p-self.raw):Dot(self.velocity)<0) then
+  or (self.velocity and ((p-self.raw):Dot(self.velocity)<0 or ((p.X-self.raw.X)*self.velocity.X+(p.Z-self.raw.Z)*self.velocity.Z<0))) then
   self.position=p;self.velocity=p*0;self.derivative=p*0
  else
   local rawVelocity=(p-self.raw)/dt

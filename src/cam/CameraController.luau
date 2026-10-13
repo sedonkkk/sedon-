@@ -105,7 +105,7 @@ function CameraController:reset()
  self.camera=nil
  self.lastFrame=nil
  self.yaw=nil;self.pitch=nil;self.polarHold=nil;self.polarTurn=nil
- self.adaptiveTau=nil;self.yawVelocity=0;self.pitchVelocity=0;self.mode=nil
+ self.adaptiveTau=nil;self.yawVelocity=0;self.pitchVelocity=0;self.mode=nil;self.guardPitchVelocity=0;self.guardYawVelocity=0
  self.diagnostics=diagnostic("RESET")
 end
 function CameraController:destroy() self:reset() end
@@ -138,7 +138,7 @@ function CameraController:_angles(frame)
  return wrap(yaw),math.atan2(look.Y,horizontal)
 end
 
-function CameraController:_update(camera,predicted,dt)
+function CameraController:_update(camera,predicted,dt,context)
  local alpha,message=CameraController.alpha(self.config.Smoothness,dt)
  if not alpha then return false,message end
  if dt<=0 then return false,"deltaTime must be positive" end
@@ -186,6 +186,20 @@ function CameraController:_update(camera,predicted,dt)
  -- instant 180-degree heading flip on exit even with Smoothness=0, without
  -- adding another smoothing filter to ordinary tracking.
  local guarded=not held and (polarTurn or horizontal<POLAR_BAND)
+ local safety=self.config.AngularSafety and context and (context.movementPhase~="Grounded" or context.distanceStuds<self.config.CloseSafetyDistance or (context.reversalScale or 1)<1)
+ if safety then
+  local function limited(step,delta,prior,rate,acceleration)
+   local desired=math.clamp(step/dt,-rate,rate)
+   if acceleration then desired=math.clamp(desired,(prior or 0)-acceleration*dt,(prior or 0)+acceleration*dt) end
+   desired=math.clamp(desired,-rate,rate)
+   local value=desired*dt
+   if value*delta<0 then return 0,0 end
+   if math.abs(value)>math.abs(delta) then return delta,0 end
+   return value,desired
+  end
+  yawStep,self.guardYawVelocity=limited(yawStep,yawDelta,self.guardYawVelocity,math.rad(self.config.AngularMaxSpeed),nil)
+  pitchStep,self.guardPitchVelocity=limited(pitchStep,targetPitch-previousPitch,self.guardPitchVelocity,math.rad(self.config.PitchMaxSpeed),math.rad(self.config.PitchMaxAcceleration))
+ else self.guardPitchVelocity=0;self.guardYawVelocity=0 end
  if guarded then yawStep=math.clamp(yawStep,-POLAR_YAW_RATE*dt,POLAR_YAW_RATE*dt) end
  local resultYaw=wrap(previousYaw+yawStep)
  local resultPitch=math.clamp(previousPitch+pitchStep,-HALF_PI,HALF_PI)
@@ -202,6 +216,8 @@ function CameraController:_update(camera,predicted,dt)
  self.lastFrame=result
  self.yaw=resultYaw;self.pitch=resultPitch;self.polarHold=held;self.polarTurn=polarTurn
  local data=self.diagnostics
+ data.yawError=math.deg(shortest(targetYaw-resultYaw));data.pitchError=math.deg(targetPitch-resultPitch)
+ data.pitchRate=math.deg(pitchStep/dt);data.safetyLimited=safety==true
  data.mode=mode;data.tauSeconds=if mode=="Adaptive" then self.adaptiveTau else CameraController.timeConstant(self.config.Smoothness)
  data.yawVelocity=self.yawVelocity;data.pitchVelocity=self.pitchVelocity
  data.yaw=math.deg(resultYaw);data.pitch=math.deg(resultPitch)
@@ -210,10 +226,10 @@ function CameraController:_update(camera,predicted,dt)
  data.state=if held then "POLAR_HOLD" elseif guarded then "POLAR_TURN" else "TRACKING"
  return true
 end
-function CameraController:update(camera,predicted,dt)
+function CameraController:update(camera,predicted,dt,context)
  -- Missing/destroyed cameras and engine errors are skipped without throwing out
 -- of RenderStepped. All validation precedes the single CFrame assignment.
- local ok,updated,message=pcall(self._update,self,camera,predicted,dt)
+ local ok,updated,message=pcall(self._update,self,camera,predicted,dt,context)
  if not ok then self.diagnostics.state="ERROR";return false,"Camera update failed: "..tostring(updated) end
  if not updated then self.diagnostics.state="ERROR" end
  return updated,message

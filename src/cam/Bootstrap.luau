@@ -51,7 +51,7 @@ function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
   if current then current:destroy();return true end
   return false
  end
- for _,name in {"GetLockedTarget","GetPrediction","GetPredictedPosition","LockTarget","UnlockTarget","configure","SetEnabled","SetHitPart","ApplyESPTarget","ClearESPTarget"} do
+ for _,name in {"GetMovementDiagnostics","GetTrackingDiagnostics","GetLockedTarget","GetPrediction","GetPredictedPosition","LockTarget","UnlockTarget","configure","SetEnabled","SetHitPart","ApplyESPTarget","ClearESPTarget"} do
   API[name]=function(...)
    if not API.session then return nil,"Not initialized" end
    return API.session[name](API.session,...)

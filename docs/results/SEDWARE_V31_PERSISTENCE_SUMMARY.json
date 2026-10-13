@@ -1,0 +1,136 @@
+{
+  "baselineCommit": "7eeb3d1ce54a59b9fda2c56ab76a80cf79881c9a",
+  "baselineSha256": "44a7b9288a17e0ccc7daee89f6b865de3170ce3a21600340313c22e1e3831fe1",
+  "currentSha256": "3a8e56d1220f34b961102f32b59e1a42f470ee58f739b7a3b7eea9c7b9ab602b",
+  "rows": 32,
+  "pairedConfigurations": 16,
+  "scheduledFps": [
+    30,
+    60,
+    120,
+    144
+  ],
+  "warmupSeconds": 0.5,
+  "recoveryWindowSeconds": 0.8,
+  "faultSeconds": {
+    "BriefOcclusion": 0.1,
+    "LongOcclusion": 0.4,
+    "BriefPartAbsence": 0.1,
+    "LongPartAbsence": 0.3
+  },
+  "commonConfig": {
+    "Enabled": true,
+    "SmartSelection": true,
+    "TargetGraceSeconds": 0.2,
+    "Radius": 180,
+    "MaxDistance": 350,
+    "HitPart": "HumanoidRootPart"
+  },
+  "environment": "Official Luau CLI with CamV2Mock API doubles executing actual standalone Session code; no native rendering, physics, network, weapon, hit confirmation, measured FPS or Da Hood run",
+  "faultPolicy": "Occlusion is an explicit Raycast double; part absence destroys HumanoidRootPart and creates a new BasePart in the same loaded character",
+  "lossReference": "Observed GetLockedTarget transitions from the selected Player to nil, including synchronous destruction callbacks",
+  "pauseReference": "Sum of scheduled frame durations whose end state remains locked to the selected Player and exposes non-nil pauseReason",
+  "timeReference": "Fault durations are exact; last timestep of each segment can be shorter than 1/FPS. First-loss/recovery -1 means no transition observed",
+  "recoveryReference": "recoveredSamePlayer means that GetLockedTarget equals the original Player at the end, including cases that never lost it; autoReacquired requires observed loss and subsequent reacquisition",
+  "policyDifference": "Natural defaults preserved: V3 implicitly reacquires after loss; V3.1 ReacquireOnLoss=false retains a real loss until a user action. Different long-fault final locks reflect this intentional policy, not prediction accuracy",
+  "candidateLimitation": "One loaded candidate per row; otherPlayerSelections=0 is a fixture integrity check, not multi-player anti-switch validation",
+  "diagnosticsLimitation": "V3 has no GetTrackingDiagnostics; finalTrackingState/lastLossCode are Unavailable, not inferred",
+  "groups": [
+    {
+      "version": "V3",
+      "scenario": "BriefOcclusion",
+      "rows": 4,
+      "totalObservedLosses": 0,
+      "totalObservedReacquisitions": 0,
+      "meanPausedSeconds": 0.10625000000000001,
+      "meanUnlockedSeconds": 0.0,
+      "finalSamePlayerRows": 4,
+      "automaticReacquisitionRows": 0,
+      "otherPlayerSelections": 0
+    },
+    {
+      "version": "V3",
+      "scenario": "LongOcclusion",
+      "rows": 4,
+      "totalObservedLosses": 4,
+      "totalObservedReacquisitions": 4,
+      "meanPausedSeconds": 0.21458333325,
+      "meanUnlockedSeconds": 0.26145833350000003,
+      "finalSamePlayerRows": 4,
+      "automaticReacquisitionRows": 4,
+      "otherPlayerSelections": 0
+    },
+    {
+      "version": "V3",
+      "scenario": "BriefPartAbsence",
+      "rows": 4,
+      "totalObservedLosses": 4,
+      "totalObservedReacquisitions": 4,
+      "meanPausedSeconds": 0.0,
+      "meanUnlockedSeconds": 0.2447916665,
+      "finalSamePlayerRows": 4,
+      "automaticReacquisitionRows": 4,
+      "otherPlayerSelections": 0
+    },
+    {
+      "version": "V3",
+      "scenario": "LongPartAbsence",
+      "rows": 4,
+      "totalObservedLosses": 4,
+      "totalObservedReacquisitions": 4,
+      "meanPausedSeconds": 0.0,
+      "meanUnlockedSeconds": 0.50659722225,
+      "finalSamePlayerRows": 4,
+      "automaticReacquisitionRows": 4,
+      "otherPlayerSelections": 0
+    },
+    {
+      "version": "V3.1",
+      "scenario": "BriefOcclusion",
+      "rows": 4,
+      "totalObservedLosses": 0,
+      "totalObservedReacquisitions": 0,
+      "meanPausedSeconds": 0.10625000000000001,
+      "meanUnlockedSeconds": 0.0,
+      "finalSamePlayerRows": 4,
+      "automaticReacquisitionRows": 0,
+      "otherPlayerSelections": 0
+    },
+    {
+      "version": "V3.1",
+      "scenario": "LongOcclusion",
+      "rows": 4,
+      "totalObservedLosses": 4,
+      "totalObservedReacquisitions": 0,
+      "meanPausedSeconds": 0.21458333325,
+      "meanUnlockedSeconds": 0.940625,
+      "finalSamePlayerRows": 0,
+      "automaticReacquisitionRows": 0,
+      "otherPlayerSelections": 0
+    },
+    {
+      "version": "V3.1",
+      "scenario": "BriefPartAbsence",
+      "rows": 4,
+      "totalObservedLosses": 0,
+      "totalObservedReacquisitions": 0,
+      "meanPausedSeconds": 0.1,
+      "meanUnlockedSeconds": 0.0,
+      "finalSamePlayerRows": 4,
+      "automaticReacquisitionRows": 0,
+      "otherPlayerSelections": 0
+    },
+    {
+      "version": "V3.1",
+      "scenario": "LongPartAbsence",
+      "rows": 4,
+      "totalObservedLosses": 4,
+      "totalObservedReacquisitions": 0,
+      "meanPausedSeconds": 0.1447916665,
+      "meanUnlockedSeconds": 0.9552083335,
+      "finalSamePlayerRows": 0,
+      "automaticReacquisitionRows": 0,
+      "otherPlayerSelections": 0
+    }
+  ]
+}

@@ -29,7 +29,9 @@ local function configuration(overrides)
  return config
 end
 local function moving(overrides)
- local input={Enabled=true,MemoryTracking=false}
+ -- These fixtures isolate calibrated velocity * horizon arithmetic. The V3.1
+ -- vertical/reversal guards have separate default-behavior regressions.
+ local input={Enabled=true,MemoryTracking=false,VerticalControl=false,ReversalDamping=false}
  for key,value in overrides or {} do
   input[key]=if key=="PredictionX" then value*13.15/0.1205 elseif key=="PredictionY" then value*13.15/0.08 else value
  end
@@ -39,7 +41,7 @@ local function moving(overrides)
  return engine
 end
 
-test("standalone header and independent defaults match V3 controls",function()
+test("standalone header and independent defaults match V3.1 controls",function()
  local a,b=Config.defaults(),Config.defaults()
  check(not a.Enabled and a.HitPart=="UpperTorso")
  check(a.CamPrediction==nil);near(a.PredictionX,13.15);near(a.PredictionY,13.15)
@@ -47,6 +49,8 @@ test("standalone header and independent defaults match V3 controls",function()
  near(a.PredictionSmoothing,0);near(a.VelocitySmoothing,0.06)
  check(a.MemoryTracking and a.VelocityPrediction and a.PingCompensation)
  check(a.FallbackR6 and a.RespectScriptableCamera)
+ check(a.VerticalControl and a.ReversalDamping and not a.ReacquireOnLoss)
+ near(a.TargetPartGraceSeconds,0.15)
  check(#Config.controls==17)
  for _,control in Config.controls do
   check(Config.fields[control.key]==control and a[control.key]~=nil)
@@ -117,7 +121,7 @@ test("axis edits are independent and adjusted horizons remain bounded",function(
 end)
 
 test("memory reversals and jump state changes rebase without slow trailing velocity",function()
- local engine=PredictionEngine.new(configuration({Enabled=true}))
+ local engine=PredictionEngine.new(configuration({Enabled=true,VerticalControl=false,ReversalDamping=false}))
  check(engine:observe(0,zero,"Running"))
  check(engine:observe(0.1,V.new(1,0,0),"Running"))
  local resets=engine.history.resets
