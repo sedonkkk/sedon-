@@ -1,5 +1,7 @@
 # SEDWARE V3.1 — PINK EDITION
 
+Documento histórico. La versión actual y su comparación están en [SEDWARE V3.2](SEDWARE_V32.md) y [sus resultados](SEDWARE_V32_RESULTS.md). Las URLs de esta guía conservan el código V3.1.
+
 Actualización del proyecto existente, basada en el código, observaciones del usuario y comparación reproducible contra V3. Conserva la GUI y la escala 13.xx. No modifica `PinkDotLock.lua`, `DaHoodPrediction.lua`, armas ni comunicaciones protegidas de Da Hood.
 
 Estado de entrega: código, regresiones CLI/dobles y comparaciones ejecutados; **Roblox Studio, física/render/FPS nativos y Da Hood no verificados**. Se incluye un runner nativo preparado. No se atribuyen disparos fallidos únicamente a la cámara ni se anuncia una corrección del sistema de armas.

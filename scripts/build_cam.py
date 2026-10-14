@@ -31,7 +31,7 @@ def source_bundle(check=False):
     manifest = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in MODULES.items()}
     lines = [
         '--!nonstrict',
-        '-- SEDWARE CAM LOCK V3.1 — PINK EDITION | edit Config below.',
+        '-- SEDWARE CAM LOCK V3.2 — PINK EDITION | edit Config below.',
         '-- Prediction X/Y use a provisional Sedware scale; explicit calibration below. Movement requires authorization.',
         '-- Enabled=false opens the GUI without controlling the camera.',
         '-- Public client APIs only. No remote weapon integration or bypass.',
@@ -45,7 +45,7 @@ def source_bundle(check=False):
         ' local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn',
         ' if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end',
         'end',
-        'bootLog("CamExecution","START","SEDWARE CAM LOCK V3.1 — PINK EDITION payload began execution")',
+        'bootLog("CamExecution","START","SEDWARE CAM LOCK V3.2 — PINK EDITION payload began execution")',
         'local Config',
         'local configBuilt,headerError=xpcall(function() Config = '+match.group(2)+' end,bootTraceback)',
         'if configBuilt then headerError=nil else bootLog("CamConfiguration","FAIL",headerError) end',
@@ -197,22 +197,26 @@ def studio_place(source_path, check=False):
         else:
             regression_delivery.write_bytes(regression_build.read_bytes())
         print(f'Packaged native roll regression place: {regression_delivery} (not executed in this Linux environment)')
-        v2_runner = ROOT/'tests/studio/CamV31Regression.client.luau'
+        v2_runner = ROOT/'tests/studio/CamV32Regression.client.luau'
         if v2_runner.exists():
-            starter_script.find('Properties/string[@name="Name"]').text = 'CamV31Regression'
+            starter_script.find('Properties/string[@name="Name"]').text = 'CamV32Regression'
             starter_script.find('Properties/ProtectedString[@name="Source"]').text = v2_runner.read_text(encoding='utf-8')
+            fixture = ROOT/'tests/studio/CamV32Grant.server.luau'
+            assert fixture.exists(), 'V3.2 native test requires its owned server fixture'
+            _, fixture_props = item(servers, 'Script', 'SEDWAREV32TestFixture')
+            ET.SubElement(fixture_props, 'ProtectedString', name='Source').text = fixture.read_text(encoding='utf-8')
             ET.indent(document, space='  ')
-            v2_build = ROOT/'build/SedwareCamV31Test.rbxlx'
+            v2_build = ROOT/'build/SedwareCamV32Test.rbxlx'
             ET.ElementTree(document).write(v2_build, encoding='utf-8', xml_declaration=True)
-            v2_delivery = ROOT/'studio/SedwareCamV31Test.rbxlx'
+            v2_delivery = ROOT/'studio/SedwareCamV32Test.rbxlx'
             embedded = ET.parse(v2_build).findall('.//ProtectedString[@name="Source"]')
-            assert sorted(node.text for node in embedded) == sorted([*expected_sources, v2_runner.read_text(encoding='utf-8')])
+            assert sorted(node.text for node in embedded) == sorted([*expected_sources, v2_runner.read_text(encoding='utf-8'), fixture.read_text(encoding='utf-8')])
             if check:
                 if not v2_delivery.exists() or v2_delivery.read_bytes() != v2_build.read_bytes():
-                    raise RuntimeError('V3.1 native place differs: run scripts/build_cam.py')
+                    raise RuntimeError('V3.2 native place differs: run scripts/build_cam.py')
             else:
                 v2_delivery.write_bytes(v2_build.read_bytes())
-            print(f'Packaged native V3.1 regression place: {v2_delivery} (native results pending)')
+            print(f'Packaged native V3.2 regression place: {v2_delivery} (native results pending)')
 
 
 if __name__ == '__main__':

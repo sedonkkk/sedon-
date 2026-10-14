@@ -1,8 +1,8 @@
-# Versión actual: SEDWARE V3.1
+# Versión actual: SEDWARE V3.2
 
-Consulta [la guía V3.1](SEDWARE_V31.md) y [los resultados](SEDWARE_V31_RESULTS.md). Las versiones anteriores se conservan como documentación histórica. Verificación de motor pendiente.
+Consulta [la guía V3.2](SEDWARE_V32.md), [la auditoría del archivo antiguo](SEDWARE_V32_LEGACY_AUDIT.md) y [los resultados](SEDWARE_V32_RESULTS.md). Las versiones anteriores se conservan como documentación histórica. Verificación de motor pendiente.
 
-# Versión actual: SEDWARE V3
+# Histórico: SEDWARE V3
 
 Consulta [la guía V3](SEDWARE_V3.md). La [guía V2](SEDWARE_V2.md) es histórica y conserva sus URLs fijadas a su versión. V3 es una candidata con verificación nativa pendiente.
 

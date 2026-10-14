@@ -29,7 +29,7 @@ local function configuration(overrides)
  return config
 end
 local function moving(overrides)
- -- These fixtures isolate calibrated velocity * horizon arithmetic. The V3.1
+ -- These fixtures isolate calibrated velocity * horizon arithmetic. The V3.2
  -- vertical/reversal guards have separate default-behavior regressions.
  local input={Enabled=true,MemoryTracking=false,VerticalControl=false,ReversalDamping=false}
  for key,value in overrides or {} do
@@ -41,7 +41,7 @@ local function moving(overrides)
  return engine
 end
 
-test("standalone header and independent defaults match V3.1 controls",function()
+test("standalone header and independent defaults match V3.2 controls",function()
  local a,b=Config.defaults(),Config.defaults()
  check(not a.Enabled and a.HitPart=="UpperTorso")
  check(a.CamPrediction==nil);near(a.PredictionX,13.15);near(a.PredictionY,13.15)
@@ -51,7 +51,9 @@ test("standalone header and independent defaults match V3.1 controls",function()
  check(a.FallbackR6 and a.RespectScriptableCamera)
  check(a.VerticalControl and a.ReversalDamping and not a.ReacquireOnLoss)
  near(a.TargetPartGraceSeconds,0.15)
- check(#Config.controls==17)
+ check(a.FlyOrientation)
+ near(a.FlyMaxTorque,100000);near(a.FlyMaxAngularVelocity,6);near(a.FlyOrientationResponsiveness,15)
+ check(#Config.controls==21)
  for _,control in Config.controls do
   check(Config.fields[control.key]==control and a[control.key]~=nil)
  end

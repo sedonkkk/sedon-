@@ -31,7 +31,27 @@ function Session:GetTrackingDiagnostics()
  d.target=self.locked and self.locked.player.Name;d.locked=self.locked~=nil
  d.trackingState=self.trackingState or "IDLE";d.reason=self.trackingReason;d.lastLoss=self.lastLoss
  d.pauseReason=self.pauseReason;d.prediction=self.predictionOutput
+ d.observation=self.observation and table.clone(self.observation)
  return d
+end
+function Session:GetESPDiagnostics()
+ local data=table.clone(self.esp.stats)
+ data.loadedDataOnly=true;data.extendedAuthorized=ESPAccess.allowed(self.config,self.report)
+ return data
+end
+function Session:_observe(now,position,state)
+ local accepted,reason=self.prediction:observe(now,position,state)
+ local previous=self.observation or {rejectedCount=0}
+ self.observation={accepted=accepted==true,reason=reason,time=now,
+  lastAcceptedAt=if accepted then now else previous.lastAcceptedAt,
+  rejectedCount=previous.rejectedCount+(if accepted then 0 else 1),
+  lastRejectedAt=if accepted then previous.lastRejectedAt else now,
+  lastRejectedReason=if accepted then previous.lastRejectedReason else reason}
+ if not accepted and self.config.DebugMode and (not self.nextObservationDiagnostic or now>=self.nextObservationDiagnostic) then
+  self.nextObservationDiagnostic=now+1
+  Runtime.trace(self.report,"CamObservation","REJECTED",reason or "Observation rejected")
+ end
+ return accepted,reason
 end
 function Session:_lose(code,detail)
  self.lastLoss={code=code,detail=detail,time=self:_clock(),target=self.locked and self.locked.player.Name}
@@ -71,13 +91,13 @@ function Session:LockTarget(player)
   end
   return false,reason
  end
- self.prediction:reset();self.controller:reset();self.predictionOutput=nil
+ self.prediction:reset();self.controller:reset();self.predictionOutput=nil;self.observation=nil
  self.selector.lossSince=nil;self.nextRetention=nil
  self.nextObservation=nil;self.nextPing=nil
  self.partGapSince=nil;self.trackingState="TRACKING";self.trackingReason=nil
  self:_bindTarget(data)
  self:_ping(now)
- self.prediction:observe(now,data.part.Position,tostring(data.humanoid:GetState()))
+ self:_observe(now,data.part.Position,tostring(data.humanoid:GetState()))
  self.nextObservation=now+1/self.config.UpdateHz
  self.predictionOutput=self.prediction:predict(self.selector:origin(),now)
  if self.predictionOutput then self.predictionOutput.captureTimeKnown=false;self.predictionOutput.ageSource="LocalReadTime" end
@@ -87,7 +107,7 @@ function Session:LockTarget(player)
 end
 function Session:UnlockTarget(reason)
  if not self.locked then return false end
- self.locked=nil;self.predictionOutput=nil
+ self.locked=nil;self.predictionOutput=nil;self.observation=nil
  self.trackingState=if self.config.Enabled then "IDLE" else "DISABLED";self.trackingReason=nil;self.pauseReason=nil
  self.targetCleanup:destroy();self.targetCleanup=Cleanup.new()
  self.prediction:reset();self.controller:reset();self.nextObservation=nil;self.nextPing=nil
@@ -181,29 +201,62 @@ function Session:GetMovementDiagnostics()
  for _,field in {"Fly","Speed"} do
   local controller=if field=="Fly" then self.fly else self.speed
   local requested=self.config[field];local effective=false
+  local requestedSpeed=if field=="Fly" then self.config.FlySpeed else self.config.WalkSpeed
+  local measured,horizontal,vertical,serverMeasured,appliedSpeed,commandSpeed
+  local wanted=false
   local state,reason="OFF","Not requested"
-  if not permitted then state="UNAVAILABLE";reason="No permitted local context or own server authorization"
+  if not requested then controller.probeSince=nil
+  elseif not permitted then state="UNAVAILABLE";reason="No permitted local context or own server authorization"
   elseif field=="Speed" and requested and self.config.Fly then state="OFF";reason="Paused while Fly is requested"
   elseif requested and not ready then state="UNAVAILABLE";reason="Waiting for living, unanchored character"
   elseif requested then
    local root=entry.root;local velocity=root.AssemblyLinearVelocity
-   local measured=velocity and (if field=="Fly" then velocity.Magnitude else math.sqrt(velocity.X^2+velocity.Z^2)) or 0
-   local wanted=if field=="Fly" then self.fly.velocity.Magnitude>self.config.MovementMinimumSpeed else entry.humanoid.MoveDirection and entry.humanoid.MoveDirection.Magnitude>0.1
-   effective=(controller.active and measured>=self.config.MovementMinimumSpeed and (if field=="Fly" then self.fly.velocity.Magnitude>=self.config.MovementMinimumSpeed and velocity:Dot(self.fly.velocity)>0 else wanted and velocity:Dot(entry.humanoid.MoveDirection)>0))==true
+   local validVelocity=velocity and finite(velocity.X) and finite(velocity.Y) and finite(velocity.Z) and finite(velocity.Magnitude)
+   if validVelocity then
+    horizontal=math.sqrt(velocity.X^2+velocity.Z^2);vertical=velocity.Y
+    measured=if field=="Fly" then velocity.Magnitude else horizontal
+   end
+   commandSpeed=if field=="Fly" then self.fly.velocity.Magnitude else self.config.WalkSpeed
+   wanted=(if field=="Fly" then commandSpeed>self.config.MovementMinimumSpeed else entry.humanoid.MoveDirection and entry.humanoid.MoveDirection.Magnitude>0.1)==true
+   local matching=validVelocity and (if field=="Fly" then wanted and velocity:Dot(self.fly.velocity)>0 else wanted and velocity:Dot(entry.humanoid.MoveDirection)>0)
+   effective=(controller.active and measured and measured>=self.config.MovementMinimumSpeed and matching)==true
    if server then
     local applied=if field=="Fly" then bridge.serverFly else bridge.serverSpeed
-    state=if bridge.active and applied then "SERVER AUTHORIZED" elseif bridge.state=="SERVER_REJECTED" or bridge.state=="SERVER_TIMEOUT" then "SERVER LIMITED" else "UNAVAILABLE"
-    reason=bridge.reason or bridge.state
-   elseif controller.limited then state="SERVER LIMITED";reason="WalkSpeed changed externally; not overwritten"
+    local serverHorizontal=self.player:GetAttribute("SEDWAREMeasuredHorizontalSpeed")
+    local serverVertical=self.player:GetAttribute("SEDWAREMeasuredVerticalSpeed")
+    if finite(serverHorizontal) and finite(serverVertical) then
+     serverMeasured=if field=="Fly" then math.sqrt(serverHorizontal^2+serverVertical^2) else serverHorizontal
+    end
+    appliedSpeed=if field=="Speed" then self.player:GetAttribute("SEDWAREAppliedWalkSpeed") else (if applied then commandSpeed else nil)
+    local overrideReason=field=="Speed" and self.player:GetAttribute("SEDWAREServerSpeedReason")
+    if type(overrideReason)=="string" and overrideReason~="" then
+     state="LIMITED";reason=overrideReason;effective=false
+    elseif controller.limited or bridge.state=="SERVER_REJECTED" or bridge.state=="SERVER_TIMEOUT" then
+     state="LIMITED";reason=bridge.reason or "Requested property changed externally";effective=false
+    elseif not bridge.available then state="UNAVAILABLE";reason=bridge.reason or "Own server component unavailable";effective=false
+    else
+     effective=(effective and bridge.active and applied and serverMeasured and serverMeasured>=self.config.MovementMinimumSpeed)==true
+     state=if effective then "SERVER ACTIVE" else "PENDING"
+     reason=if effective then "Motion observed by client and own server; own request applied" else "Waiting for own server application, input or measured motion"
+    end
+   elseif controller.limited then state="LIMITED";reason="WalkSpeed changed externally; not overwritten";effective=false
    elseif effective then state="LOCAL ACTIVE";reason="Physical velocity observed locally; replication unverified"
    else
-    controller.probeSince=if wanted then controller.probeSince or self:_clock() else nil
-    state=if controller.probeSince and self:_clock()-controller.probeSince>=self.config.MovementProbeSeconds then "SERVER LIMITED" else "LOCAL ONLY"
-    reason=if state=="SERVER LIMITED" then "Requested motion not observed; environment restriction/physics cause unconfirmed" else "Idle, waiting for input or physical confirmation"
+    state="PENDING";reason="Idle, waiting for input or physical confirmation"
    end
-  else controller.probeSince=nil end
+   if not server then appliedSpeed=if field=="Speed" then entry.humanoid.WalkSpeed else (controller.constraint and controller.constraint.VectorVelocity.Magnitude) end
+   if wanted and not effective and state=="PENDING" then
+    controller.probeSince=controller.probeSince or self:_clock()
+    if self:_clock()-controller.probeSince>=self.config.MovementProbeSeconds then
+     state="LIMITED";reason="Requested motion not observed; physical/environment cause unconfirmed"
+    end
+   else controller.probeSince=nil end
+  end
   if controller.error then state="ERROR";reason=controller.error end
-  result[field]={requested=requested,controllerActive=controller.active==true,effective=effective,state=state,reason=reason}
+  result[field]={requested=requested,controllerActive=controller.active==true,effective=effective,state=state,reason=reason,
+   requestedSpeed=requestedSpeed,commandSpeed=commandSpeed,appliedSpeed=appliedSpeed,
+   observedSpeed=measured,observedHorizontalSpeed=horizontal,observedVerticalSpeed=vertical,
+   serverObservedSpeed=serverMeasured,wantedInput=wanted}
  end
  return result
 end
@@ -258,8 +311,9 @@ function Session:_cameraDiagnostic(now)
  self.nextCameraDiagnostic=now+self.config.CameraDebugInterval
  local data=self.controller:GetDiagnostics()
  Runtime.trace(self.report,"CamCamera",data.state,string.format(
-  "yaw=%.3f pitch=%.3f roll=%.6f targetAngle=%.3f deltaTime=%.6f angularError=%.3f",
-  data.yaw,data.pitch,data.roll,data.targetAngle,data.deltaTime,data.angularError))
+  "yaw=%.3f pitch=%.3f roll=%.6f targetAngle=%.3f deltaTime=%.6f angularError=%.3f yawError=%s pitchError=%s pitchRate=%s pitchAccelerationApplied=%s safety=%s conflict=%s overshootReference=%s",
+  data.yaw,data.pitch,data.roll,data.targetAngle,data.deltaTime,data.angularError,tostring(data.yawError),tostring(data.pitchError),
+  tostring(data.pitchRate),tostring(data.accelerationApplied),tostring(data.safetyState),tostring(data.constraintConflict),tostring(data.overshootReference)))
 end
 function Session:_track(dt,now)
  if not self.config.Enabled then return end
@@ -297,7 +351,7 @@ function Session:_track(dt,now)
  if self.config.SmartSelection and self.retentionPaused then self:_pause("Target temporarily outside visible bounds",now);return end
  if not self.nextObservation or now+1e-7>=self.nextObservation then
   self.nextObservation=now+1/self.config.UpdateHz
-  self.prediction:observe(now,data.part.Position,tostring(data.humanoid:GetState()))
+  self:_observe(now,data.part.Position,tostring(data.humanoid:GetState()))
  end
  self.predictionOutput=self.prediction:predict(camera.CFrame.Position,now)
  if self.predictionOutput then self.predictionOutput.captureTimeKnown=false;self.predictionOutput.ageSource="LocalReadTime" end
@@ -329,12 +383,21 @@ function Session:_step(dt)
   local stats=self.esp.stats
   local esp=if not self.config.ESP then "OFF | Enable ESP + Hitboxes or Names"
    elseif not self.config.Hitboxes and not self.config.Names then "Choose Hitboxes or Names to show indicators"
-   else string.format("%d visible / %d evaluated | %d active",stats.visible,stats.considered,stats.active)
+   else string.format("%s %s | %d visible / %d evaluated",
+    if stats.mode=="AlwaysOnTop" then "Always On Top" else "Visible Only",
+    if stats.unlimitedRange then "loaded" else tostring(stats.maxDistance),stats.visible,stats.considered)
   self.ui:setStatus(movement,esp,allowed,movementReport)
   if self.config.DebugMode then
    Runtime.trace(self.report,"Movement","STATUS",movement.." | mode="..movementReport.mode.." | "..movementReport.Fly.reason.." | "..movementReport.Speed.reason)
+   for _,field in {"Fly","Speed"} do
+    local m=movementReport[field]
+    Runtime.trace(self.report,"Movement","MEASURE",string.format("%s requestedSpeed=%s command=%s applied=%s observed=%s serverObserved=%s input=%s controllerActive=%s effective=%s",
+     field,tostring(m.requestedSpeed),tostring(m.commandSpeed),tostring(m.appliedSpeed),tostring(m.observedSpeed),tostring(m.serverObservedSpeed),tostring(m.wantedInput),tostring(m.controllerActive),tostring(m.effective)))
+   end
    Runtime.trace(self.report,"ESP","DIAGNOSTIC",string.format("registered=%d evaluated=%d range=%d screen=%d occluded=%d notReady=%d far=%d offscreen=%d visible=%d active=%d created=%d raycasts=%d ms=%.4f maxMs=%.4f",
     stats.registered,stats.considered,stats.inRange,stats.onScreen,stats.occluded,stats.notReady,stats.outOfRange,stats.offscreen,stats.visible,stats.active,stats.created,stats.raycasts,stats.lastSeconds*1000,stats.maxSeconds*1000))
+   Runtime.trace(self.report,"ESP","MODE",string.format("mode=%s range=%s loadedDataOnly=true invalidRoot=%s invalidHead=%s",
+    tostring(stats.mode),if stats.unlimitedRange then "Unlimited" else tostring(stats.maxDistance),tostring(stats.invalidRoot),tostring(stats.invalidHead)))
    local p=self.predictionOutput;local d=self.controller.diagnostics
    Runtime.trace(self.report,"Tracking","DIAGNOSTIC",string.format("target=%s angularError=%.3f scaleX=%.2f scaleY=%.2f horizonX=%.6f horizonY=%.6f smoothness=%.3f mode=%s fps=%.1f pingMs=%s smoothedPingMs=%s localReadAge=%s captureTime=unknown observationDelay=unknown updateMs=%.4f",
     self.locked and self.locked.player.Name or "none",d.angularError,self.config.PredictionX,self.config.PredictionY,
@@ -343,6 +406,10 @@ function Session:_step(dt)
    Runtime.trace(self.report,"Tracking","STATE",string.format("state=%s reason=%s lastLoss=%s phase=%s hitPart=%s verticalVelocity=%s yawError=%s pitchError=%s horizonXUsed=%s horizonYUsed=%s",
     tostring(self.trackingState),tostring(self.trackingReason),self.lastLoss and self.lastLoss.code or "none",p and p.movementPhase or "unknown",self.config.HitPart,
     tostring(p and p.verticalVelocityUsed),tostring(d.yawError),tostring(d.pitchError),tostring(p and p.horizontalHorizonUsed),tostring(p and p.verticalHorizonUsed)))
+   local o=self.observation
+   Runtime.trace(self.report,"Tracking","QUALITY",string.format("observeAccepted=%s rejection=%s rejectedCount=%s verticalAnomaly=%s anomalyReason=%s rawYVelocity=%s pitchRate=%s appliedAcceleration=%s safety=%s conflict=%s overshootReference=%s pitchOvershoot=%s",
+    tostring(o and o.accepted),tostring(o and o.reason),tostring(o and o.rejectedCount),tostring(p and p.verticalAnomaly),tostring(p and p.verticalAnomalyReason),
+    tostring(p and p.verticalRawVelocity),tostring(d.pitchRate),tostring(d.accelerationApplied),tostring(d.safetyState),tostring(d.constraintConflict),tostring(d.overshootReference),tostring(d.pitchOvershootDegrees)))
   end
  end
 end
@@ -399,7 +466,11 @@ function Session.init(options,report)
   stage="Graphics"
   self.notifications=NotificationSystem.new(report.playerGui,config)
   self.ui=UI.new(report.playerGui,config,function(field,value) return self:configure(field,value) end,
-   function(reason,field) self:_notify((if field=="Fly" or field=="Speed" then field.." | " else "Invalid value | ")..tostring(reason)) end,function(name,value) return self:_action(name,value) end,self.player)
+   function(reason,field)
+    local descriptor=field and Config.fields[field]
+    local prefix=if descriptor and descriptor.section=="MOVEMENT" then descriptor.label.." | " else "Invalid value | "
+    self:_notify(prefix..tostring(reason))
+   end,function(name,value) return self:_action(name,value) end,self.player)
   self.gui=self.ui.gui
   assert(self.gui.Parent==report.playerGui and self.notifications.gui.Parent==report.playerGui,"Cam Lock interface failed to attach")
   self.cleanup:connect(self.gui.Destroying,function() self:destroy() end)

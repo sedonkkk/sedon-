@@ -10,22 +10,33 @@ local input=Instance.new("RemoteEvent");input.Name="SEDWAREMovementInput";input.
 local states,connections,globalConnections={},{},{}
 local function connect(signal,callback) local c=signal:Connect(callback);table.insert(globalConnections,c);return c end
 local function finite(v) return type(v)=="number" and v==v and math.abs(v)<math.huge end
+-- WalkSpeed stores float32 while request numbers are Luau doubles.
+local function close(a,b) return finite(a) and finite(b) and math.abs(a-b)<=1e-4 end
+local function orient(s,forward)
+ if not s.orientation then return end
+ local horizontal=Vector3.new(forward.X,0,forward.Z)
+ if horizontal.Magnitude>1e-5 then s.heading=horizontal.Unit end
+ s.heading=s.heading or Vector3.new(0,0,-1)
+ s.orientation.CFrame=CFrame.lookAt(Vector3.zero,s.heading,Vector3.yAxis)
+end
 local function restore(s)
  if s.player and s.player:GetAttribute("SEDWAREMovementToken")==s.token then
   s.player:SetAttribute("SEDWAREServerFlyActive",false);s.player:SetAttribute("SEDWAREServerSpeedActive",false)
   s.player:SetAttribute("SEDWAREMeasuredHorizontalSpeed",0);s.player:SetAttribute("SEDWAREMeasuredVerticalSpeed",0)
+  s.player:SetAttribute("SEDWAREAppliedWalkSpeed",0);s.player:SetAttribute("SEDWAREServerSpeedReason","")
  end
+ if s.orientation then s.orientation:Destroy();s.orientation=nil end
  if s.constraint then s.constraint:Destroy();s.constraint=nil end
  if s.attachment then s.attachment:Destroy();s.attachment=nil end
  if s.humanoid and s.original then pcall(function()
-  if s.humanoid.WalkSpeed==s.appliedSpeed then s.humanoid.WalkSpeed=s.original.speed end
+  if close(s.humanoid.WalkSpeed,s.appliedSpeed) then s.humanoid.WalkSpeed=s.original.speed end
   if s.flyApplied then
    s.humanoid.AutoRotate=s.original.rotate;s.humanoid.PlatformStand=s.original.platform
    if s.humanoid.Health>0 then s.humanoid:ChangeState(s.original.state) end
   end
  end) end
  if s.root and s.flyApplied then pcall(function() if s.ownerAutomatic==false then s.root:SetNetworkOwner(s.previousOwner) else s.root:SetNetworkOwnershipAuto() end end) end
- s.humanoid=nil;s.original=nil;s.root=nil;s.flyApplied=false
+ s.humanoid=nil;s.original=nil;s.root=nil;s.flyApplied=false;s.appliedSpeed=nil
 end
 local function apply(player,s)
  restore(s)
@@ -44,23 +55,50 @@ local function apply(player,s)
   s.constraint.Attachment0=s.attachment;s.constraint.RelativeTo=Enum.ActuatorRelativeTo.World
   s.constraint.VelocityConstraintMode=Enum.VelocityConstraintMode.Vector;s.constraint.ForceLimitsEnabled=true
   s.constraint.MaxForce=s.maxForce;s.constraint.VectorVelocity=Vector3.zero;s.constraint.Parent=root
+  if s.flyOrientation then
+   s.orientation=Instance.new("AlignOrientation");s.orientation.Name="SEDWAREServerFlyOrientation"
+   s.orientation.Mode=Enum.OrientationAlignmentMode.OneAttachment;s.orientation.Attachment0=s.attachment
+   s.orientation.AlignType=Enum.AlignType.AllAxes
+   s.orientation.RigidityEnabled=false;s.orientation.ReactionTorqueEnabled=false
+   s.orientation.MaxTorque=s.maxTorque;s.orientation.MaxAngularVelocity=s.maxAngularVelocity
+   s.orientation.Responsiveness=s.orientationResponsiveness;s.orientation.Parent=root
+   orient(s,root.CFrame.LookVector)
+  end
   h.AutoRotate=false;h.PlatformStand=true;h:ChangeState(Enum.HumanoidStateType.Physics)
- elseif s.speed then h.WalkSpeed=s.walkSpeed;s.appliedSpeed=s.walkSpeed end
+ elseif s.speed then
+  h.WalkSpeed=s.walkSpeed
+  local actual=h.WalkSpeed
+  s.appliedSpeed=if close(actual,s.walkSpeed) then actual else nil
+  s.speedLimited=s.appliedSpeed==nil
+ end
  player:SetAttribute("SEDWAREMovementToken",s.token)
  player:SetAttribute("SEDWAREServerFlyActive",s.fly)
- player:SetAttribute("SEDWAREServerSpeedActive",s.speed and not s.fly)
- return true,"Server applied; physical result must be measured separately"
+ player:SetAttribute("SEDWAREServerSpeedActive",s.speed and not s.fly and not s.speedLimited)
+ player:SetAttribute("SEDWAREAppliedWalkSpeed",if s.speed and not s.fly and not s.speedLimited then s.appliedSpeed else 0)
+ player:SetAttribute("SEDWAREServerSpeedReason",if s.speedLimited then "WalkSpeed application limited; requested value not accepted" else "")
+ return true,if s.speedLimited then "WalkSpeed application limited; requested value not accepted" else "Server applied; physical result must be measured separately"
 end
 control.OnServerInvoke=function(player,r)
  if player:GetAttribute("SEDWAREMovementAuthorized")~=true then return {ok=false,reason="Server authorization denied"} end
  if type(r)~="table" or type(r.token)~="string" or #r.token>100 or type(r.fly)~="boolean" or type(r.speed)~="boolean"
   or not finite(r.flySpeed) or r.flySpeed<1 or r.flySpeed>200
-  or not finite(r.walkSpeed) or r.walkSpeed<1 or r.walkSpeed>100
+  or not finite(r.walkSpeed) or r.walkSpeed<1 or r.walkSpeed>140
   or not finite(r.maxForce) or r.maxForce<1000 or r.maxForce>10000000 then return {ok=false,reason="Invalid movement request"} end
+ -- Optional v1 fields: older SDK requests receive bounded defaults; false is honored.
+ if r.flyOrientation~=nil and type(r.flyOrientation)~="boolean" then return {ok=false,reason="Invalid flight orientation flag"} end
+ local maxTorque=if r.maxTorque==nil then 100000 else r.maxTorque
+ local maxAngularVelocity=if r.maxAngularVelocity==nil then 6 else r.maxAngularVelocity
+ local orientationResponsiveness=if r.orientationResponsiveness==nil then 15 else r.orientationResponsiveness
+ if not finite(maxTorque) or maxTorque<1000 or maxTorque>10000000
+  or not finite(maxAngularVelocity) or maxAngularVelocity<0.1 or maxAngularVelocity>20
+  or not finite(orientationResponsiveness) or orientationResponsiveness<5 or orientationResponsiveness>100 then
+  return {ok=false,reason="Flight orientation settings out of range"}
+ end
  local previous=states[player];local now=os.clock()
  if previous and now-(previous.lastRequest or 0)<0.03 then return {ok=false,reason="Request rate exceeded"} end
  if previous then restore(previous) end
- local s={player=player,token=r.token,fly=r.fly,speed=r.speed,flySpeed=r.flySpeed,walkSpeed=r.walkSpeed,maxForce=r.maxForce,lastInput=now,lastRequest=now}
+ local s={player=player,token=r.token,fly=r.fly,speed=r.speed,flySpeed=r.flySpeed,walkSpeed=r.walkSpeed,maxForce=r.maxForce,lastInput=now,lastRequest=now,
+  flyOrientation=r.flyOrientation~=false,maxTorque=maxTorque,maxAngularVelocity=maxAngularVelocity,orientationResponsiveness=orientationResponsiveness}
  if not r.fly and not r.speed then states[player]=nil;return {ok=true,reason="Server movement disabled"} end
  states[player]=s
  local ok,accepted,reason=pcall(apply,player,s)
@@ -75,20 +113,30 @@ connect(input.OnServerEvent,function(player,token,velocity)
  if typeof(velocity)~="Vector3" or not finite(velocity.X) or not finite(velocity.Y) or not finite(velocity.Z)
   or velocity.Magnitude>s.flySpeed+0.01 then return end
  s.lastInput=now
- if s.constraint then s.constraint.VectorVelocity=velocity end
+ if s.constraint then s.constraint.VectorVelocity=velocity;orient(s,velocity) end
 end)
 connect(Run.Heartbeat,function()
  local now=os.clock()
  for player,s in states do
   if player:GetAttribute("SEDWAREMovementAuthorized")~=true or now-s.lastInput>0.8
-   or player.Character==nil or not s.root or not s.root:IsDescendantOf(player.Character) or s.humanoid.Health<=0 then
+   or player.Character==nil or not s.root or not s.root:IsDescendantOf(player.Character) or s.root.Anchored
+   or not s.humanoid:IsDescendantOf(player.Character) or s.humanoid.Health<=0 then
    restore(s);states[player]=nil
-  elseif not s.nextMeasure or now>=s.nextMeasure then
+  else
+   -- A correction by another owned system is recorded once, never fought.
+   if s.speed and not s.fly and not s.speedLimited and not close(s.humanoid.WalkSpeed,s.appliedSpeed) then
+    s.speedLimited=true
+    player:SetAttribute("SEDWAREServerSpeedActive",false)
+    player:SetAttribute("SEDWAREAppliedWalkSpeed",0)
+    player:SetAttribute("SEDWAREServerSpeedReason","WalkSpeed changed externally; not overwritten")
+   end
+   if not s.nextMeasure or now>=s.nextMeasure then
    s.nextMeasure=now+.2
    local v=s.root.AssemblyLinearVelocity
    if typeof(v)=="Vector3" and finite(v.X) and finite(v.Y) and finite(v.Z) then
     player:SetAttribute("SEDWAREMeasuredHorizontalSpeed",math.sqrt(v.X*v.X+v.Z*v.Z))
     player:SetAttribute("SEDWAREMeasuredVerticalSpeed",v.Y)
+   end
    end
   end
  end

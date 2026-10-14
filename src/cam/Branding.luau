@@ -1,7 +1,7 @@
 --!nonstrict
 -- Native geometry keeps the Sedware mark visible without an uploaded asset.
 local Branding = {
-	Title = "SEDWARE", Subtitle = "CAM LOCK · PINK EDITION", Version = "v3.1",
+	Title = "SEDWARE", Subtitle = "CAM LOCK · PINK EDITION", Version = "v3.2",
 	Colors = if Color3 then {
 		Background = Color3.fromRGB(10, 10, 14), Surface = Color3.fromRGB(19, 19, 25),
 		Input = Color3.fromRGB(29, 29, 38), Border = Color3.fromRGB(57, 42, 61),

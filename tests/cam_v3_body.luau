@@ -42,7 +42,7 @@ return function(reloadBundle,serverSource)
  end)
  test("unavailable movement is visible and anchored character cannot activate",function(m,a)
   function m.services.RunService:IsStudio() return false end
-  local s=a.init();m:advance(.6);check(s.ui.controls.Fly.Text=="UNAVAILABLE")
+  local s=a.init();m:advance(.6);check(s.ui.controls.Fly.Text=="OFF" and s.ui.controls.Fly.Active)
   check(not s:configure("Fly",true));s:configure("MovementAuthorized",true)
   s.registry.entries[s.player].root.Anchored=true
   check(s:configure("Fly",true));m:advance(.6)

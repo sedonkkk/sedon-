@@ -30,20 +30,22 @@ end
 function PredictionEngine:observe(t,position,state)
  -- Validate raw sample before any optional filter state mutation.
  local latest=self.history:latest()
- if type(t)~="number" or t~=t or math.abs(t)==math.huge or (latest and t<=latest.t) then return false end
+ if type(t)~="number" or t~=t or math.abs(t)==math.huge then return false,"INVALID_OBSERVATION_TIME" end
+ if latest and t<=latest.t then return false,"NON_INCREASING_OBSERVATION_TIME" end
  local valid,ok=pcall(function() return position.Magnitude<math.huge and position.X==position.X and position.Y==position.Y and position.Z==position.Z end)
- if not valid or not ok or (state~=nil and type(state)~="string") then return false end
+ if not valid or not ok then return false,"INVALID_OBSERVATION_POSITION" end
+ if state~=nil and type(state)~="string" then return false,"INVALID_HUMANOID_STATE" end
  if self.config.MotionFilter~="Memory" and self.filter.time then
   local dt=t-self.filter.time;local displacement=(position-self.filter.raw).Magnitude
   local maximum=self.config.MaxObservedSpeed*dt
-  if displacement>maximum and displacement<=maximum+self.config.TeleportSlack then return false end
+  if displacement>maximum and displacement<=maximum+self.config.TeleportSlack then return false,"OBSERVED_SPEED_LIMIT" end
  end
  local filtered=self.filter:observe(t,position,state)
  local accepted=self.prediction:observe(t,filtered,state)
  if accepted then self.vertical:observe(t,position,state) end
  if not accepted and self.config.MotionFilter~="Memory" then self.filter:reset() end
  aliases(self)
- return accepted
+ return accepted,if accepted then nil else "MOTION_HISTORY_REJECTED"
 end
 function PredictionEngine:samplePing(rttSeconds,now)
  local accepted=self.prediction:samplePing(rttSeconds,now)

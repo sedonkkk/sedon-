@@ -99,7 +99,7 @@
         <Properties>
           <string name="Name">SedwareCamLock</string>
           <ProtectedString name="Source">--!nonstrict
--- SEDWARE CAM LOCK V3.1 — PINK EDITION | edit Config below.
+-- SEDWARE CAM LOCK V3.2 — PINK EDITION | edit Config below.
 -- Prediction X/Y use a provisional Sedware scale; explicit calibration below. Movement requires authorization.
 -- Enabled=false opens the GUI without controlling the camera.
 -- Public client APIs only. No remote weapon integration or bypass.
@@ -113,7 +113,7 @@ local function bootLog(phase,status,detail)
  local logger=if status=="FAIL" and type(warn)=="function" then warn elseif type(print)=="function" then print else warn
  if type(logger)=="function" then pcall(logger,"[SEDWARE]["..phase.."]["..status.."] "..tostring(detail)) end
 end
-bootLog("CamExecution","START","SEDWARE CAM LOCK V3.1 — PINK EDITION payload began execution")
+bootLog("CamExecution","START","SEDWARE CAM LOCK V3.2 — PINK EDITION payload began execution")
 local Config
 local configBuilt,headerError=xpcall(function() Config = {
  Enabled=false, HitPart="UpperTorso",
@@ -121,6 +121,7 @@ local configBuilt,headerError=xpcall(function() Config = {
  LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
  Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
  FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
+ FlyOrientation=true, FlyMaxTorque=100000, FlyMaxAngularVelocity=6, FlyOrientationResponsiveness=15,
  MovementAuthorized=false, MovementMode="Auto", LocalMovementAllowed=false,
  ESPAuthorized=false, ESPUnlimitedRange=false, ESPFarDistance=350, ESPFarUpdateHz=3,
  VerticalControl=true, RisingHorizon=0.055, FallingHorizon=0.045, ApexHorizon=0.025,
@@ -1673,7 +1674,7 @@ end
 return Overlay
 end
 -- END Overlay
--- BEGIN Config | sha256 6ba5d61f9578155092ae332160989c1e259ac505872a1fb5bdb4e8d180773d61
+-- BEGIN Config | sha256 6cf308ac456b0f1016db8c1a2712f50f47f0de22beaa2c8bf5b95bbe20bb8bf9
 factories["Config"] = function(loadModule)
 --!nonstrict
 -- V3 visible scale has one explicit, provisional linear calibration to seconds.
@@ -1687,6 +1688,7 @@ Config.sourceLiteral = [=[{
  LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
  Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
  FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
+ FlyOrientation=true, FlyMaxTorque=100000, FlyMaxAngularVelocity=6, FlyOrientationResponsiveness=15,
  MovementAuthorized=false, MovementMode="Auto", LocalMovementAllowed=false,
  ESPAuthorized=false, ESPUnlimitedRange=false, ESPFarDistance=350, ESPFarUpdateHz=3,
  VerticalControl=true, RisingHorizon=0.055, FallingHorizon=0.045, ApexHorizon=0.025,
@@ -1734,7 +1736,8 @@ Config.numericLimits = {
  TargetPartGraceSeconds={0,1}, TargetGraceSeconds={0,2}, ReleaseRadiusMultiplier={1,3}, TargetVisibilityHz={1,30},
  FilterMinCutoff={0.01,100}, FilterBeta={0,10}, AlphaBetaAlpha={0.01,1}, AlphaBetaBeta={0.001,1}, Smoothness={0,1}, Radius={1,2000},
  CameraDebugInterval={0.1,10}, NotificationCooldown={0.1,30},
- FlySpeed={1,200}, WalkSpeed={1,100}, FlySmoothing={0,1}, FlyMaxForce={1000,10000000},
+ FlySpeed={1,200}, WalkSpeed={1,140}, FlySmoothing={0,1}, FlyMaxForce={1000,10000000},
+ FlyMaxTorque={1000,10000000}, FlyMaxAngularVelocity={0.1,20}, FlyOrientationResponsiveness={5,100},
  ESPUpdateHz={1,30}, ESPMaxDistance={10,2000},
  PingSmoothing={0.05,10}, MinPredictionX={0,0.6}, MaxPredictionX={0,0.6}, MinPredictionY={0,0.6}, MaxPredictionY={0,0.6},
  PredictionSlew={0.001,2}, PredictionSmoothing={0,2}, MaxDistance={10,2000}, AcquisitionInterval={0.05,2},
@@ -1752,6 +1755,7 @@ Config.controls = {
  {key="PredictionY",label="Prediction Y",kind="number",decimals=2,tab="MAIN"},
  {key="Smoothness",label="Smoothness",kind="number",decimals=3,tab="MAIN"},
  {key="Radius",label="Radius",kind="number",decimals=0,tab="MAIN"},
+ {key="MovementMode",label="Movement Mode",kind="choice",options={"Auto","Local","Server"},tab="MISC",section="MOVEMENT"},
  {key="Fly",label="Fly",kind="toggle",tab="MISC",section="MOVEMENT"},
  {key="FlyKeybind",label="Fly Keybind",kind="keybind",tab="MISC",section="MOVEMENT"},
  {key="FlySpeed",label="Fly Speed",kind="number",decimals=0,tab="MISC",section="MOVEMENT"},
@@ -1761,6 +1765,9 @@ Config.controls = {
  {key="ESP",label="ESP",kind="toggle",tab="MISC",section="ESP"},
  {key="Hitboxes",label="Hitboxes",kind="toggle",tab="MISC",section="ESP"},
  {key="Names",label="Names",kind="toggle",tab="MISC",section="ESP"},
+ {key="ESPOcclusionMode",label="Display Mode",kind="choice",options={"VisibleOnly","AlwaysOnTop"},tab="MISC",section="ESP"},
+ {key="ESPMaxDistance",label="ESP Range",kind="number",decimals=0,tab="MISC",section="ESP"},
+ {key="ESPUnlimitedRange",label="Unlimited Range",kind="toggle",tab="MISC",section="ESP"},
  {key="ESPTargetMode",label="Target Mode",kind="choice",options={"All","Specific Player"},tab="MISC",section="ESP"},
  {key="ESPUsername",label="Player Username",kind="text",tab="MISC",section="ESP"},
 }
@@ -1780,6 +1787,7 @@ function Config.defaults()
   LogoAssetId="rbxassetid://COLOCAR_ID_REAL", DebugMode=false, NotificationCooldown=3,
   Fly=false, FlyKeybind="V", FlySpeed=65, Speed=false, SpeedKeybind="G", WalkSpeed=24,
   FlyUpKey="Space", FlyDownKey="LeftControl", FlySmoothing=0.10, FlyMaxForce=100000,
+  FlyOrientation=true, FlyMaxTorque=100000, FlyMaxAngularVelocity=6, FlyOrientationResponsiveness=15,
   MovementAuthorized=false, MovementMode="Auto", LocalMovementAllowed=false,
  ESPAuthorized=false, ESPUnlimitedRange=false, ESPFarDistance=350, ESPFarUpdateHz=3,
  VerticalControl=true, RisingHorizon=0.055, FallingHorizon=0.045, ApexHorizon=0.025,
@@ -1965,12 +1973,12 @@ Config.keyName=PinkConfig.keyName
 return Config
 end
 -- END Config
--- BEGIN Branding | sha256 3a790947cc13ecd07fa4b4c63208f566a8207bc3c06e01980f9a214534841625
+-- BEGIN Branding | sha256 7d758901e5d5152df14d8cebc913f3db1fb31237ab5a1e577a2c2e8a603ac01b
 factories["Branding"] = function(loadModule)
 --!nonstrict
 -- Native geometry keeps the Sedware mark visible without an uploaded asset.
 local Branding = {
-	Title = "SEDWARE", Subtitle = "CAM LOCK · PINK EDITION", Version = "v3.1",
+	Title = "SEDWARE", Subtitle = "CAM LOCK · PINK EDITION", Version = "v3.2",
 	Colors = if Color3 then {
 		Background = Color3.fromRGB(10, 10, 14), Surface = Color3.fromRGB(19, 19, 25),
 		Input = Color3.fromRGB(29, 29, 38), Border = Color3.fromRGB(57, 42, 61),
@@ -2138,7 +2146,7 @@ end
 return PlayerRegistry
 end
 -- END PlayerRegistry
--- BEGIN MovementAccess | sha256 cbd649a8dac60811e5413bdc30d8f5d9cba748f1d8fef41e85310448e5751d83
+-- BEGIN MovementAccess | sha256 f13933450344c2c996a357b836baaaf902bc39018e006c8e40176ed467d858b3
 factories["MovementAccess"] = function(loadModule)
 --!nonstrict
 -- Local test permission and server authorization are independent contracts.
@@ -2163,13 +2171,15 @@ function Access.allowed(config,report)
   or report.world:GetAttribute("SEDWAREMovementAuthorized")==true
 end
 function Access.ready(entry,world)
- return entry and entry.character and entry.character:IsDescendantOf(world) and entry.humanoid and entry.humanoid.Health&gt;0
-  and entry.root and entry.root:IsA("BasePart") and not entry.root.Anchored
+ return entry and entry.character and entry.character:IsDescendantOf(world)
+  and entry.humanoid and entry.humanoid:IsDescendantOf(entry.character)
+  and type(entry.humanoid.Health)=="number" and entry.humanoid.Health==entry.humanoid.Health and entry.humanoid.Health&lt;math.huge and entry.humanoid.Health&gt;0
+  and entry.root and entry.root:IsA("BasePart") and entry.root:IsDescendantOf(entry.character) and not entry.root.Anchored
 end
 return Access
 end
 -- END MovementAccess
--- BEGIN FlyController | sha256 ec5cd9ee978d66a917d5cbaa91fb88514f6a676a1bff3fbd386391ff0ec1e815
+-- BEGIN FlyController | sha256 543fd232c226f7a1df6e5743f5274974b49d036d75a08dc20ebad24bc3986bce
 factories["FlyController"] = function(loadModule)
 --!nonstrict
 local MovementAccess=loadModule("MovementAccess")
@@ -2179,6 +2189,7 @@ function FlyController.new(config,report)
  return setmetatable({config=config,report=report,active=false,velocity=Vector3.zero},FlyController)
 end
 function FlyController:stop()
+ if self.orientation then self.orientation:Destroy();self.orientation=nil end
  if self.constraint then self.constraint:Destroy();self.constraint=nil end
  if self.attachment then self.attachment:Destroy();self.attachment=nil end
  if self.humanoid and self.original then
@@ -2187,12 +2198,36 @@ function FlyController:stop()
    if self.humanoid.Health&gt;0 then self.humanoid:ChangeState(self.original.state) end
   end)
  end
- self.humanoid=nil;self.root=nil;self.original=nil;self.active=false;self.velocity=Vector3.zero
+ self.humanoid=nil;self.root=nil;self.original=nil;self.active=false;self.velocity=Vector3.zero;self.heading=nil
+end
+function FlyController:_updateOrientation(camera)
+ if not self.config.FlyOrientation then
+  if self.orientation then self.orientation:Destroy();self.orientation=nil end
+  return
+ end
+ if not self.orientation or self.orientation.Parent~=self.root then
+  if self.orientation then self.orientation:Destroy() end
+  self.orientation=Instance.new("AlignOrientation");self.orientation.Name="SEDWAREFlyOrientation"
+  self.orientation.Mode=Enum.OrientationAlignmentMode.OneAttachment;self.orientation.Attachment0=self.attachment
+  self.orientation.AlignType=Enum.AlignType.AllAxes
+  self.orientation.RigidityEnabled=false;self.orientation.ReactionTorqueEnabled=false;self.orientation.Parent=self.root
+ end
+ self.orientation.MaxTorque=self.config.FlyMaxTorque
+ self.orientation.MaxAngularVelocity=self.config.FlyMaxAngularVelocity
+ self.orientation.Responsiveness=self.config.FlyOrientationResponsiveness
+ local forward=if camera then camera.CFrame.LookVector else self.root.CFrame.LookVector
+ local horizontal=Vector3.new(forward.X,0,forward.Z)
+ if horizontal.Magnitude&gt;1e-5 then self.heading=horizontal.Unit end
+ self.heading=self.heading or Vector3.new(0,0,-1)
+ -- Only the constraint goal changes. Never assign the character's CFrame.
+ self.orientation.CFrame=CFrame.lookAt(Vector3.zero,self.heading,Vector3.yAxis)
 end
 function FlyController:start(entry)
  if not MovementAccess.allowed(self.config,self.report) then return false,"Fly requiere una experiencia propia o autorización explícita" end
  if not MovementAccess.ready(entry,self.report.world) then return true,"Waiting for character" end
- if self.active and self.root==entry.root then return true end
+ if self.active and self.root==entry.root and self.humanoid==entry.humanoid
+  and self.constraint and self.constraint.Parent==entry.root
+  and self.attachment and self.attachment.Parent==entry.root then return true end
  if MovementAccess.server(self.config,self.report) then return true,"Waiting for server confirmation" end
  if entry.root:FindFirstChild("SEDWAREServerFlyVelocity") then return true,"Waiting for server controller to release" end
  self:stop()
@@ -2204,6 +2239,7 @@ function FlyController:start(entry)
   self.constraint.Attachment0=self.attachment;self.constraint.RelativeTo=Enum.ActuatorRelativeTo.World
   self.constraint.VelocityConstraintMode=Enum.VelocityConstraintMode.Vector;self.constraint.ForceLimitsEnabled=true
   self.constraint.MaxForce=self.config.FlyMaxForce;self.constraint.VectorVelocity=Vector3.zero;self.constraint.Parent=self.root
+  self:_updateOrientation(nil)
   self.humanoid.AutoRotate=false;self.humanoid.PlatformStand=true;self.humanoid:ChangeState(Enum.HumanoidStateType.Physics)
   self.active=true
  end)
@@ -2212,7 +2248,9 @@ function FlyController:start(entry)
 end
 function FlyController:update(entry,camera,dt,keys)
  if not self.config.Fly or not MovementAccess.allowed(self.config,self.report) or not MovementAccess.ready(entry,self.report.world) then self:stop();return end
- if not self.active or self.root~=entry.root then
+ if not self.active or self.root~=entry.root or self.humanoid~=entry.humanoid
+  or (not MovementAccess.server(self.config,self.report) and
+   (not self.constraint or self.constraint.Parent~=entry.root or not self.attachment or self.attachment.Parent~=entry.root)) then
   local started,reason=self:start(entry);assert(started,reason)
  end
  local bridge=self.report.movementBridge
@@ -2220,6 +2258,7 @@ function FlyController:update(entry,camera,dt,keys)
   self.active=bridge.active and bridge.serverFly==true and self.config.Fly
   if not camera then self.velocity=Vector3.zero;return end
  elseif not self.active then return end
+ if not MovementAccess.server(self.config,self.report) then self:_updateOrientation(camera) end
  if not camera then self.velocity=Vector3.zero;self.constraint.VectorVelocity=Vector3.zero;return end
  if type(dt)~="number" or dt&lt;=0 or dt~=dt or dt==math.huge then return end
  local direction=camera.CFrame.LookVector*((keys.W and 1 or 0)-(keys.S and 1 or 0))
@@ -2229,6 +2268,9 @@ function FlyController:update(entry,camera,dt,keys)
  local wanted=direction*self.config.FlySpeed
  local alpha=if self.config.FlySmoothing==0 then 1 else 1-math.exp(-dt/self.config.FlySmoothing)
  self.velocity=self.velocity:Lerp(wanted,alpha)
+ -- A speed edit is also a new server input limit. Old smoothing state must
+ -- not exceed it or valid flight can expire while its inputs are rejected.
+ if self.velocity.Magnitude&gt;self.config.FlySpeed then self.velocity=self.velocity.Unit*self.config.FlySpeed end
  if MovementAccess.server(self.config,self.report) then return end
  self.constraint.VectorVelocity=self.velocity
  if self.constraint.MaxForce~=self.config.FlyMaxForce then self.constraint.MaxForce=self.config.FlyMaxForce end
@@ -2237,36 +2279,50 @@ function FlyController:destroy() self:stop() end
 return FlyController
 end
 -- END FlyController
--- BEGIN SpeedController | sha256 6051735ee2e6992bac6be9c5ddeba36e912e4f22d4d18788bf089950fdc82866
+-- BEGIN SpeedController | sha256 7198828e548c7d43dae5f56be84939c6b8d6d8bab5275204945cfbd13575ba16
 factories["SpeedController"] = function(loadModule)
 --!nonstrict
 local MovementAccess=loadModule("MovementAccess")
 local SpeedController={}
 SpeedController.__index=SpeedController
+-- WalkSpeed is a native float; Luau configuration numbers can have more
+-- precision. Compare readback within float32 noise, never a real correction.
+local function close(a,b)
+ return type(a)=="number" and type(b)=="number" and a==a and b==b
+  and math.abs(a)&lt;math.huge and math.abs(b)&lt;math.huge and math.abs(a-b)&lt;=1e-4
+end
 function SpeedController.new(config,report)
  return setmetatable({config=config,report=report,active=false,writes=0},SpeedController)
 end
 function SpeedController:stop()
  if self.humanoid and self.original~=nil then pcall(function()
-  if self.humanoid.WalkSpeed==self.applied then self.humanoid.WalkSpeed=self.original end
+  if close(self.humanoid.WalkSpeed,self.applied) then self.humanoid.WalkSpeed=self.original end
  end) end
- self.humanoid=nil;self.original=nil;self.applied=nil;self.active=false;self.limited=false
+ self.humanoid=nil;self.original=nil;self.applied=nil;self.configured=nil;self.active=false;self.limited=false;self.reason=nil
 end
 function SpeedController:sync(entry,flying)
  if not self.config.Speed or flying or not MovementAccess.allowed(self.config,self.report) or not MovementAccess.ready(entry,self.report.world) then self:stop();return end
  if MovementAccess.server(self.config,self.report) then
-  self.active=self.report.movementBridge.active and self.report.movementBridge.serverSpeed==true;return
+  local bridge=self.report.movementBridge
+  local reason=if self.report.player:GetAttribute("SEDWAREMovementToken")==bridge.token then self.report.player:GetAttribute("SEDWAREServerSpeedReason") else nil
+  local confirmed=bridge.active and bridge.serverSpeed==true
+  self.limited=bridge.active and ((type(reason)=="string" and reason~="") or (confirmed and not close(entry.humanoid.WalkSpeed,self.config.WalkSpeed)))
+  self.reason=if self.limited then (if type(reason)=="string" and reason~="" then reason else "WalkSpeed changed externally; not overwritten") else nil
+  self.active=confirmed and not self.limited;return
  end
  if self.humanoid~=entry.humanoid then
   self:stop();self.humanoid=entry.humanoid;self.original=self.humanoid.WalkSpeed
  end
  -- Deliberately do not fight a server that overwrites WalkSpeed. Reapply only
  -- for a new character, a config edit or a state transition.
- if self.applied~=self.config.WalkSpeed then
-  self.humanoid.WalkSpeed=self.config.WalkSpeed;self.applied=self.config.WalkSpeed;self.writes+=1
+ if self.configured~=self.config.WalkSpeed then
+  self.humanoid.WalkSpeed=self.config.WalkSpeed;self.configured=self.config.WalkSpeed;self.writes+=1
+  local actual=self.humanoid.WalkSpeed
+  self.applied=if close(actual,self.configured) then actual else nil
  end
- self.active=self.humanoid.WalkSpeed==self.applied
+ self.active=close(self.humanoid.WalkSpeed,self.applied)
  self.limited=not self.active
+ self.reason=if self.limited then "WalkSpeed changed externally; not overwritten" else nil
 end
 function SpeedController:destroy() self:stop() end
 return SpeedController
@@ -2340,7 +2396,7 @@ end
 return Access
 end
 -- END ESPAccess
--- BEGIN ESPRenderer | sha256 9892b01c5528b4bb7ce0bb4f30e5211d500844c1f78d8551c1ac1fee4b0a0a3c
+-- BEGIN ESPRenderer | sha256 5c7e1fb31101f009f40268ab2e03679f8113bd4737fe9fa474a63c820ee03715
 factories["ESPRenderer"] = function(loadModule)
 --!nonstrict
 -- Native adornments follow character transforms; no per-player render loops.
@@ -2348,13 +2404,13 @@ local Branding=loadModule("Branding")
 local ESPRenderer={}
 ESPRenderer.__index=ESPRenderer
 function ESPRenderer.new(parent,entry,config,layer,world)
- return setmetatable({parent=parent,entry=entry,config=config,layer=layer,world=world,created=0,destroyed=false},ESPRenderer)
+ return setmetatable({parent=parent,entry=entry,config=config,layer=layer,world=world,created=0,destroyed=false,hidden=true},ESPRenderer)
 end
 function ESPRenderer:_new(className)
  self.created+=1;return Instance.new(className)
 end
-function ESPRenderer:_screenBounds()
- local root=self.entry.root;local camera=self.world.CurrentCamera
+function ESPRenderer:_screenBounds(root)
+ local camera=self.world.CurrentCamera
  local loX,loY,hiX,hiY=math.huge,math.huge,-math.huge,-math.huge
  local half=root.Size*0.5;local frame=root.CFrame
  for _,x in {-1,1} do for _,y in {-1,1} do for _,z in {-1,1} do
@@ -2368,23 +2424,33 @@ function ESPRenderer:_screenBounds()
  return true
 end
 function ESPRenderer:sync(visible)
+ if not visible then self:hide();return end
  local entry,config=self.entry,self.config
+ local root=entry.root and entry.character and entry.root:IsA("BasePart") and entry.root:IsDescendantOf(entry.character) and entry.root
+ local head=entry.head and entry.character and entry.head:IsA("BasePart") and entry.head:IsDescendantOf(entry.character) and entry.head
  local top=config.ESPOcclusionMode=="AlwaysOnTop"
- if config.Hitboxes and entry.root and top then
+ if config.Hitboxes and root and top then
   if self.box then self.box:Destroy();self.box=nil end
   if not self.screenBox then
    self.screenBox=self:_new("Frame");self.screenBox.Name="SEDWAREProjectedHitbox"
    self.screenBox.BackgroundTransparency=1;self.screenBox.BorderSizePixel=0;self.screenBox.Parent=self.layer
    local stroke=self:_new("UIStroke");stroke.Color=Branding.Colors.Pink;stroke.Thickness=1.5;stroke.Parent=self.screenBox
+  end
+  -- Disabled Highlights still consume a native rendering slot. Keep the 2D
+  -- frame pooled, but create the Highlight only when it will be shown.
+  if visible and not self.highlight then
    self.highlight=self:_new("Highlight");self.highlight.Name="SEDWAREAuthorizedHighlight"
    self.highlight.FillColor=Branding.Colors.Pink;self.highlight.OutlineColor=Branding.Colors.Pink
    self.highlight.FillTransparency=0.9;self.highlight.OutlineTransparency=0.15
    self.highlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop;self.highlight.Parent=self.parent
   end
-  self.highlight.Adornee=entry.character
-  local shown=visible and self:_screenBounds()
-  self.screenBox.Visible=shown;self.highlight.Enabled=visible
- elseif config.Hitboxes and entry.root then
+  if self.highlight then
+   if visible then self.highlight.Adornee=entry.character;self.highlight.Enabled=true
+   else self.highlight:Destroy();self.highlight=nil end
+  end
+  local shown=visible and self:_screenBounds(root)
+  self.screenBox.Visible=shown
+ elseif config.Hitboxes and root then
   if self.screenBox then self.screenBox:Destroy();self.screenBox=nil end
   if self.highlight then self.highlight:Destroy();self.highlight=nil end
   if not self.box then
@@ -2393,14 +2459,14 @@ function ESPRenderer:sync(visible)
    self.box.LineThickness=0.025;self.box.Transparency=0.2;self.box.SurfaceTransparency=0.95;self.box.Parent=self.parent
   end
   -- BasePart reference avoids ambiguous Model bounding boxes; never resizes physics.
-  if self.box.Adornee~=entry.root then self.box.Adornee=entry.root end
+  if self.box.Adornee~=root then self.box.Adornee=root end
   self.box.Visible=visible
  else
   if self.box then self.box:Destroy();self.box=nil end
   if self.screenBox then self.screenBox:Destroy();self.screenBox=nil end
   if self.highlight then self.highlight:Destroy();self.highlight=nil end
  end
- if config.Names and (entry.head or entry.root) then
+ if config.Names and root then
   if not self.billboard then
    self.billboard=self:_new("BillboardGui");self.billboard.Name="SEDWAREPlayerName"
    self.billboard.AlwaysOnTop=false;self.billboard.LightInfluence=0;self.billboard.Size=UDim2.fromOffset(180,28)
@@ -2409,15 +2475,18 @@ function ESPRenderer:sync(visible)
    self.label.Text=entry.player.Name;self.label.Font=Enum.Font.GothamMedium;self.label.TextSize=14
    self.label.TextColor3=Branding.Colors.White;self.label.TextStrokeTransparency=0.5;self.label.Parent=self.billboard
   end
-  local adornee=entry.head or entry.root
+  local adornee=head or root
   if self.billboard.Adornee~=adornee then self.billboard.Adornee=adornee end
   self.billboard.AlwaysOnTop=top
   self.billboard.MaxDistance=if config.ESPUnlimitedRange then 0 else config.ESPMaxDistance;self.billboard.Enabled=visible
  elseif self.billboard then self.billboard:Destroy();self.billboard=nil;self.label=nil end
+ self.hidden=not root
 end
 function ESPRenderer:hide()
+ if self.hidden then return end
+ self.hidden=true
  if self.screenBox then self.screenBox.Visible=false end
- if self.highlight then self.highlight.Enabled=false;self.highlight.Adornee=nil end
+ if self.highlight then self.highlight:Destroy();self.highlight=nil end
  if self.box then self.box.Visible=false;self.box.Adornee=nil end
  if self.billboard then self.billboard.Enabled=false;self.billboard.Adornee=nil end
 end
@@ -2432,7 +2501,7 @@ end
 return ESPRenderer
 end
 -- END ESPRenderer
--- BEGIN ESPManager | sha256 6a1fb5638dd00854e222ce7b0315087b27582aeee84843159deb59c0cba65c5a
+-- BEGIN ESPManager | sha256 3ccc33b58b30c2a404459fb6749b5b97fa9441513452a9833c04984e8ebdbbb3
 factories["ESPManager"] = function(loadModule)
 --!nonstrict
 local ESPRenderer=loadModule("ESPRenderer")
@@ -2441,7 +2510,8 @@ local ESPManager={}
 ESPManager.__index=ESPManager
 function ESPManager.new(config,report,registry)
  local self=setmetatable({config=config,report=report,registry=registry,renderers={},observations={},destroyed=false,
-  stats={updates=0,created=0,lastSeconds=0,maxSeconds=0,visible=0,considered=0,registered=0,inRange=0,onScreen=0,occluded=0,notReady=0,outOfRange=0,offscreen=0,active=0,raycasts=0,totalSeconds=0}},ESPManager)
+  stats={updates=0,created=0,lastSeconds=0,maxSeconds=0,visible=0,considered=0,registered=0,inRange=0,onScreen=0,occluded=0,notReady=0,outOfRange=0,offscreen=0,active=0,raycasts=0,totalSeconds=0,invalidRoot=0,invalidHead=0,
+   mode=config.ESPOcclusionMode,maxDistance=config.ESPMaxDistance,unlimitedRange=config.ESPUnlimitedRange}},ESPManager)
  if config.ESPUsername~="" then self.selectedUsername=string.lower(config.ESPUsername) end
  return self
 end
@@ -2451,7 +2521,11 @@ function ESPManager:applyTarget(username)
  self.selectedUsername=entry.username;self:refresh();return true
 end
 function ESPManager:clearTarget() self.selectedUsername=nil;self:refresh() end
-function ESPManager:refresh() self.nextUpdate=nil;table.clear(self.observations);for _,r in self.renderers do r.nextUpdate=nil end;self:_trim();if not self.config.ESP or (not self.config.Hitboxes and not self.config.Names) then self.stats.visible=0;self.stats.active=0 end end
+function ESPManager:refresh()
+ self.stats.mode=self.config.ESPOcclusionMode;self.stats.maxDistance=self.config.ESPMaxDistance;self.stats.unlimitedRange=self.config.ESPUnlimitedRange
+ self.nextUpdate=nil;table.clear(self.observations);for _,r in self.renderers do r.nextUpdate=nil end;self:_trim()
+ if not self.config.ESP or (not self.config.Hitboxes and not self.config.Names) then self.stats.visible=0;self.stats.active=0 end
+end
 function ESPManager:_selected(entry)
  return entry.player~=self.report.player and (self.config.ESPTargetMode=="All"
   or (self.selectedUsername~=nil and entry.username==self.selectedUsername))
@@ -2479,9 +2553,10 @@ function ESPManager:update(now)
  if self.nextUpdate and now&lt;self.nextUpdate then return end
  local hz=if self.config.ESPLowPerformanceMode then math.min(self.config.ESPUpdateHz,10) else self.config.ESPUpdateHz
  self.nextUpdate=now+1/hz
- local started=os.clock();self.stats.updates+=1;for _,key in {"visible","considered","inRange","onScreen","occluded","notReady","outOfRange","offscreen","active","raycasts"} do self.stats[key]=0 end
+ local started=os.clock();self.stats.updates+=1;for _,key in {"visible","considered","inRange","onScreen","occluded","notReady","outOfRange","offscreen","active","raycasts","invalidRoot","invalidHead"} do self.stats[key]=0 end
  self.stats.registered=#self.registry.list-(if self.registry.entries[self.report.player] then 1 else 0)
  self:_trim()
+ if self.config.ESPOcclusionMode~="AlwaysOnTop" and self.layer then self.layer:Destroy();self.layer=nil end
  local camera=self.report.world.CurrentCamera
  if not camera then for _,renderer in self.renderers do renderer:hide() end;self.stats.reason="CurrentCamera unavailable";return end
  if self.config.ESPOcclusionMode=="VisibleOnly" and not self.params then
@@ -2492,11 +2567,18 @@ function ESPManager:update(now)
  for _,entry in self.registry.list do
   if self:_selected(entry) then
    self.stats.considered+=1
+   -- Registry events usually refresh these references immediately. Validate
+   -- ancestry here as well: streaming/respawn must never draw stale parts.
+   local root=entry.character and entry.root and entry.root:IsA("BasePart") and entry.root:IsDescendantOf(entry.character) and entry.root
+   local head=entry.character and entry.head and entry.head:IsA("BasePart") and entry.head:IsDescendantOf(entry.character) and entry.head
+   if entry.root and not root then self.stats.invalidRoot+=1 end
+   if entry.head and not head then self.stats.invalidHead+=1 end
+   local adornment=head or root
    local ready=entry.character and entry.character:IsDescendantOf(self.report.world)
-    and entry.humanoid and entry.humanoid.Health&gt;0 and entry.root and (entry.head or entry.root)
+    and entry.humanoid and entry.humanoid.Health&gt;0 and root and adornment
    local visible=false
    if ready then
-    local position=(entry.head or entry.root).Position
+    local position=adornment.Position
     local delta=position-camera.CFrame.Position
     if self.config.ESPUnlimitedRange or delta.Magnitude&lt;=self.config.ESPMaxDistance then
      self.stats.inRange+=1
@@ -2521,17 +2603,17 @@ function ESPManager:update(now)
    else self.stats.notReady+=1 end
    local renderer=self.renderers[entry.player]
    -- No instances for players that have never become visible.
+   if visible and self.config.ESPOcclusionMode=="AlwaysOnTop" and not self.layer then
+    self.layer=Instance.new("ScreenGui");self.layer.Name="SEDWAREAuthorizedESP";self.layer.IgnoreGuiInset=true
+    self.layer.ResetOnSpawn=false;self.layer.DisplayOrder=40;self.layer.Parent=self.report.playerGui
+   end
    if not renderer and visible then
-    if self.config.ESPOcclusionMode=="AlwaysOnTop" and not self.layer then
-     self.layer=Instance.new("ScreenGui");self.layer.Name="SEDWAREAuthorizedESP";self.layer.IgnoreGuiInset=true
-     self.layer.ResetOnSpawn=false;self.layer.DisplayOrder=40;self.layer.Parent=self.report.playerGui
-    end
     renderer=ESPRenderer.new(self.report.playerGui,entry,self.config,self.layer,self.report.world);self.renderers[entry.player]=renderer
    end
    if renderer then
     local before=renderer.created
     if ready then
-     local cameraDistance=((entry.head or entry.root).Position-camera.CFrame.Position).Magnitude
+     local cameraDistance=(adornment.Position-camera.CFrame.Position).Magnitude
      local due=not renderer.nextUpdate or now&gt;=renderer.nextUpdate
      if not visible then renderer:hide();renderer.nextUpdate=nil
      elseif due then
@@ -2719,7 +2801,7 @@ function NotificationSystem:setLogo(asset) Branding.setLogo(self.logo,asset) end
 return NotificationSystem
 end
 -- END NotificationSystem
--- BEGIN UI | sha256 5204c2d02647b1ec224b8f1084030117ced9b9d155d7abcb5bf3991501c7c354
+-- BEGIN UI | sha256 394f1abfca2b8af60b66bedfd37d576950c4cd4881fc87e3dca651b188d828ec
 factories["UI"] = function(loadModule)
 --!nonstrict
 local Config=loadModule("Config")
@@ -2728,6 +2810,10 @@ local UIAnimations=loadModule("UIAnimations")
 local UI={}
 UI.__index=UI
 local WIDTH,HEIGHT,HEADER,ROW=420,520,56,34
+local function choiceText(field,value)
+ if field=="ESPOcclusionMode" then return if value=="AlwaysOnTop" then "Always On Top" else "Visible Only" end
+ return tostring(value)
+end
 local function finite(n) return type(n)=="number" and n==n and math.abs(n)&lt;math.huge end
 local function point(input) local p=input and input.Position;if p and finite(p.X) and finite(p.Y) then return p.X,p.Y end end
 local function contains(object,x,y)
@@ -2767,7 +2853,7 @@ function UI:_change(field,value)
  local ok,accepted,reason=pcall(self.onChange,field,value)
  if not ok then reason=accepted;accepted=false end
  if accepted then self:setValue(field,value);return true end
- self:setValue(field,self.values[field]);self:_notice(reason or "Invalid value",field);return false
+ self:setValue(field,self.values[field]);self:_notice(reason or "Change rejected",field);return false
 end
 function UI:setValue(field,value)
  if self.destroyed or not self.controls[field] then return false end
@@ -2776,12 +2862,12 @@ function UI:setValue(field,value)
  local control,descriptor=self.controls[field],Config.fields[field]
  local text
  if descriptor.kind=="toggle" then
-  text=if value then (if field=="Fly" or field=="Speed" then "LOCAL ONLY" else "ON") else "OFF"
+  text=if value then (if field=="Fly" or field=="Speed" then "PENDING" else "ON") else "OFF"
   local properties={BackgroundColor3=if value then Branding.Colors.Neon else Branding.Colors.Input,
    TextColor3=if value then Branding.Colors.White else Branding.Colors.Muted}
   if self.building then for key,property in properties do control[key]=property end
   elseif changed then self.animations:play(control,0.15,properties) end
- elseif descriptor.kind=="choice" then text=tostring(value).."  ▾"
+ elseif descriptor.kind=="choice" then text=choiceText(field,value).."  ▾"
  elseif descriptor.kind=="keybind" then text=Config.keyName(value)
  elseif descriptor.kind=="number" then text=string.format(if descriptor.decimals==0 then "%g" else "%."..tostring(descriptor.decimals).."f",value)
  else text=tostring(value) end
@@ -2795,8 +2881,9 @@ function UI:setStatus(movement,esp,available,report)
  if self.movementStatus.Text~=movement then self.movementStatus.Text=movement end
  if self.espStatus.Text~=esp then self.espStatus.Text=esp end
  for _,field in {"Fly","Speed"} do
-  local text=if report then report[field].state elseif not available then "UNAVAILABLE" elseif self.values[field] then "LOCAL ONLY" else "OFF"
-  self.controls[field].Active=available
+  local text=if report then report[field].state elseif self.values[field] then (if available then "PENDING" else "UNAVAILABLE") else "OFF"
+  -- An unavailable route must still accept OFF and report a rejected ON.
+  self.controls[field].Active=true
   if self.controls[field].Text~=text then self.controls[field].Text=text end
  end
 end
@@ -2892,7 +2979,7 @@ function UI:_positionDropdown(animate)
  for index,choice in self.popupButtons do
   local value=self.popupOptions[index];choice.Visible=value~=nil;choice.Active=value~=nil
   if value then
-   choice.Text=value;choice.Position=UDim2.fromOffset(3,(index-1)*30*scale+2)
+   choice.Text=choiceText(field,value);choice.Position=UDim2.fromOffset(3,(index-1)*30*scale+2)
    choice.Size=UDim2.fromOffset(width-6,30*scale-3);choice.TextSize=math.max(10,11*scale)
   end
  end
@@ -2912,14 +2999,13 @@ function UI:_row(parent,descriptor)
   self:_create("UICorner",{CornerRadius=UDim.new(0,5)},control)
   self:_connect(control.FocusLost,function()
    local value=if descriptor.kind=="text" then control.Text:gsub("^%s*(.-)%s*$","%1") else tonumber(control.Text)
-   if descriptor.kind=="number" and not finite(value) then self:setValue(descriptor.key,self.values[descriptor.key]);self:_notice("Enter a finite number")
+   if descriptor.kind=="number" and not finite(value) then self:setValue(descriptor.key,self.values[descriptor.key]);self:_notice("Enter a finite number",descriptor.key)
    else self:_change(descriptor.key,value) end
   end)
  else
   control=self:_button(row,descriptor.key,"",UDim2.fromOffset(164,3),UDim2.fromOffset(WIDTH-196,27))
   self:_connect(control.Activated,function()
    if self.minimized or self.tab~=descriptor.tab then return end
-   if (descriptor.key=="Fly" or descriptor.key=="Speed") and self.movementAvailable==false then return end
    if descriptor.kind=="toggle" then self:_change(descriptor.key,not self.values[descriptor.key])
    elseif descriptor.kind=="choice" then self:_openDropdown(descriptor.key)
    elseif descriptor.kind=="keybind" then self:_action("CaptureKey",descriptor.key) end
@@ -2978,7 +3064,7 @@ function UI.new(playerGui,config,onChange,onNotice,onAction,player)
    Size=UDim2.fromOffset(WIDTH,HEADER),ZIndex=3},self.panel)
   self.logo=Branding.addLogo(self.header,function(...) return self:_create(...) end,
    UDim2.fromOffset(15,13),UDim2.fromOffset(30,30),5,config,function(...) return self:_connect(...) end)
-  self.title=self:_label(self.header,"Title","SEDWARE V3.1",UDim2.fromOffset(56,9),UDim2.fromOffset(218,22),17)
+  self.title=self:_label(self.header,"Title",Branding.Title.." "..Branding.Version:upper(),UDim2.fromOffset(56,9),UDim2.fromOffset(218,22),17)
   self.title.Font=Enum.Font.GothamBold
   self.subtitle=self:_label(self.header,"Subtitle",Branding.Subtitle,UDim2.fromOffset(57,32),UDim2.fromOffset(255,14),9,C.Pink)
   self.version=self:_label(self.header,"Version",Branding.Version,UDim2.fromOffset(WIDTH-100,15),UDim2.fromOffset(45,17),10,C.Muted)
@@ -3062,7 +3148,7 @@ function UI.new(playerGui,config,onChange,onNotice,onAction,player)
   self:_connect(self.gui.AncestryChanged,function() self:resetDrag();self:closeDropdown(true) end)
   self:setTab("MAIN");self:_fit(true)
  end,debug.traceback)
- if not ok then self:destroy();error("SEDWARE V3.1 UI: "..tostring(problem),2) end
+ if not ok then self:destroy();error("SEDWARE "..Branding.Version:upper().." UI: "..tostring(problem),2) end
  return self
 end
 function UI:setLogo(asset) Branding.setLogo(self.logo,asset) end
@@ -3213,7 +3299,7 @@ end
 return TargetSelector
 end
 -- END TargetSelector
--- BEGIN VerticalControl | sha256 54b13c568b2b262fa84b1e2b9bccb030293bfe884760dd4b97e88e053709ac30
+-- BEGIN VerticalControl | sha256 9560e744cd16aeaf15a39cde23b48f47d97721eccd9c968008fb4435476f495f
 factories["VerticalControl"] = function(loadModule)
 --!nonstrict
 -- Bounded kinematic lead; no assumed ballistic flight or server capture time.
@@ -3226,31 +3312,51 @@ function Vertical.new(config) return setmetatable({config=config,phase="Grounded
 function Vertical:reset()
  self.time=nil;self.position=nil;self.rawVelocity=nil;self.velocityY=0;self.phase="Grounded"
  self.landingUntil=nil;self.reversalAt=nil;self.previousHorizontal=nil
+ self.jumping=nil;self.anomaly=false;self.anomalyReason=nil;self.rawVelocityY=nil
+ self.jumpImpulse=false;self.landingTransition=false;self.hasMeasuredVelocity=false
 end
 function Vertical:observe(t,p,state)
  local c=self.config;state=state or "Running"
  local dt=self.time and t-self.time;local velocity=p*0
- if dt and dt&gt;0 and dt&lt;=c.StaleAfter and (p-self.position).Magnitude&lt;=c.MaxObservedSpeed*dt+c.TeleportSlack then
+ local previousKnown=self.hasMeasuredVelocity==true
+ local known=dt~=nil and dt&gt;0 and dt&lt;=c.StaleAfter and (p-self.position).Magnitude&lt;=c.MaxObservedSpeed*dt+c.TeleportSlack
+ if known then
   velocity=(p-self.position)/dt
- else self:reset() end
- local airborne=state:find("Jumping",1,true)~=nil or state:find("Freefall",1,true)~=nil
+ else self:reset();previousKnown=false end
+ local jumping=state:find("Jumping",1,true)~=nil
+ local airborne=jumping or state:find("Freefall",1,true)~=nil
  local landing=state:find("Landed",1,true)~=nil
  local wasAir=self.phase=="Rising" or self.phase=="Apex" or self.phase=="Falling"
  if (not airborne and wasAir) or landing then self.landingUntil=t+c.LandingHoldSeconds end
- local phase=if airborne then (if math.abs(velocity.Y)&lt;=c.ApexVelocity then "Apex" elseif velocity.Y&gt;0 then "Rising" else "Falling")
-  elseif self.landingUntil and t&lt;self.landingUntil then "Landing" else "Grounded"
  local vy=math.clamp(velocity.Y,-c.MaxVerticalSpeed,c.MaxVerticalSpeed)
- self.anomaly=false
- if dt and airborne and self.phase==phase and self.rawVelocity then
+ self.anomaly=vy~=velocity.Y;self.anomalyReason=if self.anomaly then "VERTICAL_SPEED_CAP" else nil
+ -- A genuine Jumping entry and a landing can contain physical impulses. A
+ -- noisy Rising/Falling/Apex classification is not such an exception: the old
+ -- same-phase check let alternating vertical spikes bypass every safeguard.
+ self.jumpImpulse=jumping and self.jumping~=true
+ self.landingTransition=(not airborne and wasAir) or landing
+ if known and previousKnown and airborne and wasAir and not self.jumpImpulse then
   local limit=c.MaxVerticalVelocityChange*dt
-  if math.abs(vy-self.velocityY)&gt;limit then vy=self.velocityY+math.clamp(vy-self.velocityY,-limit,limit);self.anomaly=true end
+  if math.abs(vy-self.velocityY)&gt;limit then
+   vy=self.velocityY+math.clamp(vy-self.velocityY,-limit,limit)
+   self.anomaly=true;self.anomalyReason="VERTICAL_ACCELERATION_CAP"
+  end
  end
+ -- Small apex hysteresis prevents horizon chatter around the speed threshold;
+ -- it is a classification margin, not another position/velocity EMA.
+ -- Classify the observed motion, independently of the bounded lead velocity.
+ -- An anomaly cap must not conceal an observed apex or turn in diagnostics.
+ local observedY=math.clamp(velocity.Y,-c.MaxVerticalSpeed,c.MaxVerticalSpeed)
+ local apex=math.abs(observedY)&lt;=(if self.phase=="Apex" then c.ApexVelocity*1.5 else c.ApexVelocity)
+ local phase=if airborne then (if apex then "Apex" elseif observedY&gt;0 then "Rising" else "Falling")
+  elseif self.landingUntil and t&lt;self.landingUntil then "Landing" else "Grounded"
  if phase=="Landing" then vy=0 end
  local horizontal=vector(p,velocity.X,0,velocity.Z)
  if self.previousHorizontal and self.previousHorizontal.Magnitude&gt;1 and horizontal.Magnitude&gt;1
   and self.previousHorizontal:Dot(horizontal)/(self.previousHorizontal.Magnitude*horizontal.Magnitude)&lt;c.ReversalDotThreshold then self.reversalAt=t end
- self.previousHorizontal=horizontal;self.time=t;self.position=p;self.rawVelocity=velocity
- self.velocityY=vy;self.phase=phase
+ self.previousHorizontal=horizontal;self.time=t;self.position=p;self.rawVelocity=if known then velocity else nil
+ self.rawVelocityY=if known then velocity.Y else nil;self.hasMeasuredVelocity=known
+ self.velocityY=vy;self.phase=phase;self.jumping=jumping
 end
 function Vertical:apply(out,now)
  local c=self.config;local factor=1
@@ -3265,11 +3371,25 @@ function Vertical:apply(out,now)
   end
  end
  out.movementPhase=self.phase;out.verticalAnomaly=self.anomaly==true;out.verticalHorizonUsed=out.predictionY
+ out.verticalAnomalyReason=self.anomalyReason;out.verticalRawVelocity=self.rawVelocityY
+ out.verticalRawVelocityKnown=self.hasMeasuredVelocity==true;out.verticalVelocityEstimate=self.velocityY
+ out.verticalEstimatedVelocity=self.velocityY;out.verticalApexLeadLimited=false;out.verticalLeadSuppressed=false
+ out.verticalJumpImpulse=self.jumpImpulse;out.verticalLandingTransition=self.landingTransition
  out.verticalVelocityUsed=out.velocity.Y;out.verticalLeadLimited=false
  if not c.VerticalControl or self.phase=="Grounded" then return out end
  local horizon=if self.phase=="Rising" then c.RisingHorizon elseif self.phase=="Falling" then c.FallingHorizon elseif self.phase=="Apex" then c.ApexHorizon else 0
  horizon=math.min(out.predictionY,horizon)
  local vy=if c.VelocityPrediction then self.velocityY else 0
+ -- An innovation cap must not preserve an excessive rising lead when a
+ -- smaller or reversed measured velocity says the target has already braked.
+ -- Suppress that extrapolation while retaining the bounded estimate and raw
+ -- anomaly for diagnostics; this is not another velocity/position filter.
+ if self.anomaly and self.hasMeasuredVelocity and c.VelocityPrediction then
+  local observed=self.rawVelocityY
+  local safe=if vy*observed&lt;=0 then 0 else math.sign(vy)*math.min(math.abs(vy),math.abs(observed))
+  out.verticalLeadSuppressed=safe~=vy;vy=safe
+  out.verticalApexLeadLimited=self.phase=="Apex" and out.verticalLeadSuppressed
+ end
  local lead=math.clamp(vy*(horizon+out.ageSeconds),-c.MaxVerticalLead,c.MaxVerticalLead)
  out.verticalLeadLimited=math.abs(vy*(horizon+out.ageSeconds))&gt;c.MaxVerticalLead
  out.verticalVelocityUsed=vy;out.verticalHorizonUsed=horizon;out.verticalTotalLeadSeconds=if math.abs(vy)&gt;1e-8 then math.abs(lead/vy) else 0
@@ -3416,84 +3536,117 @@ end
 return MotionFilter
 end
 -- END MotionFilter
--- BEGIN MovementBridge | sha256 d9e298e33d25668051bebcdb8dd13dc98c51036211fed9110950abbfe5f8a591
+-- BEGIN MovementBridge | sha256 4bc58fc212914bcaae800f1c40006ada88628e5f2335bdb98dbfd174739fb3c3
 factories["MovementBridge"] = function(loadModule)
 --!nonstrict
 -- Talks ONLY to the public protocol supplied by this repository for owned places.
 -- Never probes another game's remotes. Requests yield in task.spawn, never render.
 local MovementBridge={};MovementBridge.__index=MovementBridge
 function MovementBridge.new(config,report)
- local self=setmetatable({config=config,report=report,available=false,active=false,state="LOCAL_DECLARATION_ONLY",
-  token=tostring(os.clock())..":"..tostring(math.random(1,1000000000)),revision=0},MovementBridge)
+ local self=setmetatable({config=config,report=report,available=false,active=false,state="SERVER_COMPONENT_MISSING",
+  token=tostring(os.clock())..":"..tostring(math.random(1,1000000000)),revision=0,generation=0},MovementBridge)
  self:refresh()
  return self
 end
-function MovementBridge:refresh()
- if self.available or self.destroyed then return end
- local report=self.report
- if report.world:GetAttribute("SEDWAREMovementProtocolVersion")~=1 then return end
- local ok,storage=pcall(function() return game:GetService("ReplicatedStorage") end)
- if ok then
-  self.control=storage:FindFirstChild("SEDWAREMovementControl")
-  self.input=storage:FindFirstChild("SEDWAREMovementInput")
-  self.available=self.control~=nil and self.control:IsA("RemoteFunction") and self.input~=nil and self.input:IsA("RemoteEvent")
+function MovementBridge:_invalidate(reason)
+ -- Responses from the previous component cannot confirm its replacement.
+ if self.input and (self.active or self.wanted and (self.wanted.fly or self.wanted.speed)) then
+  pcall(function() self.input:FireServer(self.token,"Stop") end)
  end
- self.state=if self.available then "SERVER_READY" else "SERVER_COMPONENT_MISSING"
+ self.generation+=1;self.revision+=1;self.inflight=false;self.rateRetries=0
+ self.available=false;self.active=false;self.serverFly=false;self.serverSpeed=false
+ self.wanted=nil;self.character=nil;self.humanoid=nil;self.root=nil;self.ready=nil;self.authorized=nil
+ self.control=nil;self.input=nil;self.storage=nil;self.nextSend=nil
+ self.state="SERVER_COMPONENT_MISSING";self.reason=reason
+end
+function MovementBridge:refresh()
+ if self.destroyed then return end
+ local storage,control,input
+ if self.report.world:GetAttribute("SEDWAREMovementProtocolVersion")==1 then
+  local ok,result=pcall(function() return game:GetService("ReplicatedStorage") end)
+  if ok and result then
+   storage=result;control=storage:FindFirstChild("SEDWAREMovementControl");input=storage:FindFirstChild("SEDWAREMovementInput")
+   if not control or not control:IsA("RemoteFunction") or not input or not input:IsA("RemoteEvent") then control=nil;input=nil end
+  end
+ end
+ local available=control~=nil and input~=nil
+ if self.available==available and self.control==control and self.input==input and self.storage==storage then return end
+ self:_invalidate("Own movement server component disappeared or changed")
+ self.storage=storage
+ if available then
+  self.storage=storage;self.control=control;self.input=input;self.available=true
+  self.state="SERVER_READY";self.reason=nil
+ end
 end
 function MovementBridge:sync(entry)
  if not self.available or self.destroyed or self.config.MovementMode=="Local" then return end
  local c=self.config
  local character=entry and entry.character
+ local humanoid,root=entry and entry.humanoid,entry and entry.root
+ local ready=humanoid~=nil and humanoid.Health&gt;0 and root~=nil and not root.Anchored
+ local authorized=self.report.player:GetAttribute("SEDWAREMovementAuthorized")==true
  local previous=self.wanted
- if previous and self.character==character and self.humanoid==(entry and entry.humanoid) and self.root==(entry and entry.root) and previous.fly==c.Fly and previous.speed==c.Speed
-  and previous.flySpeed==c.FlySpeed and previous.walkSpeed==c.WalkSpeed and previous.maxForce==c.FlyMaxForce then return end
- self.character=character;self.humanoid=entry and entry.humanoid;self.root=entry and entry.root;self.revision+=1
- self.wanted={token=self.token,fly=c.Fly,speed=c.Speed,flySpeed=c.FlySpeed,walkSpeed=c.WalkSpeed,maxForce=c.FlyMaxForce}
+ if previous and self.character==character and self.humanoid==humanoid and self.root==root and self.ready==ready and self.authorized==authorized
+  and previous.fly==c.Fly and previous.speed==c.Speed and previous.flySpeed==c.FlySpeed and previous.walkSpeed==c.WalkSpeed and previous.maxForce==c.FlyMaxForce
+  and previous.flyOrientation==c.FlyOrientation and previous.maxTorque==c.FlyMaxTorque
+  and previous.maxAngularVelocity==c.FlyMaxAngularVelocity and previous.orientationResponsiveness==c.FlyOrientationResponsiveness then return end
+ self.character=character;self.humanoid=humanoid;self.root=root;self.ready=ready;self.authorized=authorized;self.revision+=1
+ self.wanted={token=self.token,fly=c.Fly,speed=c.Speed,flySpeed=c.FlySpeed,walkSpeed=c.WalkSpeed,maxForce=c.FlyMaxForce,
+  flyOrientation=c.FlyOrientation,maxTorque=c.FlyMaxTorque,maxAngularVelocity=c.FlyMaxAngularVelocity,orientationResponsiveness=c.FlyOrientationResponsiveness}
  self:_send()
 end
 function MovementBridge:_send()
- if self.inflight or self.destroyed then return end
- local revision=self.revision;local request=table.clone(self.wanted)
+ if self.inflight or self.destroyed or not self.available or not self.wanted then return end
+ local revision,generation=self.revision,self.generation;local request=table.clone(self.wanted);local control=self.control
  self.active=false;self.serverFly=false;self.serverSpeed=false
- self.inflight=true;self.state="WAITING_SERVER";self.started=os.clock()
+ self.inflight=true;self.state="WAITING_SERVER";self.started=os.clock();self.reason=nil
  task.spawn(function()
-  local ok,result=pcall(function() return self.control:InvokeServer(request) end)
+  local ok,result=pcall(function() return control:InvokeServer(request) end)
+  if self.destroyed or generation~=self.generation then return end
   self.inflight=false
-  if self.destroyed then return end
   if revision~=self.revision then self:_send();return end
   self.active=ok and type(result)=="table" and result.ok==true
   self.state=if self.active then "SERVER_CONFIRMED" else "SERVER_REJECTED"
   self.reason=if ok and type(result)=="table" then result.reason else tostring(result)
   if self.reason=="Request rate exceeded" and (self.rateRetries or 0)&lt;3 then
    self.rateRetries=(self.rateRetries or 0)+1
-   task.delay(.1,function() if not self.destroyed and revision==self.revision then self:_send() end end)
+   task.delay(.1,function() if not self.destroyed and generation==self.generation and revision==self.revision then self:_send() end end)
   else self.rateRetries=0 end
  end)
 end
 function MovementBridge:step(now,velocity)
  if self.destroyed then return end
- if not self.available then
-  if not self.nextProbe or now&gt;=self.nextProbe then self.nextProbe=now+.5;self:refresh() end
-  if not self.available then return end
+ -- Probe at a bounded rate; a removed parent/protocol invalidates immediately.
+ if not self.nextProbe or now&gt;=self.nextProbe or (self.available and
+  (self.report.world:GetAttribute("SEDWAREMovementProtocolVersion")~=1 or self.control.Parent~=self.storage or self.input.Parent~=self.storage)) then
+  self.nextProbe=now+.5;self:refresh()
  end
- if self.inflight and os.clock()-self.started&gt;3 then self.active=false;self.state="SERVER_TIMEOUT" end
+ if not self.available then return end
+ if self.inflight and os.clock()-self.started&gt;3 then
+  self.active=false;self.serverFly=false;self.serverSpeed=false;self.state="SERVER_TIMEOUT";self.reason="Own server request timed out after 3 seconds"
+ end
  if not self.nextSend or now&gt;=self.nextSend then
   self.nextSend=now+0.1
   local player=self.report.player
-  local own=player:GetAttribute("SEDWAREMovementToken")==self.token
+  local own=self.active and player:GetAttribute("SEDWAREMovementToken")==self.token
   self.serverFly=own and player:GetAttribute("SEDWAREServerFlyActive")==true
   self.serverSpeed=own and player:GetAttribute("SEDWAREServerSpeedActive")==true
-  if self.config.MovementMode~="Local" and (self.config.Fly or self.config.Speed) then self.input:FireServer(self.token,velocity or Vector3.zero) end
+  if self.config.MovementMode~="Local" and (self.config.Fly or self.config.Speed) and (self.active or self.inflight and self.state~="SERVER_TIMEOUT") then
+   local sent,problem=pcall(function() self.input:FireServer(self.token,velocity or Vector3.zero) end)
+   if not sent then
+    self.active=false;self.serverFly=false;self.serverSpeed=false;self.state="SERVER_REJECTED";self.reason="Own movement input failed: "..tostring(problem)
+   end
+  end
  end
 end
 function MovementBridge:destroy()
- if self.destroyed then return end;self.destroyed=true;self.active=false
+ if self.destroyed then return end;self.destroyed=true;self.generation+=1;self.active=false;self.serverFly=false;self.serverSpeed=false
  if self.available then pcall(function() self.input:FireServer(self.token,"Stop") end) end
 end
 return MovementBridge
 end
 -- END MovementBridge
--- BEGIN CameraController | sha256 63b155b2c9d6645f0b44fc5768164b56365ad46dee8c485df8d7ac1e264ddaad
+-- BEGIN CameraController | sha256 d37ed2733e5e7150349fc24a97e1363ce2deb484eed6a2b59f8a973fa38b4c72
 factories["CameraController"] = function(loadModule)
 --!nonstrict
 -- Orientation-only camera tracking. The session runs this AFTER Roblox's camera
@@ -3542,7 +3695,10 @@ local function shortest(value)
 end
 local function angle(a,b) return math.deg(math.acos(math.clamp(dot(a,b),-1,1))) end
 local function diagnostic(state)
- return {yaw=0,pitch=0,roll=0,targetAngle=0,deltaTime=0,angularError=0,state=state}
+ return {yaw=0,pitch=0,roll=0,targetAngle=0,deltaTime=0,angularError=0,state=state,
+  yawRate=0,pitchRate=0,accelerationApplied=0,yawAccelerationApplied=0,
+  safetyState="IDLE",overshootReference="INITIAL",setpointChange=0,
+  pitchOvershootDegrees=0,yawOvershootDegrees=0,constraintConflict=false}
 end
 
 -- Smoothness is a dimensionless 0..1 strength control, not a per-frame Lerp
@@ -3575,6 +3731,28 @@ function CameraController.critical(delta,velocity,omega,dt,maxRate,maxAccelerati
  if delta==0 or step*delta&lt;0 or math.abs(step)&gt;math.abs(delta) then return delta,0 end
  return step,bounded
 end
+
+-- Limit the velocity that will ACTUALLY be applied this frame. An internal
+-- velocity reset at the goal does not bound the acceleration of the CFrame.
+-- The stopping ceiling includes this frame's travel and a conservative
+-- continuous braking distance; it starts braking before reaching the goal.
+-- A moved goal can make stopping before it impossible. Preserve acceleration
+-- continuity then, report the crossing, and brake instead of snapping to zero.
+local function appliedStep(step,delta,prior,dt,rate,acceleration)
+ local distance=math.abs(delta)
+ local aDt=acceleration*dt
+ local stop=if distance==0 then 0 else
+  (2*acceleration*distance)/(math.sqrt(aDt*aDt+2*acceleration*distance)+aDt)
+ local desired=math.clamp(step/dt,-rate,rate)
+ desired=math.clamp(desired,-stop,stop)
+ if desired*delta&lt;0 then desired=0 end
+ local velocity=math.clamp(desired,prior-aDt,prior+aDt)
+ velocity=math.clamp(velocity,-rate,rate)
+ local value=velocity*dt
+ local crossing=(distance&gt;EPSILON and value*delta&gt;0 and math.abs(value)&gt;distance+EPSILON)
+ local recovery=value*delta&lt;0 or crossing or (distance&lt;=EPSILON and math.abs(value)&gt;EPSILON)
+ return value,velocity,recovery,math.abs(desired-step/dt)&gt;EPSILON
+end
 local function nativeVector(x,y,z) return Vector3.new(x,y,z) end
 local function nativeFromBasis(position,right,up,look) return CFrame.fromMatrix(position,right,up,-look) end
 
@@ -3603,6 +3781,7 @@ function CameraController:reset()
  self.lastFrame=nil
  self.yaw=nil;self.pitch=nil;self.polarHold=nil;self.polarTurn=nil
  self.adaptiveTau=nil;self.yawVelocity=0;self.pitchVelocity=0;self.mode=nil;self.guardPitchVelocity=0;self.guardYawVelocity=0
+ self.appliedPitchVelocity=nil;self.appliedYawVelocity=nil;self.targetYaw=nil;self.targetPitch=nil
  self.diagnostics=diagnostic("RESET")
 end
 function CameraController:destroy() self:reset() end
@@ -3683,23 +3862,35 @@ function CameraController:_update(camera,predicted,dt,context)
  -- instant 180-degree heading flip on exit even with Smoothness=0, without
  -- adding another smoothing filter to ordinary tracking.
  local guarded=not held and (polarTurn or horizontal&lt;POLAR_BAND)
- local safety=self.config.AngularSafety and context and (context.movementPhase~="Grounded" or context.distanceStuds&lt;self.config.CloseSafetyDistance or (context.reversalScale or 1)&lt;1)
+ -- One continuous angular guard covers all tracking phases. Turning it off at
+ -- Grounded previously produced a large discontinuity precisely at landing.
+ -- Pure calibration calls without context retain their original response.
+ local safety=self.config.AngularSafety and context~=nil
+ local priorPitch=if sameCamera then self.appliedPitchVelocity or 0 else 0
+ local priorYaw=if sameCamera then self.appliedYawVelocity or 0 else 0
+ local recovery,braking=false,false
+ local yawRisk=safety and (context.movementPhase~="Grounded" or context.distanceStuds&lt;self.config.CloseSafetyDistance or (context.reversalScale or 1)&lt;1)
  if safety then
-  local function limited(step,delta,prior,rate,acceleration)
-   local desired=math.clamp(step/dt,-rate,rate)
-   if acceleration then desired=math.clamp(desired,(prior or 0)-acceleration*dt,(prior or 0)+acceleration*dt) end
-   desired=math.clamp(desired,-rate,rate)
-   local value=desired*dt
-   if value*delta&lt;0 then return 0,0 end
-   if math.abs(value)&gt;math.abs(delta) then return delta,0 end
-   return value,desired
-  end
-  yawStep,self.guardYawVelocity=limited(yawStep,yawDelta,self.guardYawVelocity,math.rad(self.config.AngularMaxSpeed),nil)
-  pitchStep,self.guardPitchVelocity=limited(pitchStep,targetPitch-previousPitch,self.guardPitchVelocity,math.rad(self.config.PitchMaxSpeed),math.rad(self.config.PitchMaxAcceleration))
+  local pr,pb
+  -- Preserve V3.1 yaw response: ordinary grounded yaw uses its chosen
+  -- interpolation, with the existing rate guard only during risky contexts.
+  -- Adding a second yaw acceleration controller delayed initial acquisition.
+  if yawRisk then yawStep=math.clamp(yawStep,-math.rad(self.config.AngularMaxSpeed)*dt,math.rad(self.config.AngularMaxSpeed)*dt) end
+  self.guardYawVelocity=yawStep/dt
+  pitchStep,self.guardPitchVelocity,pr,pb=appliedStep(pitchStep,targetPitch-previousPitch,priorPitch,dt,math.rad(self.config.PitchMaxSpeed),math.rad(self.config.PitchMaxAcceleration))
+  recovery=pr;braking=pb
  else self.guardPitchVelocity=0;self.guardYawVelocity=0 end
+ local beforePolar=yawStep
  if guarded then yawStep=math.clamp(yawStep,-POLAR_YAW_RATE*dt,POLAR_YAW_RATE*dt) end
  local resultYaw=wrap(previousYaw+yawStep)
- local resultPitch=math.clamp(previousPitch+pitchStep,-HALF_PI,HALF_PI)
+ local wantedPitch=previousPitch+pitchStep
+ local resultPitch=math.clamp(wantedPitch,-HALF_PI,HALF_PI)
+ -- Hard poles have precedence over inertia. They can make simultaneous rate,
+ -- acceleration and horizon constraints impossible, and are disclosed below.
+ local constraintConflict=resultPitch~=wantedPitch or beforePolar~=yawStep
+ local appliedPitch=(resultPitch-previousPitch)/dt
+ local appliedYaw=shortest(resultYaw-previousYaw)/dt
+ if safety and math.abs(appliedPitch-priorPitch)&gt;math.rad(self.config.PitchMaxAcceleration)*dt+1e-7 then constraintConflict=true end
  if math.abs(shortest(targetYaw-resultYaw))&lt;1e-3 then polarTurn=false end
  local base,previousLook=self:_level(current.Position,previousYaw,previousPitch)
  if not frameOK(base) then return false,"Leveled initial camera CFrame is invalid" end
@@ -3712,9 +3903,29 @@ function CameraController:_update(camera,predicted,dt,context)
  self.camera=camera
  self.lastFrame=result
  self.yaw=resultYaw;self.pitch=resultPitch;self.polarHold=held;self.polarTurn=polarTurn
+ self.appliedPitchVelocity=appliedPitch;self.appliedYawVelocity=appliedYaw
  local data=self.diagnostics
  data.yawError=math.deg(shortest(targetYaw-resultYaw));data.pitchError=math.deg(targetPitch-resultPitch)
- data.pitchRate=math.deg(pitchStep/dt);data.safetyLimited=safety==true
+ data.pitchRate=math.deg(appliedPitch);data.yawRate=math.deg(appliedYaw)
+ data.accelerationApplied=math.deg((appliedPitch-priorPitch)/dt)
+ data.yawAccelerationApplied=math.deg((appliedYaw-priorYaw)/dt)
+ data.safetyLimited=safety==true
+ data.yawRateGuarded=yawRisk==true;data.yawAccelerationBounded=false
+ data.safetyState=if not safety then "BYPASSED" elseif not sameCamera then "INITIAL_FRAME"
+  elseif constraintConflict then "HARD_CONSTRAINT" elseif recovery then "BRAKING_RECOVERY"
+  elseif braking then "BRAKING" else "BOUNDED"
+ data.constraintConflict=constraintConflict;data.accelerationReference=if sameCamera then "PREVIOUS_APPLIED_FRAME" else "INITIAL_OR_RESET_FRAME"
+ local changedYaw=if sameCamera and self.targetYaw then shortest(targetYaw-self.targetYaw) else 0
+ local changedPitch=if sameCamera and self.targetPitch then targetPitch-self.targetPitch else 0
+ local stable=sameCamera and self.targetYaw~=nil and math.abs(changedYaw)&lt;1e-6 and math.abs(changedPitch)&lt;1e-6
+ data.setpointChange=math.deg(math.sqrt(changedYaw*changedYaw+changedPitch*changedPitch))
+ data.setpointChanged=not stable;data.overshootReference=if stable then "STABLE_SETPOINT" elseif sameCamera and self.targetYaw then "MOVING_SETPOINT" else "INITIAL"
+ local pitchCrossed=(targetPitch-previousPitch)*(targetPitch-resultPitch)&lt; -1e-12
+ local yawCrossed=yawDelta*shortest(targetYaw-resultYaw)&lt; -1e-12
+ data.pitchGoalCrossed=pitchCrossed;data.yawGoalCrossed=yawCrossed
+ data.pitchOvershootDegrees=if stable and pitchCrossed then math.abs(data.pitchError) else 0
+ data.yawOvershootDegrees=if stable and yawCrossed then math.abs(data.yawError) else 0
+ self.targetYaw=targetYaw;self.targetPitch=targetPitch
  data.mode=mode;data.tauSeconds=if mode=="Adaptive" then self.adaptiveTau else CameraController.timeConstant(self.config.Smoothness)
  data.yawVelocity=self.yawVelocity;data.pitchVelocity=self.pitchVelocity
  data.yaw=math.deg(resultYaw);data.pitch=math.deg(resultPitch)
@@ -3735,7 +3946,7 @@ end
 return CameraController
 end
 -- END CameraController
--- BEGIN PredictionEngine | sha256 58c3795a9cf6bd6d37882d222d8dd87909e47851246c5bcd8623c9135c6ccfcd
+-- BEGIN PredictionEngine | sha256 7c49da0d8b2583238f8cad4c1b31f9e1153aaa2d66d50e566c951fefef534828
 factories["PredictionEngine"] = function(loadModule)
 --!nonstrict
 -- Preserve the existing bounded Memory Tracking, reversal/teleport recovery,
@@ -3769,20 +3980,22 @@ end
 function PredictionEngine:observe(t,position,state)
  -- Validate raw sample before any optional filter state mutation.
  local latest=self.history:latest()
- if type(t)~="number" or t~=t or math.abs(t)==math.huge or (latest and t&lt;=latest.t) then return false end
+ if type(t)~="number" or t~=t or math.abs(t)==math.huge then return false,"INVALID_OBSERVATION_TIME" end
+ if latest and t&lt;=latest.t then return false,"NON_INCREASING_OBSERVATION_TIME" end
  local valid,ok=pcall(function() return position.Magnitude&lt;math.huge and position.X==position.X and position.Y==position.Y and position.Z==position.Z end)
- if not valid or not ok or (state~=nil and type(state)~="string") then return false end
+ if not valid or not ok then return false,"INVALID_OBSERVATION_POSITION" end
+ if state~=nil and type(state)~="string" then return false,"INVALID_HUMANOID_STATE" end
  if self.config.MotionFilter~="Memory" and self.filter.time then
   local dt=t-self.filter.time;local displacement=(position-self.filter.raw).Magnitude
   local maximum=self.config.MaxObservedSpeed*dt
-  if displacement&gt;maximum and displacement&lt;=maximum+self.config.TeleportSlack then return false end
+  if displacement&gt;maximum and displacement&lt;=maximum+self.config.TeleportSlack then return false,"OBSERVED_SPEED_LIMIT" end
  end
  local filtered=self.filter:observe(t,position,state)
  local accepted=self.prediction:observe(t,filtered,state)
  if accepted then self.vertical:observe(t,position,state) end
  if not accepted and self.config.MotionFilter~="Memory" then self.filter:reset() end
  aliases(self)
- return accepted
+ return accepted,if accepted then nil else "MOTION_HISTORY_REJECTED"
 end
 function PredictionEngine:samplePing(rttSeconds,now)
  local accepted=self.prediction:samplePing(rttSeconds,now)
@@ -3875,7 +4088,7 @@ end
 return Cleanup
 end
 -- END Cleanup
--- BEGIN Session | sha256 4641bde06d8504ec7e954328cc328ec595e4d5ef1ca221868d5f4b0bd436595a
+-- BEGIN Session | sha256 c827d7315299665db182b4c76b3eda1bf8f2ca48c49b697339cf0a2e4afef1b9
 factories["Session"] = function(loadModule)
 --!nonstrict
 local Config=loadModule("Config")
@@ -3910,7 +4123,27 @@ function Session:GetTrackingDiagnostics()
  d.target=self.locked and self.locked.player.Name;d.locked=self.locked~=nil
  d.trackingState=self.trackingState or "IDLE";d.reason=self.trackingReason;d.lastLoss=self.lastLoss
  d.pauseReason=self.pauseReason;d.prediction=self.predictionOutput
+ d.observation=self.observation and table.clone(self.observation)
  return d
+end
+function Session:GetESPDiagnostics()
+ local data=table.clone(self.esp.stats)
+ data.loadedDataOnly=true;data.extendedAuthorized=ESPAccess.allowed(self.config,self.report)
+ return data
+end
+function Session:_observe(now,position,state)
+ local accepted,reason=self.prediction:observe(now,position,state)
+ local previous=self.observation or {rejectedCount=0}
+ self.observation={accepted=accepted==true,reason=reason,time=now,
+  lastAcceptedAt=if accepted then now else previous.lastAcceptedAt,
+  rejectedCount=previous.rejectedCount+(if accepted then 0 else 1),
+  lastRejectedAt=if accepted then previous.lastRejectedAt else now,
+  lastRejectedReason=if accepted then previous.lastRejectedReason else reason}
+ if not accepted and self.config.DebugMode and (not self.nextObservationDiagnostic or now&gt;=self.nextObservationDiagnostic) then
+  self.nextObservationDiagnostic=now+1
+  Runtime.trace(self.report,"CamObservation","REJECTED",reason or "Observation rejected")
+ end
+ return accepted,reason
 end
 function Session:_lose(code,detail)
  self.lastLoss={code=code,detail=detail,time=self:_clock(),target=self.locked and self.locked.player.Name}
@@ -3950,13 +4183,13 @@ function Session:LockTarget(player)
   end
   return false,reason
  end
- self.prediction:reset();self.controller:reset();self.predictionOutput=nil
+ self.prediction:reset();self.controller:reset();self.predictionOutput=nil;self.observation=nil
  self.selector.lossSince=nil;self.nextRetention=nil
  self.nextObservation=nil;self.nextPing=nil
  self.partGapSince=nil;self.trackingState="TRACKING";self.trackingReason=nil
  self:_bindTarget(data)
  self:_ping(now)
- self.prediction:observe(now,data.part.Position,tostring(data.humanoid:GetState()))
+ self:_observe(now,data.part.Position,tostring(data.humanoid:GetState()))
  self.nextObservation=now+1/self.config.UpdateHz
  self.predictionOutput=self.prediction:predict(self.selector:origin(),now)
  if self.predictionOutput then self.predictionOutput.captureTimeKnown=false;self.predictionOutput.ageSource="LocalReadTime" end
@@ -3966,7 +4199,7 @@ function Session:LockTarget(player)
 end
 function Session:UnlockTarget(reason)
  if not self.locked then return false end
- self.locked=nil;self.predictionOutput=nil
+ self.locked=nil;self.predictionOutput=nil;self.observation=nil
  self.trackingState=if self.config.Enabled then "IDLE" else "DISABLED";self.trackingReason=nil;self.pauseReason=nil
  self.targetCleanup:destroy();self.targetCleanup=Cleanup.new()
  self.prediction:reset();self.controller:reset();self.nextObservation=nil;self.nextPing=nil
@@ -4060,29 +4293,62 @@ function Session:GetMovementDiagnostics()
  for _,field in {"Fly","Speed"} do
   local controller=if field=="Fly" then self.fly else self.speed
   local requested=self.config[field];local effective=false
+  local requestedSpeed=if field=="Fly" then self.config.FlySpeed else self.config.WalkSpeed
+  local measured,horizontal,vertical,serverMeasured,appliedSpeed,commandSpeed
+  local wanted=false
   local state,reason="OFF","Not requested"
-  if not permitted then state="UNAVAILABLE";reason="No permitted local context or own server authorization"
+  if not requested then controller.probeSince=nil
+  elseif not permitted then state="UNAVAILABLE";reason="No permitted local context or own server authorization"
   elseif field=="Speed" and requested and self.config.Fly then state="OFF";reason="Paused while Fly is requested"
   elseif requested and not ready then state="UNAVAILABLE";reason="Waiting for living, unanchored character"
   elseif requested then
    local root=entry.root;local velocity=root.AssemblyLinearVelocity
-   local measured=velocity and (if field=="Fly" then velocity.Magnitude else math.sqrt(velocity.X^2+velocity.Z^2)) or 0
-   local wanted=if field=="Fly" then self.fly.velocity.Magnitude&gt;self.config.MovementMinimumSpeed else entry.humanoid.MoveDirection and entry.humanoid.MoveDirection.Magnitude&gt;0.1
-   effective=(controller.active and measured&gt;=self.config.MovementMinimumSpeed and (if field=="Fly" then self.fly.velocity.Magnitude&gt;=self.config.MovementMinimumSpeed and velocity:Dot(self.fly.velocity)&gt;0 else wanted and velocity:Dot(entry.humanoid.MoveDirection)&gt;0))==true
+   local validVelocity=velocity and finite(velocity.X) and finite(velocity.Y) and finite(velocity.Z) and finite(velocity.Magnitude)
+   if validVelocity then
+    horizontal=math.sqrt(velocity.X^2+velocity.Z^2);vertical=velocity.Y
+    measured=if field=="Fly" then velocity.Magnitude else horizontal
+   end
+   commandSpeed=if field=="Fly" then self.fly.velocity.Magnitude else self.config.WalkSpeed
+   wanted=(if field=="Fly" then commandSpeed&gt;self.config.MovementMinimumSpeed else entry.humanoid.MoveDirection and entry.humanoid.MoveDirection.Magnitude&gt;0.1)==true
+   local matching=validVelocity and (if field=="Fly" then wanted and velocity:Dot(self.fly.velocity)&gt;0 else wanted and velocity:Dot(entry.humanoid.MoveDirection)&gt;0)
+   effective=(controller.active and measured and measured&gt;=self.config.MovementMinimumSpeed and matching)==true
    if server then
     local applied=if field=="Fly" then bridge.serverFly else bridge.serverSpeed
-    state=if bridge.active and applied then "SERVER AUTHORIZED" elseif bridge.state=="SERVER_REJECTED" or bridge.state=="SERVER_TIMEOUT" then "SERVER LIMITED" else "UNAVAILABLE"
-    reason=bridge.reason or bridge.state
-   elseif controller.limited then state="SERVER LIMITED";reason="WalkSpeed changed externally; not overwritten"
+    local serverHorizontal=self.player:GetAttribute("SEDWAREMeasuredHorizontalSpeed")
+    local serverVertical=self.player:GetAttribute("SEDWAREMeasuredVerticalSpeed")
+    if finite(serverHorizontal) and finite(serverVertical) then
+     serverMeasured=if field=="Fly" then math.sqrt(serverHorizontal^2+serverVertical^2) else serverHorizontal
+    end
+    appliedSpeed=if field=="Speed" then self.player:GetAttribute("SEDWAREAppliedWalkSpeed") else (if applied then commandSpeed else nil)
+    local overrideReason=field=="Speed" and self.player:GetAttribute("SEDWAREServerSpeedReason")
+    if type(overrideReason)=="string" and overrideReason~="" then
+     state="LIMITED";reason=overrideReason;effective=false
+    elseif controller.limited or bridge.state=="SERVER_REJECTED" or bridge.state=="SERVER_TIMEOUT" then
+     state="LIMITED";reason=bridge.reason or "Requested property changed externally";effective=false
+    elseif not bridge.available then state="UNAVAILABLE";reason=bridge.reason or "Own server component unavailable";effective=false
+    else
+     effective=(effective and bridge.active and applied and serverMeasured and serverMeasured&gt;=self.config.MovementMinimumSpeed)==true
+     state=if effective then "SERVER ACTIVE" else "PENDING"
+     reason=if effective then "Motion observed by client and own server; own request applied" else "Waiting for own server application, input or measured motion"
+    end
+   elseif controller.limited then state="LIMITED";reason="WalkSpeed changed externally; not overwritten";effective=false
    elseif effective then state="LOCAL ACTIVE";reason="Physical velocity observed locally; replication unverified"
    else
-    controller.probeSince=if wanted then controller.probeSince or self:_clock() else nil
-    state=if controller.probeSince and self:_clock()-controller.probeSince&gt;=self.config.MovementProbeSeconds then "SERVER LIMITED" else "LOCAL ONLY"
-    reason=if state=="SERVER LIMITED" then "Requested motion not observed; environment restriction/physics cause unconfirmed" else "Idle, waiting for input or physical confirmation"
+    state="PENDING";reason="Idle, waiting for input or physical confirmation"
    end
-  else controller.probeSince=nil end
+   if not server then appliedSpeed=if field=="Speed" then entry.humanoid.WalkSpeed else (controller.constraint and controller.constraint.VectorVelocity.Magnitude) end
+   if wanted and not effective and state=="PENDING" then
+    controller.probeSince=controller.probeSince or self:_clock()
+    if self:_clock()-controller.probeSince&gt;=self.config.MovementProbeSeconds then
+     state="LIMITED";reason="Requested motion not observed; physical/environment cause unconfirmed"
+    end
+   else controller.probeSince=nil end
+  end
   if controller.error then state="ERROR";reason=controller.error end
-  result[field]={requested=requested,controllerActive=controller.active==true,effective=effective,state=state,reason=reason}
+  result[field]={requested=requested,controllerActive=controller.active==true,effective=effective,state=state,reason=reason,
+   requestedSpeed=requestedSpeed,commandSpeed=commandSpeed,appliedSpeed=appliedSpeed,
+   observedSpeed=measured,observedHorizontalSpeed=horizontal,observedVerticalSpeed=vertical,
+   serverObservedSpeed=serverMeasured,wantedInput=wanted}
  end
  return result
 end
@@ -4137,8 +4403,9 @@ function Session:_cameraDiagnostic(now)
  self.nextCameraDiagnostic=now+self.config.CameraDebugInterval
  local data=self.controller:GetDiagnostics()
  Runtime.trace(self.report,"CamCamera",data.state,string.format(
-  "yaw=%.3f pitch=%.3f roll=%.6f targetAngle=%.3f deltaTime=%.6f angularError=%.3f",
-  data.yaw,data.pitch,data.roll,data.targetAngle,data.deltaTime,data.angularError))
+  "yaw=%.3f pitch=%.3f roll=%.6f targetAngle=%.3f deltaTime=%.6f angularError=%.3f yawError=%s pitchError=%s pitchRate=%s pitchAccelerationApplied=%s safety=%s conflict=%s overshootReference=%s",
+  data.yaw,data.pitch,data.roll,data.targetAngle,data.deltaTime,data.angularError,tostring(data.yawError),tostring(data.pitchError),
+  tostring(data.pitchRate),tostring(data.accelerationApplied),tostring(data.safetyState),tostring(data.constraintConflict),tostring(data.overshootReference)))
 end
 function Session:_track(dt,now)
  if not self.config.Enabled then return end
@@ -4176,7 +4443,7 @@ function Session:_track(dt,now)
  if self.config.SmartSelection and self.retentionPaused then self:_pause("Target temporarily outside visible bounds",now);return end
  if not self.nextObservation or now+1e-7&gt;=self.nextObservation then
   self.nextObservation=now+1/self.config.UpdateHz
-  self.prediction:observe(now,data.part.Position,tostring(data.humanoid:GetState()))
+  self:_observe(now,data.part.Position,tostring(data.humanoid:GetState()))
  end
  self.predictionOutput=self.prediction:predict(camera.CFrame.Position,now)
  if self.predictionOutput then self.predictionOutput.captureTimeKnown=false;self.predictionOutput.ageSource="LocalReadTime" end
@@ -4208,12 +4475,21 @@ function Session:_step(dt)
   local stats=self.esp.stats
   local esp=if not self.config.ESP then "OFF | Enable ESP + Hitboxes or Names"
    elseif not self.config.Hitboxes and not self.config.Names then "Choose Hitboxes or Names to show indicators"
-   else string.format("%d visible / %d evaluated | %d active",stats.visible,stats.considered,stats.active)
+   else string.format("%s %s | %d visible / %d evaluated",
+    if stats.mode=="AlwaysOnTop" then "Always On Top" else "Visible Only",
+    if stats.unlimitedRange then "loaded" else tostring(stats.maxDistance),stats.visible,stats.considered)
   self.ui:setStatus(movement,esp,allowed,movementReport)
   if self.config.DebugMode then
    Runtime.trace(self.report,"Movement","STATUS",movement.." | mode="..movementReport.mode.." | "..movementReport.Fly.reason.." | "..movementReport.Speed.reason)
+   for _,field in {"Fly","Speed"} do
+    local m=movementReport[field]
+    Runtime.trace(self.report,"Movement","MEASURE",string.format("%s requestedSpeed=%s command=%s applied=%s observed=%s serverObserved=%s input=%s controllerActive=%s effective=%s",
+     field,tostring(m.requestedSpeed),tostring(m.commandSpeed),tostring(m.appliedSpeed),tostring(m.observedSpeed),tostring(m.serverObservedSpeed),tostring(m.wantedInput),tostring(m.controllerActive),tostring(m.effective)))
+   end
    Runtime.trace(self.report,"ESP","DIAGNOSTIC",string.format("registered=%d evaluated=%d range=%d screen=%d occluded=%d notReady=%d far=%d offscreen=%d visible=%d active=%d created=%d raycasts=%d ms=%.4f maxMs=%.4f",
     stats.registered,stats.considered,stats.inRange,stats.onScreen,stats.occluded,stats.notReady,stats.outOfRange,stats.offscreen,stats.visible,stats.active,stats.created,stats.raycasts,stats.lastSeconds*1000,stats.maxSeconds*1000))
+   Runtime.trace(self.report,"ESP","MODE",string.format("mode=%s range=%s loadedDataOnly=true invalidRoot=%s invalidHead=%s",
+    tostring(stats.mode),if stats.unlimitedRange then "Unlimited" else tostring(stats.maxDistance),tostring(stats.invalidRoot),tostring(stats.invalidHead)))
    local p=self.predictionOutput;local d=self.controller.diagnostics
    Runtime.trace(self.report,"Tracking","DIAGNOSTIC",string.format("target=%s angularError=%.3f scaleX=%.2f scaleY=%.2f horizonX=%.6f horizonY=%.6f smoothness=%.3f mode=%s fps=%.1f pingMs=%s smoothedPingMs=%s localReadAge=%s captureTime=unknown observationDelay=unknown updateMs=%.4f",
     self.locked and self.locked.player.Name or "none",d.angularError,self.config.PredictionX,self.config.PredictionY,
@@ -4222,6 +4498,10 @@ function Session:_step(dt)
    Runtime.trace(self.report,"Tracking","STATE",string.format("state=%s reason=%s lastLoss=%s phase=%s hitPart=%s verticalVelocity=%s yawError=%s pitchError=%s horizonXUsed=%s horizonYUsed=%s",
     tostring(self.trackingState),tostring(self.trackingReason),self.lastLoss and self.lastLoss.code or "none",p and p.movementPhase or "unknown",self.config.HitPart,
     tostring(p and p.verticalVelocityUsed),tostring(d.yawError),tostring(d.pitchError),tostring(p and p.horizontalHorizonUsed),tostring(p and p.verticalHorizonUsed)))
+   local o=self.observation
+   Runtime.trace(self.report,"Tracking","QUALITY",string.format("observeAccepted=%s rejection=%s rejectedCount=%s verticalAnomaly=%s anomalyReason=%s rawYVelocity=%s pitchRate=%s appliedAcceleration=%s safety=%s conflict=%s overshootReference=%s pitchOvershoot=%s",
+    tostring(o and o.accepted),tostring(o and o.reason),tostring(o and o.rejectedCount),tostring(p and p.verticalAnomaly),tostring(p and p.verticalAnomalyReason),
+    tostring(p and p.verticalRawVelocity),tostring(d.pitchRate),tostring(d.accelerationApplied),tostring(d.safetyState),tostring(d.constraintConflict),tostring(d.overshootReference),tostring(d.pitchOvershootDegrees)))
   end
  end
 end
@@ -4278,7 +4558,11 @@ function Session.init(options,report)
   stage="Graphics"
   self.notifications=NotificationSystem.new(report.playerGui,config)
   self.ui=UI.new(report.playerGui,config,function(field,value) return self:configure(field,value) end,
-   function(reason,field) self:_notify((if field=="Fly" or field=="Speed" then field.." | " else "Invalid value | ")..tostring(reason)) end,function(name,value) return self:_action(name,value) end,self.player)
+   function(reason,field)
+    local descriptor=field and Config.fields[field]
+    local prefix=if descriptor and descriptor.section=="MOVEMENT" then descriptor.label.." | " else "Invalid value | "
+    self:_notify(prefix..tostring(reason))
+   end,function(name,value) return self:_action(name,value) end,self.player)
   self.gui=self.ui.gui
   assert(self.gui.Parent==report.playerGui and self.notifications.gui.Parent==report.playerGui,"Cam Lock interface failed to attach")
   self.cleanup:connect(self.gui.Destroying,function() self:destroy() end)
@@ -4329,7 +4613,7 @@ end
 return Session
 end
 -- END Session
--- BEGIN Bootstrap | sha256 1ffe56bb1c097c55ac9552d395e7d3c8dfd29fc4cc6f721505fb8994f002afe1
+-- BEGIN Bootstrap | sha256 65f2245f3e7c157f42bf589e3d260253a538a50d267f9f25ea8bb58a4d96052b
 factories["Bootstrap"] = function(loadModule)
 --!nonstrict
 local Runtime=loadModule("Runtime")
@@ -4384,7 +4668,7 @@ function Bootstrap.new(initialConfig,getModule,moduleNames,headerError)
   if current then current:destroy();return true end
   return false
  end
- for _,name in {"GetMovementDiagnostics","GetTrackingDiagnostics","GetLockedTarget","GetPrediction","GetPredictedPosition","LockTarget","UnlockTarget","configure","SetEnabled","SetHitPart","ApplyESPTarget","ClearESPTarget"} do
+ for _,name in {"GetMovementDiagnostics","GetTrackingDiagnostics","GetESPDiagnostics","GetLockedTarget","GetPrediction","GetPredictedPosition","LockTarget","UnlockTarget","configure","SetEnabled","SetHitPart","ApplyESPTarget","ClearESPTarget"} do
   API[name]=function(...)
    if not API.session then return nil,"Not initialized" end
    return API.session[name](API.session,...)
@@ -4467,22 +4751,33 @@ local input=Instance.new("RemoteEvent");input.Name="SEDWAREMovementInput";input.
 local states,connections,globalConnections={},{},{}
 local function connect(signal,callback) local c=signal:Connect(callback);table.insert(globalConnections,c);return c end
 local function finite(v) return type(v)=="number" and v==v and math.abs(v)&lt;math.huge end
+-- WalkSpeed stores float32 while request numbers are Luau doubles.
+local function close(a,b) return finite(a) and finite(b) and math.abs(a-b)&lt;=1e-4 end
+local function orient(s,forward)
+ if not s.orientation then return end
+ local horizontal=Vector3.new(forward.X,0,forward.Z)
+ if horizontal.Magnitude&gt;1e-5 then s.heading=horizontal.Unit end
+ s.heading=s.heading or Vector3.new(0,0,-1)
+ s.orientation.CFrame=CFrame.lookAt(Vector3.zero,s.heading,Vector3.yAxis)
+end
 local function restore(s)
  if s.player and s.player:GetAttribute("SEDWAREMovementToken")==s.token then
   s.player:SetAttribute("SEDWAREServerFlyActive",false);s.player:SetAttribute("SEDWAREServerSpeedActive",false)
   s.player:SetAttribute("SEDWAREMeasuredHorizontalSpeed",0);s.player:SetAttribute("SEDWAREMeasuredVerticalSpeed",0)
+  s.player:SetAttribute("SEDWAREAppliedWalkSpeed",0);s.player:SetAttribute("SEDWAREServerSpeedReason","")
  end
+ if s.orientation then s.orientation:Destroy();s.orientation=nil end
  if s.constraint then s.constraint:Destroy();s.constraint=nil end
  if s.attachment then s.attachment:Destroy();s.attachment=nil end
  if s.humanoid and s.original then pcall(function()
-  if s.humanoid.WalkSpeed==s.appliedSpeed then s.humanoid.WalkSpeed=s.original.speed end
+  if close(s.humanoid.WalkSpeed,s.appliedSpeed) then s.humanoid.WalkSpeed=s.original.speed end
   if s.flyApplied then
    s.humanoid.AutoRotate=s.original.rotate;s.humanoid.PlatformStand=s.original.platform
    if s.humanoid.Health&gt;0 then s.humanoid:ChangeState(s.original.state) end
   end
  end) end
  if s.root and s.flyApplied then pcall(function() if s.ownerAutomatic==false then s.root:SetNetworkOwner(s.previousOwner) else s.root:SetNetworkOwnershipAuto() end end) end
- s.humanoid=nil;s.original=nil;s.root=nil;s.flyApplied=false
+ s.humanoid=nil;s.original=nil;s.root=nil;s.flyApplied=false;s.appliedSpeed=nil
 end
 local function apply(player,s)
  restore(s)
@@ -4501,23 +4796,50 @@ local function apply(player,s)
   s.constraint.Attachment0=s.attachment;s.constraint.RelativeTo=Enum.ActuatorRelativeTo.World
   s.constraint.VelocityConstraintMode=Enum.VelocityConstraintMode.Vector;s.constraint.ForceLimitsEnabled=true
   s.constraint.MaxForce=s.maxForce;s.constraint.VectorVelocity=Vector3.zero;s.constraint.Parent=root
+  if s.flyOrientation then
+   s.orientation=Instance.new("AlignOrientation");s.orientation.Name="SEDWAREServerFlyOrientation"
+   s.orientation.Mode=Enum.OrientationAlignmentMode.OneAttachment;s.orientation.Attachment0=s.attachment
+   s.orientation.AlignType=Enum.AlignType.AllAxes
+   s.orientation.RigidityEnabled=false;s.orientation.ReactionTorqueEnabled=false
+   s.orientation.MaxTorque=s.maxTorque;s.orientation.MaxAngularVelocity=s.maxAngularVelocity
+   s.orientation.Responsiveness=s.orientationResponsiveness;s.orientation.Parent=root
+   orient(s,root.CFrame.LookVector)
+  end
   h.AutoRotate=false;h.PlatformStand=true;h:ChangeState(Enum.HumanoidStateType.Physics)
- elseif s.speed then h.WalkSpeed=s.walkSpeed;s.appliedSpeed=s.walkSpeed end
+ elseif s.speed then
+  h.WalkSpeed=s.walkSpeed
+  local actual=h.WalkSpeed
+  s.appliedSpeed=if close(actual,s.walkSpeed) then actual else nil
+  s.speedLimited=s.appliedSpeed==nil
+ end
  player:SetAttribute("SEDWAREMovementToken",s.token)
  player:SetAttribute("SEDWAREServerFlyActive",s.fly)
- player:SetAttribute("SEDWAREServerSpeedActive",s.speed and not s.fly)
- return true,"Server applied; physical result must be measured separately"
+ player:SetAttribute("SEDWAREServerSpeedActive",s.speed and not s.fly and not s.speedLimited)
+ player:SetAttribute("SEDWAREAppliedWalkSpeed",if s.speed and not s.fly and not s.speedLimited then s.appliedSpeed else 0)
+ player:SetAttribute("SEDWAREServerSpeedReason",if s.speedLimited then "WalkSpeed application limited; requested value not accepted" else "")
+ return true,if s.speedLimited then "WalkSpeed application limited; requested value not accepted" else "Server applied; physical result must be measured separately"
 end
 control.OnServerInvoke=function(player,r)
  if player:GetAttribute("SEDWAREMovementAuthorized")~=true then return {ok=false,reason="Server authorization denied"} end
  if type(r)~="table" or type(r.token)~="string" or #r.token&gt;100 or type(r.fly)~="boolean" or type(r.speed)~="boolean"
   or not finite(r.flySpeed) or r.flySpeed&lt;1 or r.flySpeed&gt;200
-  or not finite(r.walkSpeed) or r.walkSpeed&lt;1 or r.walkSpeed&gt;100
+  or not finite(r.walkSpeed) or r.walkSpeed&lt;1 or r.walkSpeed&gt;140
   or not finite(r.maxForce) or r.maxForce&lt;1000 or r.maxForce&gt;10000000 then return {ok=false,reason="Invalid movement request"} end
+ -- Optional v1 fields: older SDK requests receive bounded defaults; false is honored.
+ if r.flyOrientation~=nil and type(r.flyOrientation)~="boolean" then return {ok=false,reason="Invalid flight orientation flag"} end
+ local maxTorque=if r.maxTorque==nil then 100000 else r.maxTorque
+ local maxAngularVelocity=if r.maxAngularVelocity==nil then 6 else r.maxAngularVelocity
+ local orientationResponsiveness=if r.orientationResponsiveness==nil then 15 else r.orientationResponsiveness
+ if not finite(maxTorque) or maxTorque&lt;1000 or maxTorque&gt;10000000
+  or not finite(maxAngularVelocity) or maxAngularVelocity&lt;0.1 or maxAngularVelocity&gt;20
+  or not finite(orientationResponsiveness) or orientationResponsiveness&lt;5 or orientationResponsiveness&gt;100 then
+  return {ok=false,reason="Flight orientation settings out of range"}
+ end
  local previous=states[player];local now=os.clock()
  if previous and now-(previous.lastRequest or 0)&lt;0.03 then return {ok=false,reason="Request rate exceeded"} end
  if previous then restore(previous) end
- local s={player=player,token=r.token,fly=r.fly,speed=r.speed,flySpeed=r.flySpeed,walkSpeed=r.walkSpeed,maxForce=r.maxForce,lastInput=now,lastRequest=now}
+ local s={player=player,token=r.token,fly=r.fly,speed=r.speed,flySpeed=r.flySpeed,walkSpeed=r.walkSpeed,maxForce=r.maxForce,lastInput=now,lastRequest=now,
+  flyOrientation=r.flyOrientation~=false,maxTorque=maxTorque,maxAngularVelocity=maxAngularVelocity,orientationResponsiveness=orientationResponsiveness}
  if not r.fly and not r.speed then states[player]=nil;return {ok=true,reason="Server movement disabled"} end
  states[player]=s
  local ok,accepted,reason=pcall(apply,player,s)
@@ -4532,20 +4854,30 @@ connect(input.OnServerEvent,function(player,token,velocity)
  if typeof(velocity)~="Vector3" or not finite(velocity.X) or not finite(velocity.Y) or not finite(velocity.Z)
   or velocity.Magnitude&gt;s.flySpeed+0.01 then return end
  s.lastInput=now
- if s.constraint then s.constraint.VectorVelocity=velocity end
+ if s.constraint then s.constraint.VectorVelocity=velocity;orient(s,velocity) end
 end)
 connect(Run.Heartbeat,function()
  local now=os.clock()
  for player,s in states do
   if player:GetAttribute("SEDWAREMovementAuthorized")~=true or now-s.lastInput&gt;0.8
-   or player.Character==nil or not s.root or not s.root:IsDescendantOf(player.Character) or s.humanoid.Health&lt;=0 then
+   or player.Character==nil or not s.root or not s.root:IsDescendantOf(player.Character) or s.root.Anchored
+   or not s.humanoid:IsDescendantOf(player.Character) or s.humanoid.Health&lt;=0 then
    restore(s);states[player]=nil
-  elseif not s.nextMeasure or now&gt;=s.nextMeasure then
+  else
+   -- A correction by another owned system is recorded once, never fought.
+   if s.speed and not s.fly and not s.speedLimited and not close(s.humanoid.WalkSpeed,s.appliedSpeed) then
+    s.speedLimited=true
+    player:SetAttribute("SEDWAREServerSpeedActive",false)
+    player:SetAttribute("SEDWAREAppliedWalkSpeed",0)
+    player:SetAttribute("SEDWAREServerSpeedReason","WalkSpeed changed externally; not overwritten")
+   end
+   if not s.nextMeasure or now&gt;=s.nextMeasure then
    s.nextMeasure=now+.2
    local v=s.root.AssemblyLinearVelocity
    if typeof(v)=="Vector3" and finite(v.X) and finite(v.Y) and finite(v.Z) then
     player:SetAttribute("SEDWAREMeasuredHorizontalSpeed",math.sqrt(v.X*v.X+v.Z*v.Z))
     player:SetAttribute("SEDWAREMeasuredVerticalSpeed",v.Y)
+   end
    end
   end
  end

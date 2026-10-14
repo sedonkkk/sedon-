@@ -4,6 +4,26 @@ local Base=require("./CamMock")
 local Mock={}
 function Mock.new()
  local mock=Base.new();local env=mock.env;local wrapped={}
+ -- Keep the orientation enums finite so a typo cannot invent an API that
+ -- passes controller tests. Names/values match the official creator-docs:
+ -- reference/engine/enums/{OrientationAlignmentMode,AlignType}.yaml.
+ -- Constraints remain property/event doubles; they never integrate physics.
+ local function strictEnum(category,members)
+  local values,items={},{}
+  setmetatable(values,{__tostring=function() return category end,
+   __index=function(_,name) error(tostring(name).." is not a valid member of Enum."..category) end})
+  for _,member in members do
+   local name,value=member[1],member[2]
+   local item=setmetatable({Name=name,Value=value,EnumType=values,_mockType="EnumItem"},
+    {__tostring=function() return "Enum."..category.."."..name end})
+   values[name]=item;table.insert(items,item)
+  end
+  function values:GetEnumItems() return table.clone(items) end
+  return values
+ end
+ env.Enum.OrientationAlignmentMode=strictEnum("OrientationAlignmentMode",{{"OneAttachment",0},{"TwoAttachment",1}})
+ env.Enum.AlignType=strictEnum("AlignType",{{"Parallel",0},{"Perpendicular",1},{"PrimaryAxisParallel",2},
+  {"PrimaryAxisPerpendicular",3},{"PrimaryAxisLookAt",4},{"AllAxes",5}})
  mock:setPointer(640,360)
  local oldNew=env.Instance.new
  local extraSignals={ChildAdded=true,ChildRemoved=true,TextBoxFocused=true}

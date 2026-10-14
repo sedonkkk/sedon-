@@ -21,7 +21,9 @@ function Access.allowed(config,report)
   or report.world:GetAttribute("SEDWAREMovementAuthorized")==true
 end
 function Access.ready(entry,world)
- return entry and entry.character and entry.character:IsDescendantOf(world) and entry.humanoid and entry.humanoid.Health>0
-  and entry.root and entry.root:IsA("BasePart") and not entry.root.Anchored
+ return entry and entry.character and entry.character:IsDescendantOf(world)
+  and entry.humanoid and entry.humanoid:IsDescendantOf(entry.character)
+  and type(entry.humanoid.Health)=="number" and entry.humanoid.Health==entry.humanoid.Health and entry.humanoid.Health<math.huge and entry.humanoid.Health>0
+  and entry.root and entry.root:IsA("BasePart") and entry.root:IsDescendantOf(entry.character) and not entry.root.Anchored
 end
 return Access

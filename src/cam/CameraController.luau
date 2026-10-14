@@ -45,7 +45,10 @@ local function shortest(value)
 end
 local function angle(a,b) return math.deg(math.acos(math.clamp(dot(a,b),-1,1))) end
 local function diagnostic(state)
- return {yaw=0,pitch=0,roll=0,targetAngle=0,deltaTime=0,angularError=0,state=state}
+ return {yaw=0,pitch=0,roll=0,targetAngle=0,deltaTime=0,angularError=0,state=state,
+  yawRate=0,pitchRate=0,accelerationApplied=0,yawAccelerationApplied=0,
+  safetyState="IDLE",overshootReference="INITIAL",setpointChange=0,
+  pitchOvershootDegrees=0,yawOvershootDegrees=0,constraintConflict=false}
 end
 
 -- Smoothness is a dimensionless 0..1 strength control, not a per-frame Lerp
@@ -78,6 +81,28 @@ function CameraController.critical(delta,velocity,omega,dt,maxRate,maxAccelerati
  if delta==0 or step*delta<0 or math.abs(step)>math.abs(delta) then return delta,0 end
  return step,bounded
 end
+
+-- Limit the velocity that will ACTUALLY be applied this frame. An internal
+-- velocity reset at the goal does not bound the acceleration of the CFrame.
+-- The stopping ceiling includes this frame's travel and a conservative
+-- continuous braking distance; it starts braking before reaching the goal.
+-- A moved goal can make stopping before it impossible. Preserve acceleration
+-- continuity then, report the crossing, and brake instead of snapping to zero.
+local function appliedStep(step,delta,prior,dt,rate,acceleration)
+ local distance=math.abs(delta)
+ local aDt=acceleration*dt
+ local stop=if distance==0 then 0 else
+  (2*acceleration*distance)/(math.sqrt(aDt*aDt+2*acceleration*distance)+aDt)
+ local desired=math.clamp(step/dt,-rate,rate)
+ desired=math.clamp(desired,-stop,stop)
+ if desired*delta<0 then desired=0 end
+ local velocity=math.clamp(desired,prior-aDt,prior+aDt)
+ velocity=math.clamp(velocity,-rate,rate)
+ local value=velocity*dt
+ local crossing=(distance>EPSILON and value*delta>0 and math.abs(value)>distance+EPSILON)
+ local recovery=value*delta<0 or crossing or (distance<=EPSILON and math.abs(value)>EPSILON)
+ return value,velocity,recovery,math.abs(desired-step/dt)>EPSILON
+end
 local function nativeVector(x,y,z) return Vector3.new(x,y,z) end
 local function nativeFromBasis(position,right,up,look) return CFrame.fromMatrix(position,right,up,-look) end
 
@@ -106,6 +131,7 @@ function CameraController:reset()
  self.lastFrame=nil
  self.yaw=nil;self.pitch=nil;self.polarHold=nil;self.polarTurn=nil
  self.adaptiveTau=nil;self.yawVelocity=0;self.pitchVelocity=0;self.mode=nil;self.guardPitchVelocity=0;self.guardYawVelocity=0
+ self.appliedPitchVelocity=nil;self.appliedYawVelocity=nil;self.targetYaw=nil;self.targetPitch=nil
  self.diagnostics=diagnostic("RESET")
 end
 function CameraController:destroy() self:reset() end
@@ -186,23 +212,35 @@ function CameraController:_update(camera,predicted,dt,context)
  -- instant 180-degree heading flip on exit even with Smoothness=0, without
  -- adding another smoothing filter to ordinary tracking.
  local guarded=not held and (polarTurn or horizontal<POLAR_BAND)
- local safety=self.config.AngularSafety and context and (context.movementPhase~="Grounded" or context.distanceStuds<self.config.CloseSafetyDistance or (context.reversalScale or 1)<1)
+ -- One continuous angular guard covers all tracking phases. Turning it off at
+ -- Grounded previously produced a large discontinuity precisely at landing.
+ -- Pure calibration calls without context retain their original response.
+ local safety=self.config.AngularSafety and context~=nil
+ local priorPitch=if sameCamera then self.appliedPitchVelocity or 0 else 0
+ local priorYaw=if sameCamera then self.appliedYawVelocity or 0 else 0
+ local recovery,braking=false,false
+ local yawRisk=safety and (context.movementPhase~="Grounded" or context.distanceStuds<self.config.CloseSafetyDistance or (context.reversalScale or 1)<1)
  if safety then
-  local function limited(step,delta,prior,rate,acceleration)
-   local desired=math.clamp(step/dt,-rate,rate)
-   if acceleration then desired=math.clamp(desired,(prior or 0)-acceleration*dt,(prior or 0)+acceleration*dt) end
-   desired=math.clamp(desired,-rate,rate)
-   local value=desired*dt
-   if value*delta<0 then return 0,0 end
-   if math.abs(value)>math.abs(delta) then return delta,0 end
-   return value,desired
-  end
-  yawStep,self.guardYawVelocity=limited(yawStep,yawDelta,self.guardYawVelocity,math.rad(self.config.AngularMaxSpeed),nil)
-  pitchStep,self.guardPitchVelocity=limited(pitchStep,targetPitch-previousPitch,self.guardPitchVelocity,math.rad(self.config.PitchMaxSpeed),math.rad(self.config.PitchMaxAcceleration))
+  local pr,pb
+  -- Preserve V3.1 yaw response: ordinary grounded yaw uses its chosen
+  -- interpolation, with the existing rate guard only during risky contexts.
+  -- Adding a second yaw acceleration controller delayed initial acquisition.
+  if yawRisk then yawStep=math.clamp(yawStep,-math.rad(self.config.AngularMaxSpeed)*dt,math.rad(self.config.AngularMaxSpeed)*dt) end
+  self.guardYawVelocity=yawStep/dt
+  pitchStep,self.guardPitchVelocity,pr,pb=appliedStep(pitchStep,targetPitch-previousPitch,priorPitch,dt,math.rad(self.config.PitchMaxSpeed),math.rad(self.config.PitchMaxAcceleration))
+  recovery=pr;braking=pb
  else self.guardPitchVelocity=0;self.guardYawVelocity=0 end
+ local beforePolar=yawStep
  if guarded then yawStep=math.clamp(yawStep,-POLAR_YAW_RATE*dt,POLAR_YAW_RATE*dt) end
  local resultYaw=wrap(previousYaw+yawStep)
- local resultPitch=math.clamp(previousPitch+pitchStep,-HALF_PI,HALF_PI)
+ local wantedPitch=previousPitch+pitchStep
+ local resultPitch=math.clamp(wantedPitch,-HALF_PI,HALF_PI)
+ -- Hard poles have precedence over inertia. They can make simultaneous rate,
+ -- acceleration and horizon constraints impossible, and are disclosed below.
+ local constraintConflict=resultPitch~=wantedPitch or beforePolar~=yawStep
+ local appliedPitch=(resultPitch-previousPitch)/dt
+ local appliedYaw=shortest(resultYaw-previousYaw)/dt
+ if safety and math.abs(appliedPitch-priorPitch)>math.rad(self.config.PitchMaxAcceleration)*dt+1e-7 then constraintConflict=true end
  if math.abs(shortest(targetYaw-resultYaw))<1e-3 then polarTurn=false end
  local base,previousLook=self:_level(current.Position,previousYaw,previousPitch)
  if not frameOK(base) then return false,"Leveled initial camera CFrame is invalid" end
@@ -215,9 +253,29 @@ function CameraController:_update(camera,predicted,dt,context)
  self.camera=camera
  self.lastFrame=result
  self.yaw=resultYaw;self.pitch=resultPitch;self.polarHold=held;self.polarTurn=polarTurn
+ self.appliedPitchVelocity=appliedPitch;self.appliedYawVelocity=appliedYaw
  local data=self.diagnostics
  data.yawError=math.deg(shortest(targetYaw-resultYaw));data.pitchError=math.deg(targetPitch-resultPitch)
- data.pitchRate=math.deg(pitchStep/dt);data.safetyLimited=safety==true
+ data.pitchRate=math.deg(appliedPitch);data.yawRate=math.deg(appliedYaw)
+ data.accelerationApplied=math.deg((appliedPitch-priorPitch)/dt)
+ data.yawAccelerationApplied=math.deg((appliedYaw-priorYaw)/dt)
+ data.safetyLimited=safety==true
+ data.yawRateGuarded=yawRisk==true;data.yawAccelerationBounded=false
+ data.safetyState=if not safety then "BYPASSED" elseif not sameCamera then "INITIAL_FRAME"
+  elseif constraintConflict then "HARD_CONSTRAINT" elseif recovery then "BRAKING_RECOVERY"
+  elseif braking then "BRAKING" else "BOUNDED"
+ data.constraintConflict=constraintConflict;data.accelerationReference=if sameCamera then "PREVIOUS_APPLIED_FRAME" else "INITIAL_OR_RESET_FRAME"
+ local changedYaw=if sameCamera and self.targetYaw then shortest(targetYaw-self.targetYaw) else 0
+ local changedPitch=if sameCamera and self.targetPitch then targetPitch-self.targetPitch else 0
+ local stable=sameCamera and self.targetYaw~=nil and math.abs(changedYaw)<1e-6 and math.abs(changedPitch)<1e-6
+ data.setpointChange=math.deg(math.sqrt(changedYaw*changedYaw+changedPitch*changedPitch))
+ data.setpointChanged=not stable;data.overshootReference=if stable then "STABLE_SETPOINT" elseif sameCamera and self.targetYaw then "MOVING_SETPOINT" else "INITIAL"
+ local pitchCrossed=(targetPitch-previousPitch)*(targetPitch-resultPitch)< -1e-12
+ local yawCrossed=yawDelta*shortest(targetYaw-resultYaw)< -1e-12
+ data.pitchGoalCrossed=pitchCrossed;data.yawGoalCrossed=yawCrossed
+ data.pitchOvershootDegrees=if stable and pitchCrossed then math.abs(data.pitchError) else 0
+ data.yawOvershootDegrees=if stable and yawCrossed then math.abs(data.yawError) else 0
+ self.targetYaw=targetYaw;self.targetPitch=targetPitch
  data.mode=mode;data.tauSeconds=if mode=="Adaptive" then self.adaptiveTau else CameraController.timeConstant(self.config.Smoothness)
  data.yawVelocity=self.yawVelocity;data.pitchVelocity=self.pitchVelocity
  data.yaw=math.deg(resultYaw);data.pitch=math.deg(resultPitch)

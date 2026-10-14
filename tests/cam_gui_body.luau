@@ -101,12 +101,12 @@ return function(reloadBundle)
 		near(mock:countConnections(),0);near(mock:countRenderBindings(),0)
 	end)
 
-	test("default disabled V3.1 has six MAIN fields plus MISC and Sedware branding", function(mock, create)
+	test("default disabled V3.2 has six MAIN fields plus MISC and Sedware branding", function(mock, create)
 		local session = create()
 		local ui = session.ui
 		check(session.gui == ui.gui and ui.gui.Name == "SedwareCamLock_UI")
 		check(ui.gui.Parent == mock.playerGui)
-		near(size(ui.controls), 17); near(size(ui.hitPartOptions), 3)
+		near(size(ui.controls), 21); near(size(ui.hitPartOptions), 3)
 		local expected = {Enabled=false, HitPart="UpperTorso",
 			PredictionX=13.15, PredictionY=13.15, Smoothness=0.405, Radius=180}
 		for field, value in pairs(expected) do
@@ -118,7 +118,7 @@ return function(reloadBundle)
 		for _, field in ipairs({"PredictionX", "PredictionY", "Smoothness", "Radius"}) do
 			near(tonumber(ui.controls[field].Text), expected[field])
 		end
-		check(ui.title.Text == "SEDWARE V3.1" and ui.subtitle.Text == "CAM LOCK · PINK EDITION" and ui.version.Text == "v3.1")
+		check(ui.title.Text == "SEDWARE V3.2" and ui.subtitle.Text == "CAM LOCK · PINK EDITION" and ui.version.Text == "v3.2")
 		near(ui.panel.Size.X.Offset, 420); near(ui.panel.Size.Y.Offset, 520)
 		near(ui.panel.BackgroundColor3.R, 10/255)
 		check(ui.logo.Name == "SedwareLogo")
@@ -134,7 +134,7 @@ return function(reloadBundle)
 				if node.Parent == ui.dropdown then choiceButtons += 1 else mainButtons += 1 end
 			end
 		end
-		near(mainButtons, 15); near(boxes, 7); near(choiceButtons, 3)
+		near(mainButtons, 18); near(boxes, 8); near(choiceButtons, 3)
 		mock:resetCounters(); mock:advance(0.1)
 		near(mock.counters.candidateScans, 0); near(mock.counters.cameraWrites, 0)
 		near(mock.counters.mouseWrites, 0)
@@ -306,7 +306,10 @@ return function(reloadBundle)
 
 	test("Smoothness textbox changes angular response and camera position is preserved", function(mock, create)
 		mock:addPlayer("SmoothnessControls",mock.env.Vector3.new(30,0,-50))
-		local session = create({PredictionX=0,PredictionY=0})
+		-- Select the legacy raw angular response explicitly. The V3.2 default
+		-- acceleration guard saturates the first frame for both strength values;
+		-- separate V3.2 cases verify its applied rate/acceleration bounds.
+		local session = create({PredictionX=0,PredictionY=0,AngularSafety=false})
 		local errors = {}
 		for _, value in ipairs({0.9,0.1}) do
 			edit(session,"Smoothness",value)
@@ -500,9 +503,9 @@ return function(reloadBundle)
 			check(session.config[field] == value and session.ui.values[field] == value,
 				"roll correction changed existing field "..field)
 		end
-		near(size(session.ui.controls),17)
+		near(size(session.ui.controls),21)
 		near(session.ui.panel.Size.X.Offset,420);near(session.ui.panel.Size.Y.Offset,520)
-		check(session.ui.title.Text == "SEDWARE V3.1" and session.ui.subtitle.Text == "CAM LOCK · PINK EDITION")
+		check(session.ui.title.Text == "SEDWARE V3.2" and session.ui.subtitle.Text == "CAM LOCK · PINK EDITION")
 		check(mock.camera.CameraSubject == subject)
 		near(mock:cameraWritesFor(mock.camera,"CameraSubject"),0)
 		near(mock:cameraWritesFor(mock.camera,"CameraType"),0)
@@ -614,7 +617,9 @@ return function(reloadBundle)
 		for _,fps in ipairs({30,60,120,144}) do
 			mock:setDefaultCamera(mock.camera,rolled)
 			mock.camera._props.CFrame=rolled
-			local session=create({Enabled=true,Smoothness=0.9,PredictionX=0,PredictionY=0})
+			-- This exact equality checks the analytical legacy response, not the
+			-- frame-discretized acceleration guard tested by the V3.2 suite.
+			local session=create({Enabled=true,Smoothness=0.9,PredictionX=0,PredictionY=0,AngularSafety=false})
 			for _=1,fps/2 do
 				mock:advance(1/fps)
 				leveled(mock.camera.CFrame)
@@ -648,7 +653,7 @@ return function(reloadBundle)
 		end
 		near(diagnostic.roll,0,1e-6)
 		near(diagnostic.deltaTime,1/60,1e-8)
-		near(size(session.ui.controls),17)
+		near(size(session.ui.controls),21)
 		check(session.ui.controls.CameraDebugMode==nil and session.ui.controls.CameraDebugInterval==nil)
 		check(session:configure("CameraDebugMode",false))
 		for _=1,60 do mock:advance(1/60) end

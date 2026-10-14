@@ -5,6 +5,10 @@ local UIAnimations=if script then require(script.Parent.UIAnimations) else requi
 local UI={}
 UI.__index=UI
 local WIDTH,HEIGHT,HEADER,ROW=420,520,56,34
+local function choiceText(field,value)
+ if field=="ESPOcclusionMode" then return if value=="AlwaysOnTop" then "Always On Top" else "Visible Only" end
+ return tostring(value)
+end
 local function finite(n) return type(n)=="number" and n==n and math.abs(n)<math.huge end
 local function point(input) local p=input and input.Position;if p and finite(p.X) and finite(p.Y) then return p.X,p.Y end end
 local function contains(object,x,y)
@@ -44,7 +48,7 @@ function UI:_change(field,value)
  local ok,accepted,reason=pcall(self.onChange,field,value)
  if not ok then reason=accepted;accepted=false end
  if accepted then self:setValue(field,value);return true end
- self:setValue(field,self.values[field]);self:_notice(reason or "Invalid value",field);return false
+ self:setValue(field,self.values[field]);self:_notice(reason or "Change rejected",field);return false
 end
 function UI:setValue(field,value)
  if self.destroyed or not self.controls[field] then return false end
@@ -53,12 +57,12 @@ function UI:setValue(field,value)
  local control,descriptor=self.controls[field],Config.fields[field]
  local text
  if descriptor.kind=="toggle" then
-  text=if value then (if field=="Fly" or field=="Speed" then "LOCAL ONLY" else "ON") else "OFF"
+  text=if value then (if field=="Fly" or field=="Speed" then "PENDING" else "ON") else "OFF"
   local properties={BackgroundColor3=if value then Branding.Colors.Neon else Branding.Colors.Input,
    TextColor3=if value then Branding.Colors.White else Branding.Colors.Muted}
   if self.building then for key,property in properties do control[key]=property end
   elseif changed then self.animations:play(control,0.15,properties) end
- elseif descriptor.kind=="choice" then text=tostring(value).."  ▾"
+ elseif descriptor.kind=="choice" then text=choiceText(field,value).."  ▾"
  elseif descriptor.kind=="keybind" then text=Config.keyName(value)
  elseif descriptor.kind=="number" then text=string.format(if descriptor.decimals==0 then "%g" else "%."..tostring(descriptor.decimals).."f",value)
  else text=tostring(value) end
@@ -72,8 +76,9 @@ function UI:setStatus(movement,esp,available,report)
  if self.movementStatus.Text~=movement then self.movementStatus.Text=movement end
  if self.espStatus.Text~=esp then self.espStatus.Text=esp end
  for _,field in {"Fly","Speed"} do
-  local text=if report then report[field].state elseif not available then "UNAVAILABLE" elseif self.values[field] then "LOCAL ONLY" else "OFF"
-  self.controls[field].Active=available
+  local text=if report then report[field].state elseif self.values[field] then (if available then "PENDING" else "UNAVAILABLE") else "OFF"
+  -- An unavailable route must still accept OFF and report a rejected ON.
+  self.controls[field].Active=true
   if self.controls[field].Text~=text then self.controls[field].Text=text end
  end
 end
@@ -169,7 +174,7 @@ function UI:_positionDropdown(animate)
  for index,choice in self.popupButtons do
   local value=self.popupOptions[index];choice.Visible=value~=nil;choice.Active=value~=nil
   if value then
-   choice.Text=value;choice.Position=UDim2.fromOffset(3,(index-1)*30*scale+2)
+   choice.Text=choiceText(field,value);choice.Position=UDim2.fromOffset(3,(index-1)*30*scale+2)
    choice.Size=UDim2.fromOffset(width-6,30*scale-3);choice.TextSize=math.max(10,11*scale)
   end
  end
@@ -189,14 +194,13 @@ function UI:_row(parent,descriptor)
   self:_create("UICorner",{CornerRadius=UDim.new(0,5)},control)
   self:_connect(control.FocusLost,function()
    local value=if descriptor.kind=="text" then control.Text:gsub("^%s*(.-)%s*$","%1") else tonumber(control.Text)
-   if descriptor.kind=="number" and not finite(value) then self:setValue(descriptor.key,self.values[descriptor.key]);self:_notice("Enter a finite number")
+   if descriptor.kind=="number" and not finite(value) then self:setValue(descriptor.key,self.values[descriptor.key]);self:_notice("Enter a finite number",descriptor.key)
    else self:_change(descriptor.key,value) end
   end)
  else
   control=self:_button(row,descriptor.key,"",UDim2.fromOffset(164,3),UDim2.fromOffset(WIDTH-196,27))
   self:_connect(control.Activated,function()
    if self.minimized or self.tab~=descriptor.tab then return end
-   if (descriptor.key=="Fly" or descriptor.key=="Speed") and self.movementAvailable==false then return end
    if descriptor.kind=="toggle" then self:_change(descriptor.key,not self.values[descriptor.key])
    elseif descriptor.kind=="choice" then self:_openDropdown(descriptor.key)
    elseif descriptor.kind=="keybind" then self:_action("CaptureKey",descriptor.key) end
@@ -255,7 +259,7 @@ function UI.new(playerGui,config,onChange,onNotice,onAction,player)
    Size=UDim2.fromOffset(WIDTH,HEADER),ZIndex=3},self.panel)
   self.logo=Branding.addLogo(self.header,function(...) return self:_create(...) end,
    UDim2.fromOffset(15,13),UDim2.fromOffset(30,30),5,config,function(...) return self:_connect(...) end)
-  self.title=self:_label(self.header,"Title","SEDWARE V3.1",UDim2.fromOffset(56,9),UDim2.fromOffset(218,22),17)
+  self.title=self:_label(self.header,"Title",Branding.Title.." "..Branding.Version:upper(),UDim2.fromOffset(56,9),UDim2.fromOffset(218,22),17)
   self.title.Font=Enum.Font.GothamBold
   self.subtitle=self:_label(self.header,"Subtitle",Branding.Subtitle,UDim2.fromOffset(57,32),UDim2.fromOffset(255,14),9,C.Pink)
   self.version=self:_label(self.header,"Version",Branding.Version,UDim2.fromOffset(WIDTH-100,15),UDim2.fromOffset(45,17),10,C.Muted)
@@ -339,7 +343,7 @@ function UI.new(playerGui,config,onChange,onNotice,onAction,player)
   self:_connect(self.gui.AncestryChanged,function() self:resetDrag();self:closeDropdown(true) end)
   self:setTab("MAIN");self:_fit(true)
  end,debug.traceback)
- if not ok then self:destroy();error("SEDWARE V3.1 UI: "..tostring(problem),2) end
+ if not ok then self:destroy();error("SEDWARE "..Branding.Version:upper().." UI: "..tostring(problem),2) end
  return self
 end
 function UI:setLogo(asset) Branding.setLogo(self.logo,asset) end
