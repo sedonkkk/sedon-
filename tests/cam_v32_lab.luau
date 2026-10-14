@@ -188,4 +188,3 @@ return function(currentSource, baselineSource, options)
  print(string.format("V32 SUMMARY: %d paired-version rows, %d scheduled samples; CLI math / API doubles only",rows,totalSamples))
  return {rows=rows,samples=totalSamples}
 end
-

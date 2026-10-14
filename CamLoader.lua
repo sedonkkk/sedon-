@@ -1,5 +1,5 @@
 -- SEDWARE CAM LOCK: verified public payload pinned to a specific commit.
-local rawURL = "https://raw.githubusercontent.com/sedonkkk/sedon-/da44a4c7af3857c1fed22b9fb757c012180650ac/SedwareCamLock.lua"
+local rawURL = "https://raw.githubusercontent.com/sedonkkk/sedon-/72897a4ccc1e9a8b9fbeccde19fe94ee8cf0296b/SedwareCamLock.lua"
 print("[SEDWARE][CamLoader][START] Retrieving the verified payload")
 assert(type(loadstring)=="function", "[SEDWARE][CamLoader][FAIL] Host must provide a Luau-compatible loadstring")
 local ok, source = pcall(function() return game:HttpGet(rawURL) end)

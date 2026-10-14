@@ -2,6 +2,10 @@
 
 Actualización de los módulos existentes y del archivo autónomo SedwareCamLock.lua. Se conserva la GUI negra/rosada MAIN/MISC de 420×520, Memory, selección con C, primera/tercera persona, escala Prediction X/Y=13.15 y calibración interna .1205/.0800. PinkDotLock.lua y DaHoodPrediction.lua permanecen separados.
 
+Publicado en el commit [`72897a4ccc1e9a8b9fbeccde19fe94ee8cf0296b`](https://github.com/sedonkkk/sedon-/commit/72897a4ccc1e9a8b9fbeccde19fe94ee8cf0296b). El [Raw V3.2](https://raw.githubusercontent.com/sedonkkk/sedon-/72897a4ccc1e9a8b9fbeccde19fe94ee8cf0296b/SedwareCamLock.lua) devolvió HTTP 200 y coincidió exactamente con los 250722 bytes probados. El [README](../README.md) y CamLoader.lua contienen el cargador nuevo; los anteriores siguen fijados a sus versiones.
+
+Al cargar aparece el menú. Activa Enable en MAIN y pulsa C para seleccionar/liberar. En MISC se editan velocidades, keybinds, ruta y visualización. El loader requiere un host que proporcione game:HttpGet y loadstring; en Studio usa el lugar incluido o un LocalScript en StarterPlayerScripts de tu experiencia.
+
 ## Qué se comprobó del archivo antiguo
 
 La [auditoría del adjunto completo](SEDWARE_V32_LEGACY_AUDIT.md) identifica el contenido real, SHA256 y líneas relevantes. No se ejecutó la GUI original ni se incorporaron sus otras herramientas.

@@ -9,7 +9,7 @@ Estado: **Luau CLI y dobles de API ejecutados; Roblox Studio, física/render/FPS
 Los dos runners comparativos cargan los módulos desde los **bundles autónomos reales**, sin reimplementar sus fórmulas.
 
 - Baseline V3.1: commit [`da44a4c7af3857c1fed22b9fb757c012180650ac`](https://github.com/sedonkkk/sedon-/blob/da44a4c7af3857c1fed22b9fb757c012180650ac/SedwareCamLock.lua), 230147 bytes, SHA256 `3a8e56d1220f34b961102f32b59e1a42f470ee58f739b7a3b7eea9c7b9ab602b`.
-- V3.2: [SedwareCamLock.lua](../SedwareCamLock.lua), 250722 bytes, SHA256 `11cf292c14716295436ec39d7f54115924a5351b823aa54ae503d6fac3d12d28`.
+- V3.2: commit [`72897a4ccc1e9a8b9fbeccde19fe94ee8cf0296b`](https://github.com/sedonkkk/sedon-/blob/72897a4ccc1e9a8b9fbeccde19fe94ee8cf0296b/SedwareCamLock.lua), 250722 bytes, SHA256 `11cf292c14716295436ec39d7f54115924a5351b823aa54ae503d6fac3d12d28`.
 - Los tres resúmenes JSON publicados contienen ese mismo hash V3.2. Si el script cambia, estas mediciones describen exclusivamente el snapshot identificado.
 
 Se leyó completo `message (8).txt`: 112649 bytes y 2761 líneas, SHA256 `7573674d0ef56f6c4a278dd5d23fa7e1080bddb8054a39c5530c7ea776642375`. La [auditoría con líneas exactas](SEDWARE_V32_LEGACY_AUDIT.md) separa descripción y flujo efectivo. Fly1 usa Core/Weld, BodyPosition/BodyGyro y desplazamientos por wait(); Speed V2 deja de ejecutar su cuerpo tras renombrar Humanoid a xxx. Speed V1 sólo contiene un cargador remoto y su algoritmo no está incluido. No se ejecutó el archivo antiguo ni sus recursos externos.

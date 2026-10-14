@@ -24,18 +24,18 @@ Prototipo modular de asistencia de apuntado para una **experiencia propia**. Inc
 
 [Raw SEDWARE nuevo verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/e18ba899586cd12214bee587802f927fa258d4c9/PinkDotLock.lua) · [PinkLoader.lua](PinkLoader.lua) · [Demo listo para Studio](studio/PinkDotLockTest.rbxlx). 246 pruebas de Pink/SEDWARE y 96 anteriores pasan; el loader carga las funciones de cliente. Los controladores multiarmas y el servidor se distribuyen en el lugar de Studio.
 
-## SEDWARE CAM LOCK V3.1 — PINK EDITION
+## SEDWARE CAM LOCK V3.2 — PINK EDITION
 
-[`SedwareCamLock.lua`](SedwareCamLock.lua) conserva la GUI MAIN/MISC negra y rosada de 420×520, minimizar, arrastre, Memory y cámara sin roll. Prediction X/Y mantiene 13.15 → 0.1205 s en X / 0.0800 s en Y. Añade control vertical por fase, amortiguación de inversiones y pausa ante ausencia temporal de Hit Part, con diagnósticos que distinguen pausa y pérdida real.
+[`SedwareCamLock.lua`](SedwareCamLock.lua) conserva la GUI MAIN/MISC negra y rosada de 420×520, minimizar, arrastre, Memory, cámara sin roll y Prediction X/Y=13.15 con calibración interna .1205/.0800. La [auditoría del archivo antiguo](docs/SEDWARE_V32_LEGACY_AUDIT.md) explica qué se reutiliza de Fly/Speed y sus fallos, sin ejecutar sus scripts remotos.
 
-Separa Fly/Speed Local/Server con estados de aplicación y movimiento observado. ESP admite alcance configurado, caché lejana y AlwaysOnTop en contextos autorizados, conservando Hitboxes visuales, Names y Specific Player. Fixed + Memory sigue por defecto. Los límites reducen excesos en saltos/aterrizajes y pueden empeorar el seguimiento en caída; no hay mejora universal de precisión o CPU. El logo original sigue esperando un asset ID.
+Fly usa LinearVelocity y AlignOrientation con velocidad editable; Speed admite hasta 140, restaura su valor original y tolera la cuantización float sin combatir correcciones externas. Las rutas Local/Server separan solicitud, aplicación y movimiento medido. MISC añade modo de movimiento, modo/rango de ESP y Unlimited autorizado. Se corrigen referencias obsoletas y la jerarquía de AlwaysOnTop. El pitch conserva aceleración entre fases y llegada al objetivo; Fixed sigue por defecto. Hay mayor retraso/error vertical en algunas condiciones y costes CPU medidos, sin mejora universal. El logo original sigue esperando un asset ID.
 
-[Guía V3.1](docs/SEDWARE_V31.md) · [Comparación V3/V3.1 y CSV](docs/SEDWARE_V31_RESULTS.md) · [Demo propio](studio/SedwareCamLock.rbxlx) · [Runner nativo preparado](studio/SedwareCamV31Test.rbxlx). **488 regresiones CLI/dobles sin fallos**; 2304 filas matemáticas, 32 de persistencia y 48 condiciones CPU. Los 23 casos nativos están preparados y compilados, sin ejecutar. **Física/render/FPS de Roblox Studio y Da Hood no verificados. No se modifican las armas originales.** PinkDotLock.lua y DaHoodPrediction.lua permanecen intactos.
+[Guía V3.2](docs/SEDWARE_V32.md) · [Comparación V3.1/V3.2 y CSV](docs/SEDWARE_V32_RESULTS.md) · [Demo propio](studio/SedwareCamLock.rbxlx) · [Runner nativo preparado](studio/SedwareCamV32Test.rbxlx). **539 regresiones CLI/dobles sin fallos**; 2304 filas matemáticas y 48 condiciones CPU. Los 56 casos nativos están preparados y compilados, sin ejecutar. **Física/render/FPS de Roblox Studio y Da Hood no verificados. No se modifican las armas originales.** PinkDotLock.lua y DaHoodPrediction.lua permanecen intactos.
 
-[Raw V3.1 verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/da44a4c7af3857c1fed22b9fb757c012180650ac/SedwareCamLock.lua) · [Commit del código](https://github.com/sedonkkk/sedon-/commit/da44a4c7af3857c1fed22b9fb757c012180650ac) · [CamLoader.lua actualizado](CamLoader.lua). Los cargadores fijados a commits anteriores siguen ejecutando versiones anteriores. Este ejemplo requiere un host con game:HttpGet y loadstring; para Studio usa el lugar de prueba o un LocalScript en tu experiencia.
+[Raw V3.2 verificado](https://raw.githubusercontent.com/sedonkkk/sedon-/72897a4ccc1e9a8b9fbeccde19fe94ee8cf0296b/SedwareCamLock.lua) · [Commit del código](https://github.com/sedonkkk/sedon-/commit/72897a4ccc1e9a8b9fbeccde19fe94ee8cf0296b) · [CamLoader.lua actualizado](CamLoader.lua). Los cargadores fijados a commits anteriores siguen ejecutando versiones anteriores. Este ejemplo requiere un host con game:HttpGet y loadstring; para Studio usa el lugar de prueba o un LocalScript en tu experiencia. La ruta Server necesita el componente propio actualizado.
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/da44a4c7af3857c1fed22b9fb757c012180650ac/SedwareCamLock.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sedonkkk/sedon-/72897a4ccc1e9a8b9fbeccde19fe94ee8cf0296b/SedwareCamLock.lua"))()
 ```
 
 ## Ejecutar el laboratorio original
